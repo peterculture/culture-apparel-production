@@ -678,6 +678,13 @@ class Component extends DCLogic {
 
   renderVals(){
     const st=this.state, api=this._api||window.CAApi;
+    // Shared text-sanitizer -- used everywhere a raw Salesforce string field is
+    // rendered (formula fields like GOA_Order_Number__c can come back with an
+    // <a href="..."> wrapper; see api.text()'s own header comment). Defined
+    // once here at the top of renderVals() so it's in scope for the split/
+    // combine view models below, not just the card (mk()) and drawer (if(src))
+    // blocks that used to each declare their own local copy.
+    const t = (api&&api.text) || (v=>v==null?'':String(v));
     const DELIVERY_METHODS = (api&&api.DELIVERY_METHODS) || ['Shipping','Delivery','Pickup','Split Ship','Order Fulfillment'];
     const DELIVERY_LABEL = (api&&api.DELIVERY_LABEL) || {};
     const U={ over:'#E24A3A', today:'#E24A3A', soon:'#C9923A', ok:'#6C665C' };
