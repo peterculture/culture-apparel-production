@@ -438,6 +438,10 @@
       <sc-if value="{{mgrShowInbox}}" hint-placeholder-val="{{ true }}">
         <div style="font:600 12px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Incoming orders</div>
         <div style="font:400 12px/1.4 'Archivo';color:#6C665C;margin-bottom:18px">Orders in pre-production with no production method yet. Set one up to create its production plan.</div>
+        <div style="position:relative;max-width:380px;margin-bottom:18px">
+          <i class="ti ti-search" style="position:absolute;left:13px;top:50%;transform:translateY(-50%);color:#4d483f;font-size:15px"></i>
+          <input value="{{mgrQ}}" onInput="{{ onMgrSearch }}" placeholder="Search order #, customer, account…" style="width:100%;background:#121215;border:1px solid #242428;border-radius:9px;padding:11px 13px 11px 36px;font-size:13px;color:#ECEAE4;outline:none">
+        </div>
         <sc-if value="{{mgrHasMsg}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:7px;font:600 11px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:#BBD382;background:#18230D;border:1px solid #3D5418;border-radius:9px;padding:10px 13px;margin-bottom:16px"><i class="ti ti-check"></i>{{mgrMsg}}</div></sc-if>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
           <sc-for list="{{inbox}}" as="o" hint-placeholder-count="3">
@@ -452,6 +456,7 @@
           </sc-for>
         </div>
         <sc-if value="{{inboxEmpty}}" hint-placeholder-val="{{ false }}"><div style="border:1px dashed #2a2a2f;border-radius:12px;padding:40px 20px;text-align:center;font:400 13px/1.5 'Archivo';color:#4d483f">No orders waiting for a production method. (Empty in demo mode — live once deployed against Salesforce.)</div></sc-if>
+        <sc-if value="{{inboxNoMatches}}" hint-placeholder-val="{{ false }}"><div style="border:1px dashed #2a2a2f;border-radius:12px;padding:40px 20px;text-align:center;font:400 13px/1.5 'Archivo';color:#4d483f">No incoming orders match "{{mgrQ}}".</div></sc-if>
       </sc-if>
 
       <sc-if value="{{mgrShowForm}}" hint-placeholder-val="{{ false }}">
@@ -698,6 +703,10 @@ class Component extends DCLogic {
     this.state = {
       now:new Date(), nameOk: VALID_NAMES.includes(storedName), orders:[], connection:'loading', q:'', openId:null, ppItemsById:{}, weekMode:'all', pickDate:'',
       view:'board', inbox:[], inboxLoaded:false, mgrId:null, mgrSource:null, form:null, vendorResults:[], planResults:[], submitting:false, mgrErr:'', mgrMsg:'',
+      // Order name / order number search for the Management inbox list
+      // (separate from the board's own `q` above -- different view, own
+      // box). See openMgr()/mgrVals() below.
+      mgrQ:'',
       sent:{},
       // Post-creation "Production Method Created" panel + the Create
       // Production Run modal it launches -- see submitMethod()/submitRun().
@@ -875,7 +884,7 @@ class Component extends DCLogic {
   defaultForm(){ return { method:'', placements:[], vendorId:null, vendorName:'', vendorQ:'', planMode:'new', planId:null, planName:'', planQ:'', status:'Pre-Production', items:[] }; }
   // Toggles one location in/out of the form's multi-select Placements list.
   togglePlacement(x){ this.setState(st=>{ const f=Object.assign({},st.form||this.defaultForm()); const cur=f.placements||[]; f.placements = cur.includes(x) ? cur.filter(v=>v!==x) : cur.concat([x]); return {form:f}; }); }
-  openMgr(){ this.setState({view:'mgr', mgrId:null, mgrErr:'', mgrMsg:''}); this.loadInbox(); }
+  openMgr(){ this.setState({view:'mgr', mgrId:null, mgrErr:'', mgrMsg:'', mgrQ:''}); this.loadInbox(); }
   // Also the general "leave Management" exit -- clears the created-method
   // panel and Create Production Run modal too, so returning here always
   // lands cleanly back on the board regardless of where the manager was.
@@ -1358,10 +1367,15 @@ class Component extends DCLogic {
     const st=this.state, api=this._api||window.CAApi;
     const t=(v)=>(api&&api.text?api.text(v):(v||''));
     const UC={ over:'#E24A3A', today:'#E24A3A', soon:'#C9923A', ok:'#6C665C' };
-    const inbox=(st.inbox||[]).map(r=>{
+    const inboxAll=(st.inbox||[]).map(r=>{
       const piv=api&&api.pivotItems?api.pivotItems(r):{qty:''}; const due=api&&api.dueInfo?api.dueInfo(r.Print_Date__c):{label:'',urg:'ok'}; const id=r.Id;
       return { id, num:t(r.GOA_Order_Number__c)||r.OrderNumber||id, customer:t(r.Customer_Order_Name__c)||t(r.Account&&r.Account.Name)||'—', account:t(r.Account&&r.Account.Name)||'', qty:piv.qty, dueLabel:due.label, urgColor:UC[due.urg]||UC.ok, onPick:()=>this.pickInbox(id) };
     });
+    // Order name / order number search, scoped to this Management inbox
+    // list -- mirrors the board's own search (renderVals() below) but keyed
+    // off mgrQ so the two boxes don't fight over one piece of state.
+    const mgrQ=(st.mgrQ||'').trim().toLowerCase();
+    const inbox = mgrQ ? inboxAll.filter(o=>(o.customer+' '+o.num+' '+o.account).toLowerCase().includes(mgrQ)) : inboxAll;
     const f=st.form, hasOrder=!!st.mgrId && !!f, mgrView=st.view==='mgr';
     let mgrOrder={num:'',customer:'',account:'',qty:''}, methodOptions=[], placementOptions=[], statusOptions=[], vendorResults=[], planResults=[], itemsView=[], itemTypeButtons=[];
     if(hasOrder){
@@ -1369,7 +1383,10 @@ class Component extends DCLogic {
       // order a manager is adding a second method/placement to (see
       // openMgrForOrder) -- that second case won't be in `inbox` any more
       // once it has a method, so fall back to the worker board's own list.
-      const ord=inbox.find(o=>o.id===st.mgrId) || (st.orders||[]).find(o=>o.orderId===st.mgrId);
+      // Looked up from the UNFILTERED list -- once an order is picked, mgrQ
+      // may no longer match it (or the manager cleared the box after
+      // picking), but the picked order's own details must still resolve.
+      const ord=inboxAll.find(o=>o.id===st.mgrId) || (st.orders||[]).find(o=>o.orderId===st.mgrId);
       if(ord) mgrOrder={num:ord.num,customer:ord.customer,account:ord.account,qty:ord.qty};
       methodOptions=['Screen Print','Embroidery','Heat Press','Promotional Items'].map(x=>({ label:x, onPick:()=>this.setForm({method:x}), bg:f.method===x?'#2a1210':'#121215', border:f.method===x?'#C6372B':'#242428', color:f.method===x?'#ECEAE4':'#8a8378' }));
       placementOptions=(api&&api.PLACEMENTS?api.PLACEMENTS:['Front','Back','Left Sleeve','Right Sleeve','Left Chest','Right Chest','Full Front','Full Back','Tag','Hood','Pocket']).map(x=>{ const on=(f.placements||[]).includes(x); return { label:x, onPick:()=>this.togglePlacement(x), bg:on?'#2a1210':'#121215', border:on?'#C6372B':'#242428', color:on?'#ECEAE4':'#8a8378' }; });
@@ -1409,6 +1426,10 @@ class Component extends DCLogic {
     return {
       mgrView, mgrShowInbox: mgrView && !hasOrder && !cpRaw, mgrShowForm: mgrView && hasOrder && !cpRaw, mgrShowCreated: mgrView && !!cpRaw,
       inbox, inboxEmpty:(st.inbox||[]).length===0 && st.inboxLoaded,
+      // Distinct from inboxEmpty (genuinely nothing waiting) -- this is "there
+      // ARE incoming orders, just none matching what was typed".
+      inboxNoMatches: inboxAll.length>0 && inbox.length===0,
+      mgrQ:st.mgrQ, onMgrSearch:(e)=>this.setState({mgrQ:e.target.value}),
       onOpenMgr:()=>this.openMgr(), onCloseMgr:()=>this.closeMgr(), onBackToInbox:()=>this.backToInbox(),
       mgrOrder, mgrSpecs:f?f.specs:'', onMgrSpecs:(e)=>this.setMgrSpecs(e.target.value), mgrNotes:f?f.notes:'', onMgrSpecial:(e)=>this.setMgrSpecial(e.target.value),
       formMethodOptions:methodOptions, formPlacementOptions:placementOptions, statusOptions, formStatus:f?f.status:'Pre-Production', onStatus:(e)=>this.setForm({status:e.target.value}),
