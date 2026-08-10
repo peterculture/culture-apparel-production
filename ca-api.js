@@ -278,6 +278,29 @@
   // nothing org-specific is hardcoded on this side.
   function getZkWizardUrl(orderId, num){ return jget('/api/orders/' + encodeURIComponent(orderId) + '/zk-wizard-url?num=' + encodeURIComponent(num || '')); }
 
+  /* ── split / combine shipments (Shipment_Order__c junction) ──
+     Split: one order's items go out across 2+ physical shipments -- each
+     group gets its own Shipment_Order__c "leg", its own OrderItems tagged
+     to that leg, and its own logged zkmulti__MCShipment__c.
+     Combine: 2+ orders ship together in ONE box -- one Primary order (its
+     address/contact wins, one shared shipment record) plus 1+ Secondary
+     orders riding along. Reuses the existing Is_Master_Shipment_Order__c /
+     Master_Shipment_Order__c display already built into shipping.html's
+     drawer (see the modal.hasCombinedNote logic there) -- this is just the
+     first thing that actually WRITES those two fields.
+     See functions/api/shipments/split.js and .../combine.js for the full
+     server-side contract and field-level detail. */
+  // groups: [{ itemIds:[...], carrier, serviceType, tracking, weight }, ...] -- 2+ required.
+  function splitShipment(orderId, groups){ return jsend('/api/shipments/split', 'POST', { orderId: orderId, groups: groups }); }
+  // orderIds: 2+ Order Ids including primaryOrderId. carrier/tracking required, serviceType/weight optional.
+  function combineShipment(orderIds, primaryOrderId, o){
+    o = o || {};
+    return jsend('/api/shipments/combine', 'POST', { orderIds: orderIds, primaryOrderId: primaryOrderId, carrier: o.carrier, serviceType: o.serviceType, tracking: o.tracking, weight: o.weight });
+  }
+  // Split Shipment's item picker reuses getOrderSizes(orderId) above --
+  // same raw OrderItem rows (Id, Size__c, Quantity, Color__c, Product2.Name)
+  // the size-breakdown grid already fetches from /api/order-sizes.
+
   /* ── active Salesforce environment (dev2 / staging / production) ──
      Global, shared across every user -- see functions/api/admin/sf-env.js */
   function getSfEnv(){ return jget('/api/admin/sf-env'); }
@@ -426,6 +449,7 @@
     getOrders: getOrders, getProductionOrders: getProductionOrders, getInbox: getInbox, getPreProductionItems: getPreProductionItems, patchItem: patchItem, deleteItem: deleteItem, createItem: createItem, searchVendors: searchVendors, searchPlans: searchPlans, searchPresses: searchPresses, createMethod: createMethod, createProductionRun: createProductionRun, getProductionRuns: getProductionRuns, patchProductionRun: patchProductionRun, deleteProductionRun: deleteProductionRun, patchMethodStatus: patchMethodStatus, patchMethodChecklist: patchMethodChecklist, getMethodsForOrder: getMethodsForOrder, patchMethodFields: patchMethodFields, deleteMethod: deleteMethod, patchOrder: patchOrder, getOrderSizes: getOrderSizes, createReprintOrder: createReprintOrder,
     getPackaging: getPackaging, postPackaging: postPackaging, deletePackaging: deletePackaging,
     getShipments: getShipments, postShipment: postShipment, deleteShipment: deleteShipment, getZkWizardUrl: getZkWizardUrl,
+    splitShipment: splitShipment, combineShipment: combineShipment,
     getSfEnv: getSfEnv, setSfEnv: setSfEnv,
     getStationItems: getStationItems, updateItemStatus: updateItemStatus, updateOrderReceiving: updateOrderReceiving,
     getInventory: getInventory, postInventory: postInventory, stationLogin: stationLogin,
