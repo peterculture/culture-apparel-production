@@ -83,7 +83,7 @@ export async function rollupOrderSubstatus(env, orderId) {
 /**
  * Shared helper: mirror each Production_Method__c's own "Pre-Production
  * Checklist" booleans back onto the legacy Order-level fields of the same
- * name (Films_Printed__c, Screens_Completed__c, Mix_Inks__c, Digitize_File__c,
+ * name (Design_Received__c, Screens_Completed__c, Mix_Inks__c, Digitize_File__c,
  * Thread_Color_Materials__c, Transfers_Received__c, Transfers_Ready__c --
  * still writable via orders/[id].js's ALLOWED_FIELDS for any caller reading
  * the Order directly, e.g. a standard Salesforce page layout or report).
@@ -113,9 +113,17 @@ export async function rollupOrderSubstatus(env, orderId) {
  * order (e.g. Screens_Completed__c on an order with only a Heat Press method)
  * has nothing to roll up and is left alone rather than forced to false.
  * Cancelled methods are excluded, same as the substatus rollup above.
+ *
+ * NOTE (2026-08-10): Films_Printed__c was renamed to Design_Received__c
+ * (API name, not just label -- on both Order and Production_Method__c, in
+ * both dev2 and Staging) -- the shop no longer prints film; art now goes
+ * straight onto an exposure unit that burns the emulsion directly, so this
+ * field now tracks whether the customer's art has arrived. Same rollup
+ * behavior as before, just following the field's new real name -- see
+ * ca-api.js's CHECK_FIELD.
  */
 const CHECKLIST_FIELD_TYPE = {
-  Films_Printed__c: "Screen Print",
+  Design_Received__c: "Screen Print",
   Screens_Completed__c: "Screen Print",
   Mix_Inks__c: "Screen Print",
   Digitize_File__c: "Embroidery",
