@@ -70,6 +70,15 @@
   /* ── Order_Substatus__c: the "In Production" label is stored as "Production" ── */
   var SUBSTATUS_VALUE = { 'Pre-Production':'Pre-Production', 'Ready for Print':'Ready for Print', 'In Production':'Production', 'Post-Production':'Post-Production', 'Completed':'Completed' };
   var SUBSTATUS_LABEL = {}; Object.keys(SUBSTATUS_VALUE).forEach(function (label) { SUBSTATUS_LABEL[SUBSTATUS_VALUE[label]] = label; });
+
+  /* ── Shipping_Delivery__c ("Delivery Method"): same label/value trap as
+     above, confirmed live in Setup 2026-08-10 -- the picklist entry shown
+     on screen as "Local Dropoff" is stored under the API value "Delivery".
+     DELIVERY_LABEL maps the real stored value -> what to show a human;
+     DELIVERY_METHODS is the fixed tab order the Shipping/Receiving
+     Dashboard (shipping.html) uses, stored-value keyed. */
+  var DELIVERY_LABEL = { 'Shipping':'Shipping', 'Delivery':'Delivery', 'Pickup':'Pick-up', 'Split Ship':'Split Ship', 'Order Fulfillment':'Order Fulfillment' };
+  var DELIVERY_METHODS = ['Shipping', 'Delivery', 'Pickup', 'Split Ship', 'Order Fulfillment'];
   var STAGE_KEY = { 'Ready for Print':'rfp', 'In Production':'ip', 'Post-Production':'pp', 'Completed':'done' };
   var STAGE_SUBSTATUS = { rfp:'Ready for Print', ip:'In Production', pp:'Post-Production', done:'Completed' };
   function stageOf(rec){ return STAGE_KEY[SUBSTATUS_LABEL[rec.Order_Substatus__c] || rec.Order_Substatus__c] || null; }
@@ -244,6 +253,17 @@
   function postPackaging(orderId, type, qty){ return jsend('/api/packaging', 'POST', { orderId: orderId, Packaging_Type__c: type, Quantity__c: qty }); }
   function deletePackaging(pkgId){ return jdel('/api/packaging/' + encodeURIComponent(pkgId)); }
 
+  /* ── shipping/receiving dashboard ── */
+  // Orders where Order_Substatus__c = 'Post-Production' (every method on the
+  // order has finished production -- see functions/api/shipping-orders/index.js
+  // for why that's the right gate) and Status isn't already 'Complete'.
+  function getShippingOrders(){ return jget('/api/shipping-orders').then(function (d) { return d.records || []; }); }
+  // Closes an order out from the shipping/receiving board: standard
+  // Status -> 'Complete'. Deliberately its own endpoint/call, not a generic
+  // patchOrder({Status:'Complete'}) -- see functions/api/orders/[id]/complete.js
+  // for why Status isn't on the generic PATCH allow-list.
+  function completeOrder(orderId){ return jsend('/api/orders/' + encodeURIComponent(orderId) + '/complete', 'POST', { by: workerName() }); }
+
   /* ── shipments (zkmulti__MCShipment__c) ── */
   function getShipments(orderId){ return jget('/api/shipments?orderId=' + encodeURIComponent(orderId)).then(function (d) { return d.records || []; }); }
   function postShipment(orderId, o){ o = o || {}; return jsend('/api/shipments', 'POST', { orderId: orderId, Carrier: o.carrier, ServiceType: o.serviceType, TrackingNumber: o.tracking, Weight: o.weight }); }
@@ -351,6 +371,19 @@
       };
     });
   }
+  // Salesforce's compound Address fields (ShippingAddress, BillingAddress)
+  // come back over REST as an object -- { street, city, state, postalCode,
+  // country, ... } -- or null if nothing's been entered. Turns that into two
+  // display lines; returns null (not a string) when there's nothing to show,
+  // so callers can branch on it directly instead of printing an empty box.
+  function formatAddress(addr){
+    if (!addr) return null;
+    var line1 = text(addr.street);
+    var cityStateZip = [text(addr.city), text(addr.state)].filter(Boolean).join(', ') + (addr.postalCode ? ' ' + text(addr.postalCode) : '');
+    var line2 = cityStateZip.trim();
+    if (!line1 && !line2) return null;
+    return { line1: line1, line2: line2, country: text(addr.country) };
+  }
   function pivotItems(rec){
     var items = (rec.OrderItems && rec.OrderItems.records) || [];
     var bySize = {}, total = 0, garment = '';
@@ -386,6 +419,8 @@
   window.CAApi = {
     VALID_NAMES: VALID_NAMES, ROLE_KEY: ROLE_KEY, NAME_KEY: NAME_KEY, role: role, workerName: workerName, setRole: setRole, setWorkerName: setWorkerName, logout: logout, isManager: isManager, confirmManager: confirmManager, MANAGER_NAMES: MANAGER_NAMES,
     SUBSTATUS_VALUE: SUBSTATUS_VALUE, SUBSTATUS_LABEL: SUBSTATUS_LABEL, STAGE_KEY: STAGE_KEY, STAGE_SUBSTATUS: STAGE_SUBSTATUS, stageOf: stageOf, stageOfMethod: stageOfMethod,
+    DELIVERY_LABEL: DELIVERY_LABEL, DELIVERY_METHODS: DELIVERY_METHODS, formatAddress: formatAddress,
+    getShippingOrders: getShippingOrders, completeOrder: completeOrder,
     CHECK_FIELD: CHECK_FIELD, RECV_FROM_SF: RECV_FROM_SF, RECV_TO_SF: RECV_TO_SF,
     PLACEMENTS: PLACEMENTS, methodsList: methodsList, METHOD_META: METHOD_META,
     getOrders: getOrders, getProductionOrders: getProductionOrders, getInbox: getInbox, getPreProductionItems: getPreProductionItems, patchItem: patchItem, deleteItem: deleteItem, createItem: createItem, searchVendors: searchVendors, searchPlans: searchPlans, searchPresses: searchPresses, createMethod: createMethod, createProductionRun: createProductionRun, getProductionRuns: getProductionRuns, patchProductionRun: patchProductionRun, deleteProductionRun: deleteProductionRun, patchMethodStatus: patchMethodStatus, patchMethodChecklist: patchMethodChecklist, getMethodsForOrder: getMethodsForOrder, patchMethodFields: patchMethodFields, deleteMethod: deleteMethod, patchOrder: patchOrder, getOrderSizes: getOrderSizes, createReprintOrder: createReprintOrder,
