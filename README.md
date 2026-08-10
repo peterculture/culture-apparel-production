@@ -17,14 +17,32 @@ two small shared files ship alongside the HTML.
 | `index.html` | Production Dashboard (kanban) | replace existing |
 | `pre-production.html` | Pre-Production board | replace existing |
 | `station.html` | Station tablet board | replace existing |
+| `shipping.html` | Shipping/Receiving Dashboard (Post-Production → ship/complete) | new |
 | `login.html` | PIN + name capture gate | new |
 | `order-sheet.html` | Printable order sheet (`order-sheet.html?orderId=<SF Id>`) | new |
 | `support.js` | shared UI runtime — **required by all pages** | new |
-| `ca-api.js` | Salesforce API client — **required by index / pre-production / station / order-sheet** | new |
+| `ca-api.js` | Salesforce API client — **required by index / pre-production / station / shipping / order-sheet** | new |
 | `doc-page.js` | print helper — **required by `order-sheet.html`** | new |
 
-Upload all eight to the repo root. Keep `functions/`, `wrangler.toml`, env vars
+Upload all nine to the repo root. Keep `functions/`, `wrangler.toml`, env vars
 and secrets as-is. Commit + push; Pages redeploys.
+
+### Shipping/Receiving Dashboard (`shipping.html`)
+Lists every Order with `Order_Substatus__c = 'Post-Production'` (rollup of every
+production method on the order finishing) that isn't already `Status =
+'Complete'`. Filter tabs: All Post-Production, Shipping, Delivery (labeled
+"Local Dropoff" in Setup — same stored value trap as everywhere else in this
+app), Pickup, Split Ship, Order Fulfillment. Backed by new endpoints:
+- `GET /api/shipping-orders` — the board's query (`functions/api/shipping-orders/index.js`)
+- `POST /api/orders/:id/complete` — sets `Status = 'Complete'` only (`functions/api/orders/[id]/complete.js`)
+
+"Ship Now" opens the existing Zenkraft wizard (`GET /api/orders/:id/zk-wizard-url`,
+already shipped) pre-filled with the order; the dashboard then polls
+`GET /api/shipments` for a new `zkmulti__MCShipment__c` row and auto-marks
+`Shipping_Label_Printed__c`, with a manual "Mark Shipped" toggle as a fallback
+since Zenkraft has no callback into this app. UPS is called out as the default
+carrier in the UI copy only — no code enforces it (Zenkraft still lets a user
+pick another carrier in the wizard itself).
 
 > `support.js` and `ca-api.js` must sit at the site root next to the HTML (each
 > page loads `./support.js` and `./ca-api.js` from its `<head>`). If a page
