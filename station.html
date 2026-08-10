@@ -49,6 +49,13 @@
     <a href="pre-production.html" style="margin-left:auto;font:600 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;border:1px solid #242428;border-radius:9px;padding:9px 12px">← Pre-Production</a>
   </div>
 
+  <div style="display:flex;align-items:center;padding:14px 24px 0">
+    <div style="position:relative;flex:1;min-width:200px;max-width:360px">
+      <i class="ti ti-search" style="position:absolute;left:13px;top:50%;transform:translateY(-50%);color:#4d483f;font-size:15px"></i>
+      <input value="{{q}}" onInput="{{ onSearch }}" placeholder="Search order #, customer…" style="width:100%;background:#121215;border:1px solid #242428;border-radius:9px;padding:11px 13px 11px 36px;font-size:13px;color:#ECEAE4;outline:none">
+    </div>
+  </div>
+
   <div style="display:flex;gap:8px;padding:16px 24px 6px;flex-wrap:wrap;overflow-x:auto">
     <sc-for list="{{tabs}}" as="t" hint-placeholder-count="4">
       <button onClick="{{ t.onPick }}" style="display:inline-flex;align-items:center;gap:8px;font:600 12px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:{{t.textColor}};background:{{t.bg}};border:1px solid {{t.border}};border-radius:10px;padding:12px 15px;cursor:pointer;white-space:nowrap">{{t.label}}<span style="font:700 11px/1 'Oswald';color:{{t.countColor}};background:{{t.countBg}};border-radius:20px;padding:3px 8px">{{t.count}}</span></button>
@@ -271,6 +278,11 @@ class Component extends DCLogic {
     let storedName=''; try{ storedName=localStorage.getItem('caStationWorkerName')||''; }catch(_){}
     this.state = {
       now:new Date(), connection:'loading', station:'ink', tab:'master', modalId:null,
+      // Order name / order number search -- filters the current station's
+      // items by `order` (GOA_Order_Number__c) or `customer` (order name).
+      // Mirrors the search box on index.html / pre-production.html so all
+      // three dashboards behave the same way. See renderVals() below.
+      q:'',
       // Who's using this station tablet right now -- gates the board on
       // first visit (same "Who's this?" pattern as index.html/
       // pre-production.html) and re-opens when the header chip is tapped
@@ -382,7 +394,11 @@ class Component extends DCLogic {
     const st=this.state, cfg=this.STATIONS[st.station], accent=cfg.accent;
     const U={ over:'#E24A3A', today:'#E24A3A', soon:'#C9923A', ok:'#6C665C' };
     const doneStage=cfg.stages[cfg.stages.length-1];
-    const items=st.items[st.station];
+    // Search by order name (customer) or order number (GOA_Order_Number__c) --
+    // applied before the stage/tab split below so tab counts reflect the
+    // filtered set too, same convention as index.html's board search.
+    const q=st.q.trim().toLowerCase();
+    const items=(st.items[st.station]||[]).filter(o=>!q || (o.order+' '+o.customer).toLowerCase().includes(q));
 
     const stationPills=Object.keys(this.STATIONS).map(k=>{ const c=this.STATIONS[k], on=k===st.station; return { key:k, label:c.label.replace('The ',''), icon:c.icon, onPick:()=>this.pickStation(k), bg:on?c.accent:'#141417', border:on?c.accent:'#242428', textColor:on?'#08080A':'#8a8378' }; });
 
@@ -473,7 +489,12 @@ class Component extends DCLogic {
       sfEnvPin:st.sfEnvPin, onSfEnvPin:(e)=>this.setSfEnvPin(e.target.value),
       sfEnvSubmitLabel: st.sfEnvSubmitting?'Switching…':'Switch Environment', onSubmitSfEnv:()=>this.submitSfEnv(),
       sfEnvErr:st.sfEnvErr, sfEnvMsg:st.sfEnvMsg, sfEnvHasErr:!!st.sfEnvErr, sfEnvHasMsg:!!st.sfEnvMsg,
-      showInventory, showBoard, cardGroups, boardEmpty, emptyMsg:cfg.empty,
+      showInventory, showBoard, cardGroups, boardEmpty,
+      // A search with zero matches gets its own message instead of the
+      // station's normal "nothing waiting" copy, which would otherwise read
+      // as if the whole queue were clear.
+      emptyMsg: (boardEmpty && q) ? ('No matches for "'+st.q.trim()+'".') : cfg.empty,
+      q:st.q, onSearch:(e)=>this.setState({q:e.target.value}),
       inventory, invTotal, invTitle,
       modalOpen:!!modal, modal, onCloseModal:()=>this.setState({modalId:null}),
     };
