@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+<script src="./ca-api.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css" rel="stylesheet">
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;background:#08080A;font-family:'Archivo',system-ui,sans-serif;-webkit-font-smoothing:antialiased;color:#ECEAE4}
+    a{color:#E24A3A;text-decoration:none}
+    a:hover{color:#C6372B}
+    .ti{font-size:inherit;line-height:1;display:inline-block}
+    ::-webkit-scrollbar{width:9px;height:9px}
+    ::-webkit-scrollbar-thumb{background:#2a2a2e;border-radius:6px}
+    ::-webkit-scrollbar-track{background:transparent}
+    @keyframes ca-fade{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:scale(1)}}
+    @keyframes ca-spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+  </style>
+</helmet>
+
+<div style="display:flex;flex-direction:column;min-height:100vh;background:radial-gradient(circle at 50% -8%,#101013,#08080A 55%)">
+
+  <header style="position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:16px;padding:15px 24px;background:rgba(6,6,7,.94);backdrop-filter:blur(10px);border-bottom:2px solid {{accent}}">
+    <div style="width:46px;height:46px;border-radius:12px;background:{{accent}};display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-truck-delivery" style="color:#08080A;font-size:24px"></i></div>
+    <div style="min-width:0">
+      <div style="font:600 20px/1 'Oswald';letter-spacing:.04em;color:#ECEAE4">Shipping / Receiving</div>
+      <div style="font:500 9px/1 'Oswald';letter-spacing:.34em;text-transform:uppercase;color:{{accent}};margin-top:5px">Culture Apparel · Post-Production</div>
+    </div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end">
+      <div style="display:flex;align-items:center;gap:7px;font:600 12px/1 'Oswald';letter-spacing:.09em;color:#9C978C;white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:{{connColor}}"></span>{{connLabel}} · {{clock}}</div>
+      <button onClick="{{ onOpenSfEnv }}" title="Salesforce environment -- click to switch" style="display:flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#9C978C;background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:8px 11px;cursor:pointer;white-space:nowrap" style-hover="border-color:{{accent}};color:{{accent}}"><i class="ti ti-cloud" style="font-size:12px"></i>{{sfEnvLabel}}</button>
+      <button onClick="{{ onNameTap }}" style="display:flex;align-items:center;gap:8px;background:#141417;border:1px solid #2a2a2f;border-radius:22px;padding:6px 12px 6px 6px;cursor:pointer"><span style="width:28px;height:28px;border-radius:50%;background:{{accent}};color:#08080A;font:700 10px/28px 'Oswald';text-align:center">{{workerInit}}</span><span style="font:500 12px/1 'Archivo';color:#ECEAE4;white-space:nowrap">{{worker}}</span></button>
+    </div>
+  </header>
+
+  <div style="display:flex;align-items:center;gap:8px;padding:14px 24px 4px;flex-wrap:wrap;border-bottom:1px solid #16161a">
+    <span style="font:600 10px/1 'Oswald';letter-spacing:.12em;text-transform:uppercase;color:#4d483f;margin-right:4px">View</span>
+    <sc-for list="{{tabs}}" as="t" hint-placeholder-count="6">
+      <button onClick="{{ t.onPick }}" style="display:inline-flex;align-items:center;gap:8px;font:600 11px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:{{t.textColor}};background:{{t.bg}};border:1px solid {{t.border}};border-radius:9px;padding:10px 13px;cursor:pointer;white-space:nowrap">{{t.label}}<span style="font:700 10px/1 'Oswald';color:{{t.countColor}};background:{{t.countBg}};border-radius:20px;padding:3px 7px">{{t.count}}</span></button>
+    </sc-for>
+    <a href="index.html" style="margin-left:auto;font:600 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;border:1px solid #242428;border-radius:9px;padding:9px 12px;white-space:nowrap">← Production</a>
+  </div>
+
+  <div style="display:flex;align-items:center;padding:14px 24px 0">
+    <div style="position:relative;flex:1;min-width:200px;max-width:360px">
+      <i class="ti ti-search" style="position:absolute;left:13px;top:50%;transform:translateY(-50%);color:#4d483f;font-size:15px"></i>
+      <input value="{{q}}" onInput="{{ onSearch }}" placeholder="Search order #, customer…" style="width:100%;background:#121215;border:1px solid #242428;border-radius:9px;padding:11px 13px 11px 36px;font-size:13px;color:#ECEAE4;outline:none">
+    </div>
+  </div>
+
+  <div style="flex:1;padding:12px 24px 44px">
+    <sc-for list="{{cardGroups}}" as="g" hint-placeholder-count="2">
+      <div style="display:flex;align-items:center;gap:10px;margin:22px 0 12px">
+        <span style="width:7px;height:7px;border-radius:50%;background:{{g.color}};flex-shrink:0"></span>
+        <span style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:{{g.color}}">{{g.label}}</span>
+        <div style="flex:1;height:1px;background:#1b1b1e"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px">
+        <sc-for list="{{g.cards}}" as="o" hint-placeholder-count="2">
+          <div onClick="{{ o.onOpen }}" style="display:flex;background:#141417;border:1px solid #232327;border-radius:14px;overflow:hidden;cursor:pointer;transition:border-color .12s,transform .12s" style-hover="border-color:{{accent}};transform:translateY(-2px)">
+            <div style="width:7px;background:{{o.methodColor}};flex-shrink:0"></div>
+            <div style="padding:16px 17px;flex:1;min-width:0;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;align-items:flex-start;gap:10px">
+                <div style="min-width:0"><div style="font:700 15px/1.2 'Oswald';letter-spacing:.02em;color:#ECEAE4">{{o.order}}</div><div style="font:500 14px/1.3 'Oswald';color:#9C978C;margin-top:6px">{{o.customer}}</div></div>
+                <sc-if value="{{o.labelPrinted}}" hint-placeholder-val="{{ false }}"><span style="margin-left:auto;flex-shrink:0;display:inline-flex;align-items:center;gap:5px;font:700 9px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#7FA644;background:#18230D;border:1px solid #3D5418;border-radius:6px;padding:6px 8px"><i class="ti ti-check"></i>Shipped</span></sc-if>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span style="display:inline-flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:{{o.methodColor}};background:{{o.methodBg}};border:1px solid {{o.methodBorder}};border-radius:7px;padding:6px 9px"><i class="ti {{o.methodIcon}}"></i>{{o.methodLabel}}</span>
+                <sc-if value="{{o.hasWeight}}" hint-placeholder-val="{{ false }}"><span style="font:500 11px/1 'Archivo';color:#6C665C">{{o.weightLabel}}</span></sc-if>
+                <sc-if value="{{o.hasShipments}}" hint-placeholder-val="{{ false }}"><span style="font:500 11px/1 'Archivo';color:#6C665C">· {{o.shipmentLabel}}</span></sc-if>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;padding-top:12px;border-top:1px solid #202024">
+                <span style="display:inline-flex;align-items:center;gap:5px;font:700 12px/1 'Oswald';letter-spacing:.04em;text-transform:uppercase;color:{{o.urgColor}}"><i class="ti ti-clock-hour-4"></i>{{o.dueLabel}}</span>
+                <span style="margin-left:auto;display:inline-flex;align-items:center;gap:6px;font:700 11px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:{{accent}}">Open<i class="ti ti-arrow-right"></i></span>
+              </div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </sc-for>
+    <sc-if value="{{boardEmpty}}" hint-placeholder-val="{{ false }}">
+      <div style="border:1px dashed #2a2a2f;border-radius:14px;padding:44px 20px;text-align:center;font:400 14px/1.5 'Archivo';color:#4d483f;max-width:520px;margin:8px auto">{{emptyMsg}}</div>
+    </sc-if>
+  </div>
+
+  <sc-if value="{{modalOpen}}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;z-index:70;background:#08080A;overflow-y:auto;animation:ca-fade .18s ease">
+      <div style="position:sticky;top:0;display:flex;align-items:center;gap:14px;padding:16px 24px;background:rgba(6,6,7,.94);backdrop-filter:blur(10px);border-bottom:2px solid {{accent}};z-index:2">
+        <button onClick="{{ onCloseModal }}" style="display:inline-flex;align-items:center;gap:8px;font:600 13px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#ECEAE4;background:#141417;border:1px solid #2a2a2f;border-radius:10px;padding:12px 16px;cursor:pointer"><i class="ti ti-arrow-left"></i>Board</button>
+        <span style="margin-left:auto;font:600 12px/1 'Oswald';letter-spacing:.16em;text-transform:uppercase;color:{{accent}}">{{modal.methodLabel}}</span>
+      </div>
+      <div style="max-width:640px;margin:0 auto;padding:28px 24px 60px">
+
+        <div style="margin-bottom:22px">
+          <div style="font:600 26px/1.15 'Oswald';color:#ECEAE4">{{modal.order}}</div>
+          <div style="font:400 13px/1 'Archivo';color:#8a8378;margin-top:10px">{{modal.customer}}</div>
+          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:14px">
+            <div style="display:inline-flex;align-items:center;gap:8px;font:700 13px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:{{modal.urgColor}}"><i class="ti ti-clock-hour-4"></i>{{modal.dueLabel}}</div>
+            <span style="display:inline-flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:{{modal.methodColor}};background:{{modal.methodBg}};border:1px solid {{modal.methodBorder}};border-radius:7px;padding:7px 10px"><i class="ti {{modal.methodIcon}}"></i>{{modal.methodLabel}}</span>
+          </div>
+        </div>
+
+        <sc-if value="{{modal.hasCombinedNote}}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:flex-start;gap:10px;font:500 12px/1.5 'Archivo';color:#E0B870;background:#241a09;border:1px solid #5E4214;border-radius:11px;padding:13px 15px;margin-bottom:22px"><i class="ti ti-alert-triangle" style="margin-top:2px"></i><span>{{modal.combinedNote}}</span></div>
+        </sc-if>
+
+        <sc-if value="{{modal.hasAddress}}" hint-placeholder-val="{{ false }}">
+          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:9px">Ship To</div>
+          <div style="font:400 15px/1.5 'Archivo';color:#C9C6BF;background:#121215;border:1px solid #232327;border-radius:11px;padding:14px 16px;margin-bottom:22px">
+            <div>{{modal.addrLine1}}</div>
+            <div>{{modal.addrLine2}}</div>
+            <sc-if value="{{modal.hasContact}}" hint-placeholder-val="{{ false }}"><div style="margin-top:10px;padding-top:10px;border-top:1px solid #1f1f23;font-size:13px;color:#9C978C">{{modal.contactLine}}</div></sc-if>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{modal.hasContactOnly}}" hint-placeholder-val="{{ false }}">
+          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:9px">Contact</div>
+          <div style="font:400 15px/1.5 'Archivo';color:#C9C6BF;background:#121215;border:1px solid #232327;border-radius:11px;padding:14px 16px;margin-bottom:22px">{{modal.contactLine}}</div>
+        </sc-if>
+
+        <sc-if value="{{modal.hasWeight}}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;gap:8px;font:500 13px/1 'Archivo';color:#8a8378;margin-bottom:22px"><i class="ti ti-weight"></i>{{modal.weightLabel}} on file — confirm actual weight in the Zenkraft wizard before shipping</div>
+        </sc-if>
+
+        <sc-if value="{{modal.hasNotes}}" hint-placeholder-val="{{ false }}">
+          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:9px">Notes</div>
+          <div style="font:400 14px/1.55 'Archivo';color:#C9C6BF;white-space:pre-wrap;background:#121215;border:1px solid #232327;border-radius:11px;padding:14px 16px;margin-bottom:22px">{{modal.notes}}</div>
+        </sc-if>
+
+        <sc-if value="{{modal.showShipFlow}}" hint-placeholder-val="{{ true }}">
+          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:12px">UPS is our default carrier — pick something else in the wizard only if this shipment needs it.</div>
+          <button onClick="{{ modal.onShipNow }}" disabled="{{modal.shipBusy}}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:9px;font:700 14px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#08080A;background:{{accent}};border:none;border-radius:13px;padding:18px;cursor:pointer;margin-bottom:10px" style-hover="filter:brightness(1.08)"><i class="ti ti-brand-open-source" style="{{modal.shipSpin}}"></i>{{modal.shipNowLabel}}</button>
+          <sc-if value="{{modal.hasZkErr}}" hint-placeholder-val="{{ false }}"><div style="font:600 11px/1.4 'Oswald';letter-spacing:.03em;text-transform:uppercase;color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:9px;padding:11px 13px;margin-bottom:14px">{{modal.zkErr}}</div></sc-if>
+
+          <div style="display:flex;align-items:center;gap:10px;margin:20px 0 12px">
+            <span style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378">Shipments Logged</span>
+            <div style="flex:1;height:1px;background:#1b1b1e"></div>
+          </div>
+          <sc-if value="{{modal.hasNoShipments}}" hint-placeholder-val="{{ true }}"><div style="font:400 13px/1.5 'Archivo';color:#4d483f;margin-bottom:14px">None yet — click Ship Now above once the label's ready to print.</div></sc-if>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">
+            <sc-for list="{{modal.shipments}}" as="s" hint-placeholder-count="1">
+              <div style="display:flex;align-items:center;gap:12px;background:#121215;border:1px solid #232327;border-radius:11px;padding:12px 15px">
+                <i class="ti ti-package" style="color:#7FA644;font-size:18px"></i>
+                <div style="min-width:0"><div style="font:600 13px/1.2 'Archivo';color:#ECEAE4">{{s.carrier}} · {{s.tracking}}</div><div style="font:400 11px/1.3 'Archivo';color:#6C665C;margin-top:3px">{{s.dateLabel}}</div></div>
+              </div>
+            </sc-for>
+          </div>
+
+          <sc-if value="{{modal.labelPrinted}}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;align-items:center;gap:9px;font:700 12px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:#7FA644;background:#18230D;border:1px solid #3D5418;border-radius:11px;padding:14px 16px;margin-bottom:12px"><i class="ti ti-circle-check"></i>{{modal.labelStatusText}}</div>
+          </sc-if>
+          <button onClick="{{ modal.onToggleLabel }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:8px;font:600 11px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#8a8378;background:transparent;border:1px solid #2a2a2f;border-radius:11px;padding:13px;cursor:pointer;margin-bottom:22px" style-hover="border-color:{{accent}};color:{{accent}}">{{modal.toggleLabelText}}</button>
+        </sc-if>
+
+        <sc-if value="{{modal.showSimpleComplete}}" hint-placeholder-val="{{ false }}">
+          <div style="height:6px"></div>
+        </sc-if>
+
+        <button onClick="{{ modal.onComplete }}" disabled="{{modal.completeBusy}}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:9px;font:700 13px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#fff;background:#2E7D46;border:none;border-radius:13px;padding:17px;cursor:pointer" style-hover="filter:brightness(1.1)"><i class="ti ti-circle-check"></i>{{modal.completeLabel}}</button>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{sfEnvOpen}}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;z-index:96;background:rgba(6,6,7,.82);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:24px">
+      <div style="width:100%;max-width:440px;background:#0D0D0F;border:1px solid #1f1f23;border-radius:18px;box-shadow:0 40px 90px -30px rgba(0,0,0,.8);position:relative">
+        <div style="display:flex;align-items:center;gap:12px;padding:18px 22px;border-bottom:1px solid #1f1f23">
+          <div>
+            <div style="font:600 17px/1.1 'Oswald';color:#ECEAE4">Salesforce Environment</div>
+            <div style="font:400 11px/1.4 'Archivo';color:#6C665C;margin-top:4px">Switches which org every tablet talks to — applies to everyone immediately.</div>
+          </div>
+          <button onClick="{{ onCloseSfEnv }}" style="margin-left:auto;flex-shrink:0;width:32px;height:32px;border-radius:9px;background:#16161a;border:1px solid #2a2a2f;color:#9C978C;cursor:pointer;font-size:15px" style-hover="color:#ECEAE4;border-color:#3a3a40"><i class="ti ti-x"></i></button>
+        </div>
+        <div style="padding:20px 22px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <sc-for list="{{sfEnvOptions}}" as="e" hint-placeholder-count="3">
+              <button onClick="{{ e.onPick }}" style="display:flex;align-items:center;gap:10px;text-align:left;background:{{e.bg}};border:1px solid {{e.border}};border-radius:10px;padding:12px 14px;cursor:{{e.cursor}}">
+                <span style="width:9px;height:9px;border-radius:50%;background:{{e.dotColor}};flex-shrink:0"></span>
+                <div style="flex:1;min-width:0">
+                  <div style="font:600 13px/1.1 'Oswald';color:{{e.textColor}}">{{e.label}}</div>
+                  <div style="font:400 10px/1.3 'Archivo';color:#6C665C;margin-top:3px">{{e.statusLabel}}</div>
+                </div>
+                <sc-if value="{{e.isActive}}" hint-placeholder-val="{{ false }}"><span style="font:600 8px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#7FA644;background:#18230D;border:1px solid #3D5418;border-radius:6px;padding:4px 7px;flex-shrink:0">Active</span></sc-if>
+              </button>
+            </sc-for>
+          </div>
+
+          <div>
+            <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Switch PIN</div>
+            <input type="password" value="{{sfEnvPin}}" onInput="{{ onSfEnvPin }}" placeholder="Enter PIN to confirm switch" style="width:100%;background:#121215;border:1px solid #232327;border-radius:9px;padding:11px 13px;font-size:13px;color:#ECEAE4;outline:none">
+          </div>
+
+          <sc-if value="{{sfEnvHasMsg}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:7px;font:600 11px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:#BBD382;background:#18230D;border:1px solid #3D5418;border-radius:9px;padding:10px 13px"><i class="ti ti-check"></i>{{sfEnvMsg}}</div></sc-if>
+          <sc-if value="{{sfEnvHasErr}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:8px;font:600 11px/1.3 'Oswald';letter-spacing:.03em;text-transform:uppercase;color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:9px;padding:12px 14px"><i class="ti ti-alert-triangle"></i>{{sfEnvErr}}</div></sc-if>
+
+          <button onClick="{{ onSubmitSfEnv }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:8px;font:700 12px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#fff;background:#C6372B;border:none;border-radius:11px;padding:16px;cursor:pointer" style-hover="filter:brightness(1.1)"><i class="ti ti-repeat"></i>{{sfEnvSubmitLabel}}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{nameGateOpen}}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;z-index:90;background:rgba(6,6,7,.88);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:24px">
+      <div style="width:100%;max-width:420px;background:#0D0D0F;border:1px solid #1f1f23;border-radius:18px;padding:30px 26px;text-align:center;box-shadow:0 40px 90px -30px rgba(0,0,0,.8)">
+        <div style="font:600 19px/1.1 'Oswald';color:#ECEAE4;margin-bottom:8px">Who's this?</div>
+        <div style="font:400 12px/1.5 'Archivo';color:#8a8378;margin-bottom:20px">Pick your name so shipments logged from this tablet can be traced back to you.</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px">
+          <sc-for list="{{names}}" as="n" hint-placeholder-count="12">
+            <button onClick="{{ n.onPick }}" style="font:600 13px/1 'Oswald';letter-spacing:.02em;color:#ECEAE4;background:#16161a;border:1px solid #2a2a2f;border-radius:10px;padding:13px 6px;cursor:pointer" style-hover="border-color:{{accent}};color:{{accent}}">{{n.label}}</button>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#3E7CB1"/><text x="50" y="60" font-family="Oswald,Arial" font-size="30" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="2">CA</text><text x="50" y="78" font-family="Arial" font-size="8" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="1">SHIP</text></svg></template></x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+// Single source of truth is window.CAApi (ca-api.js) -- literal fallback only
+// matters if that file somehow fails to load. Keep in sync with the copies in
+// login.html / index.html / pre-production.html / station.html.
+const VALID_NAMES = (window.CAApi && window.CAApi.VALID_NAMES) || ['Anthony','Asher','Alex','Parker','Titus','Gian','Isaac','Bronson','Zach','Logan','Avery','Jeff'];
+const ACCENT = '#3E7CB1';
+
+// Delivery-method chip styling, keyed by the REAL STORED VALUE (not the
+// on-screen Setup label -- "Delivery" here is what shows in Salesforce as
+// "Local Dropoff"; see ca-api.js's DELIVERY_LABEL/DELIVERY_METHODS header
+// comment and functions/api/shipping-orders/index.js for the full story).
+const METHOD_META = {
+  'Shipping':          { color:'#3E7CB1', icon:'ti-truck-delivery' },
+  'Delivery':          { color:'#7FA644', icon:'ti-map-pin' },
+  'Pickup':            { color:'#C9923A', icon:'ti-hand-stop' },
+  'Split Ship':        { color:'#8E6FB0', icon:'ti-git-branch' },
+  'Order Fulfillment':  { color:'#5E9B9A', icon:'ti-package' },
+};
+const DEFAULT_META = { color:'#6C665C', icon:'ti-question-mark' };
+// Methods that go through the Zenkraft wizard -- everything else (Pickup,
+// Delivery/Local Dropoff, Order Fulfillment) has no label to print, so the
+// drawer skips straight to a single "mark done" action.
+const SHIP_FLOW_METHODS = { 'Shipping':true, 'Split Ship':true };
+// How often to re-check for a newly-created zkmulti__MCShipment__c after
+// "Ship Now" is clicked (see startPolling/pollShipments below) -- balances
+// catching the real shipment quickly against hammering the API while the
+// manager is off in the Zenkraft tab.
+const POLL_MS = 6000;
+const POLL_MAX_TRIES = 40; // ~4 minutes, then give up quietly (Mark Shipped still works)
+
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    let storedName=''; try{ storedName=localStorage.getItem('caStationWorkerName')||''; }catch(_){}
+    this.state = {
+      now:new Date(), connection:'loading', tab:'all', q:'', modalId:null,
+      orders:[],
+      // orderId -> array of shipment records (zkmulti__MCShipment__c), loaded
+      // when a drawer opens and re-polled while "Ship Now" is in flight.
+      shipments:{},
+      // orderId -> shipment count captured the moment Ship Now was clicked,
+      // so pollShipments() can tell "a NEW shipment appeared" apart from
+      // "shipments this order already had".
+      shipBaseline:{},
+      shipBusy:{}, completeBusy:{}, zkErr:{},
+      nameOk: VALID_NAMES.includes(storedName),
+      sfEnvOpen:false, sfEnvList:[], sfEnvActive:'dev2', sfEnvActiveLabel:'Dev2', sfEnvSelected:'dev2', sfEnvPin:'', sfEnvSubmitting:false, sfEnvErr:'', sfEnvMsg:'',
+    };
+    this._demoOrders = [
+      { Id:'demo-1', OrderNumber:'00021014', GOA_Order_Number__c:'GOA-4809', Customer_Order_Name__c:'Cypress Trail 10K', Account:{Name:'Cypress Trail 10K'}, Print_Date__c:isoInDays(0), Shipping_Delivery__c:'Shipping', Shipping_Label_Printed__c:false, Weight__c:24, ShippingAddress:{street:'412 Trailhead Rd',city:'Bend',state:'OR',postalCode:'97701',country:'USA'}, ShipToContact:null, Special_Notes__c:'', Packaging_Count__c:2, Is_Master_Shipment_Order__c:false, Master_Shipment_Order__c:null, MasterShipmentOrderNumber:null, ShipmentCount:0 },
+      { Id:'demo-2', OrderNumber:'00021048', GOA_Order_Number__c:'GOA-4838', Customer_Order_Name__c:'Northgate Prep', Account:{Name:'Northgate Prep'}, Print_Date__c:isoInDays(2), Shipping_Delivery__c:'Pickup', Shipping_Label_Printed__c:false, Weight__c:null, ShippingAddress:null, ShipToContact:{Name:'Dana Ruiz',Phone:'(541) 555-0138',Email:'dana@northgateprep.example'}, Special_Notes__c:'Picking up Thursday afternoon.', Packaging_Count__c:1, Is_Master_Shipment_Order__c:false, Master_Shipment_Order__c:null, MasterShipmentOrderNumber:null, ShipmentCount:0 },
+      { Id:'demo-3', OrderNumber:'00020995', GOA_Order_Number__c:'GOA-4842', Customer_Order_Name__c:'Summit Cycling', Account:{Name:'Summit Cycling'}, Print_Date__c:isoInDays(-1), Shipping_Delivery__c:'Split Ship', Shipping_Label_Printed__c:false, Weight__c:31, ShippingAddress:{street:'88 Ridge Ave',city:'Portland',state:'OR',postalCode:'97205',country:'USA'}, ShipToContact:null, Special_Notes__c:'Two locations -- HQ + warehouse.', Packaging_Count__c:3, Is_Master_Shipment_Order__c:false, Master_Shipment_Order__c:null, MasterShipmentOrderNumber:null, ShipmentCount:1 },
+    ];
+    function isoInDays(n){ const d=new Date(); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+    this._demoShipments = { 'demo-3':[{ Id:'ds-1', zkmulti__Carrier__c:'UPS', zkmulti__Service_Type_Name__c:'Ground', zkmulti__Tracking_Number__c:'1Z999AA10123456784', zkmulti__Ship_Date__c:isoInDays(-1), CreatedDate:new Date().toISOString() }] };
+  }
+  componentDidMount(){
+    this._t=setInterval(()=>this.setState({now:new Date()}),1000);
+    this.load(); this.loadSfEnv();
+    this._ar=setInterval(()=>{ if(this.state.connection==='live' && !this.state.modalId) this.load(); },20000);
+  }
+  componentWillUnmount(){ clearInterval(this._t); clearInterval(this._ar); this.clearPoll(); }
+
+  async load(){
+    try {
+      this._api = window.CAApi; if(!this._api) throw new Error('CAApi not loaded');
+      const orders = await this._api.getShippingOrders();
+      this.setState({ orders, connection:'live' });
+    } catch(_) {
+      this.setState({ orders:this._demoOrders, connection:'demo' });
+    }
+  }
+  pickName(nm){ if(!VALID_NAMES.includes(nm)) return; try{localStorage.setItem('caStationWorkerName',nm);}catch(_){} this.setState({nameOk:true}); }
+  switchUser(){ try{localStorage.removeItem('caStationWorkerName');}catch(_){} this.setState({nameOk:false}); }
+  pickTab(k){ this.setState({tab:k}); }
+
+  // ── Salesforce environment switcher (identical pattern to the other boards) ──
+  loadSfEnv(){
+    if(!this._api) return;
+    this._api.getSfEnv().then(d=>{
+      if(!d) return;
+      const environments=d.environments||[];
+      const activeObj=environments.find(e=>e.key===d.active);
+      this.setState({ sfEnvList:environments, sfEnvActive:d.active, sfEnvActiveLabel:(activeObj&&activeObj.label)||d.active, sfEnvSelected:d.active });
+    }).catch(()=>{});
+  }
+  openSfEnvModal(){ this.setState({ sfEnvOpen:true, sfEnvPin:'', sfEnvErr:'', sfEnvMsg:'' }); this.loadSfEnv(); }
+  closeSfEnvModal(){ this.setState({sfEnvOpen:false}); }
+  pickSfEnvKey(key){ this.setState({sfEnvSelected:key, sfEnvErr:'', sfEnvMsg:''}); }
+  setSfEnvPin(v){ this.setState({sfEnvPin:v}); }
+  async submitSfEnv(){
+    if(this.state.sfEnvSubmitting || !this._api) return;
+    const key=this.state.sfEnvSelected;
+    if(!key) return;
+    if(key===this.state.sfEnvActive){ this.setState({sfEnvMsg:'Already active', sfEnvErr:''}); return; }
+    if(!this.state.sfEnvPin){ this.setState({sfEnvErr:'Enter the switch PIN', sfEnvMsg:''}); return; }
+    this.setState({sfEnvSubmitting:true, sfEnvErr:'', sfEnvMsg:''});
+    try{
+      const res = await this._api.setSfEnv(key, this.state.sfEnvPin);
+      const active = (res && res.active) || key;
+      const opt = (this.state.sfEnvList||[]).find(e=>e.key===active);
+      const label = (opt&&opt.label)||active;
+      this.setState(st=>({
+        sfEnvSubmitting:false, sfEnvActive:active, sfEnvActiveLabel:label, sfEnvPin:'',
+        sfEnvMsg:'Switched — every tablet now talks to '+label,
+        sfEnvList:(st.sfEnvList||[]).map(e=>Object.assign({}, e, {active:e.key===active})),
+      }));
+      this.load();
+    }catch(e){
+      const m=/-> (\d+)/.exec((e&&e.message)||'');
+      const code=m?Number(m[1]):0;
+      const msg = code===401?'Wrong PIN'
+        : code===409?'That environment is not configured yet'
+        : code===500?'Switch PIN is not configured on the server'
+        : code===400?'Unknown environment'
+        : 'Could not switch — try again';
+      this.setState({sfEnvSubmitting:false, sfEnvErr:msg, sfEnvMsg:''});
+    }
+  }
+
+  // ── drawer open/close + shipment history ──
+  openOrder(id){ this.setState({modalId:id}); this.loadShipments(id); }
+  closeModal(){ this.clearPoll(); this.setState({modalId:null}); }
+  loadShipments(orderId){
+    if(!this._api || this.state.connection!=='live'){
+      const demo=this._demoShipments[orderId]||[];
+      this.setState(st=>({ shipments:Object.assign({},st.shipments,{[orderId]:demo}) }));
+      return Promise.resolve(demo);
+    }
+    return this._api.getShipments(orderId).then(list=>{
+      this.setState(st=>({ shipments:Object.assign({},st.shipments,{[orderId]:list}) }));
+      return list;
+    }).catch(()=>[]);
+  }
+
+  // ── Ship Now -> Zenkraft wizard, then poll for the real shipment it creates ──
+  shipNow(order){
+    this.setState(st=>({ shipBusy:Object.assign({},st.shipBusy,{[order.Id]:true}), zkErr:Object.assign({},st.zkErr,{[order.Id]:''}) }));
+    if(!this._api || this.state.connection!=='live'){
+      this.setState(st=>({ shipBusy:Object.assign({},st.shipBusy,{[order.Id]:false}), zkErr:Object.assign({},st.zkErr,{[order.Id]:'Not connected to Salesforce (demo mode)'}) }));
+      return;
+    }
+    const baseline = (this.state.shipments[order.Id]||[]).length;
+    this._api.getZkWizardUrl(order.Id, order.OrderNumber||order.GOA_Order_Number__c).then(d=>{
+      this.setState(st=>({ shipBusy:Object.assign({},st.shipBusy,{[order.Id]:false}) }));
+      if(d && d.url){
+        window.open(d.url,'_blank','noopener');
+        this.setState(st=>({ shipBaseline:Object.assign({},st.shipBaseline,{[order.Id]:baseline}) }));
+        this.startPolling(order.Id);
+      } else {
+        this.setState(st=>({ zkErr:Object.assign({},st.zkErr,{[order.Id]:'Could not open the Zenkraft wizard'}) }));
+      }
+    }).catch(()=>{
+      this.setState(st=>({ shipBusy:Object.assign({},st.shipBusy,{[order.Id]:false}), zkErr:Object.assign({},st.zkErr,{[order.Id]:'Could not open the Zenkraft wizard'}) }));
+    });
+  }
+  // Only one order polls at a time (whichever drawer is open) -- simpler than
+  // tracking a timer per order, and matches how this tablet is actually used
+  // (one manager, one open order, at a time).
+  startPolling(orderId){
+    this.clearPoll();
+    let tries=0;
+    this._pollTimer = setInterval(()=>{
+      tries++;
+      if(tries>POLL_MAX_TRIES){ this.clearPoll(); return; }
+      this.loadShipments(orderId).then(list=>{
+        const baseline = this.state.shipBaseline[orderId];
+        if(baseline!=null && list.length>baseline){
+          this.clearPoll();
+          this.setLabelPrinted(orderId, true, true);
+        }
+      });
+    }, POLL_MS);
+  }
+  clearPoll(){ if(this._pollTimer){ clearInterval(this._pollTimer); this._pollTimer=null; } }
+
+  // ── Shipping_Label_Printed__c: set automatically by the poll above, or by
+  // hand via the "Mark Shipped"/"Not shipped yet" toggle -- either path
+  // writes the same field the same way, so it doesn't matter which one a
+  // given order ends up going through. ──
+  setLabelPrinted(orderId, val, auto){
+    this.setState(st=>({ orders: st.orders.map(o=>o.Id===orderId?Object.assign({},o,{Shipping_Label_Printed__c:val}):o) }));
+    if(this._api && this.state.connection==='live'){
+      this._api.patchOrder(orderId, { Shipping_Label_Printed__c: val }).catch(()=>{});
+    }
+  }
+  toggleLabel(order){ this.setLabelPrinted(order.Id, !order.Shipping_Label_Printed__c, false); }
+
+  // ── Complete: standard Status -> 'Complete' (see functions/api/orders/[id]/complete.js
+  // for why this is its own endpoint, not a generic field patch). Drops the
+  // order out of every board's Post-Production query on next load, so it's
+  // removed from local state immediately rather than waiting on a refresh. ──
+  completeOrder(order){
+    if(!window.confirm('Mark ' + (order.OrderNumber||order.GOA_Order_Number__c) + ' complete? It will drop off this board.')) return;
+    this.setState(st=>({ completeBusy:Object.assign({},st.completeBusy,{[order.Id]:true}) }));
+    const finish=()=>{ this.clearPoll(); this.setState(st=>({ orders: st.orders.filter(o=>o.Id!==order.Id), modalId:null })); };
+    if(!this._api || this.state.connection!=='live'){ finish(); return; }
+    this._api.completeOrder(order.Id).then(finish).catch(()=>{
+      this.setState(st=>({ completeBusy:Object.assign({},st.completeBusy,{[order.Id]:false}) }));
+      window.alert('Could not mark this order complete -- try again.');
+    });
+  }
+
+  renderVals(){
+    const st=this.state, api=this._api||window.CAApi;
+    const DELIVERY_METHODS = (api&&api.DELIVERY_METHODS) || ['Shipping','Delivery','Pickup','Split Ship','Order Fulfillment'];
+    const DELIVERY_LABEL = (api&&api.DELIVERY_LABEL) || {};
+    const U={ over:'#E24A3A', today:'#E24A3A', soon:'#C9923A', ok:'#6C665C' };
+
+    const q=st.q.trim().toLowerCase();
+    const matches=(o)=>{
+      if(!q) return true;
+      const hay=[o.OrderNumber, o.GOA_Order_Number__c, o.Customer_Order_Name__c, o.Account&&o.Account.Name].filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(q);
+    };
+    const byMethod=(o, key)=> key==='all' ? true : o.Shipping_Delivery__c===key;
+    const base=(st.orders||[]).filter(matches);
+
+    const tabDefs=[{key:'all',label:'All Post-Production'}].concat(DELIVERY_METHODS.map(m=>({key:m,label:DELIVERY_LABEL[m]||m})));
+    const tabs=tabDefs.map(t=>{
+      const on=st.tab===t.key;
+      const count=base.filter(o=>byMethod(o,t.key)).length;
+      return { key:t.key, label:t.label, count:String(count), onPick:()=>this.pickTab(t.key), bg:on?'#1a1a1e':'#121215', border:on?ACCENT:'#232327', textColor:on?'#ECEAE4':'#8a8378', countColor:on?'#08080A':'#9C978C', countBg:on?ACCENT:'#242428' };
+    });
+
+    const filtered=base.filter(o=>byMethod(o,st.tab));
+
+    const mk=(o)=>{
+      const meta = METHOD_META[o.Shipping_Delivery__c] || DEFAULT_META;
+      const due=(api&&api.dueInfo)?api.dueInfo(o.Print_Date__c):{label:'No date',urg:'ok',days:null};
+      const weight = o.Weight__c!=null && o.Weight__c!=='' ? Number(o.Weight__c) : null;
+      return {
+        id:o.Id, order:(o.GOA_Order_Number__c||o.OrderNumber||o.Id), customer:(o.Customer_Order_Name__c||(o.Account&&o.Account.Name)||'—'),
+        methodLabel: DELIVERY_LABEL[o.Shipping_Delivery__c]||o.Shipping_Delivery__c||'—', methodColor:meta.color, methodIcon:meta.icon,
+        methodBg:'rgba(255,255,255,.04)', methodBorder:'#2f2f34',
+        hasWeight: weight!=null, weightLabel: weight!=null ? (weight+' lb') : '',
+        hasShipments: (o.ShipmentCount||0)>0, shipmentLabel: (o.ShipmentCount||0)+(o.ShipmentCount===1?' shipment logged':' shipments logged'),
+        labelPrinted: !!o.Shipping_Label_Printed__c,
+        urgColor:U[due.urg]||U.ok, dueLabel:due.label, urg:due.urg, days:due.days,
+        onOpen:()=>this.openOrder(o.Id),
+      };
+    };
+    let cards=filtered.map(mk);
+    cards.sort((a,b)=>{ const da=(a.days==null)?Infinity:a.days, db=(b.days==null)?Infinity:b.days; return da-db; });
+    const boardEmpty = cards.length===0;
+
+    const GROUP_DEFS=[
+      { key:'over',  label:'Overdue',     color:'#E24A3A' },
+      { key:'today', label:'Ship Today',  color:'#E24A3A' },
+      { key:'soon',  label:'Ship Soon',   color:'#C9923A' },
+      { key:'ok',    label:'On Schedule', color:'#6C665C' },
+    ];
+    const cardGroups = GROUP_DEFS.map(g=>({ label:g.label, color:g.color, cards:cards.filter(c=>c.urg===g.key) })).filter(g=>g.cards.length>0);
+
+    // ── drawer ──
+    let modal=null;
+    const src=(st.orders||[]).find(o=>o.Id===st.modalId);
+    if(src){
+      const meta = METHOD_META[src.Shipping_Delivery__c] || DEFAULT_META;
+      const due=(api&&api.dueInfo)?api.dueInfo(src.Print_Date__c):{label:'No date',urg:'ok',days:null};
+      const addr=(api&&api.formatAddress)?api.formatAddress(src.ShippingAddress):null;
+      const contact=src.ShipToContact;
+      const contactLine=contact ? [contact.Name, contact.Phone, contact.Email].filter(Boolean).join(' · ') : '';
+      const isShipFlow = !!SHIP_FLOW_METHODS[src.Shipping_Delivery__c];
+      const shipments = (st.shipments[src.Id]||[]).map(s=>({
+        carrier: s.zkmulti__Carrier__c||'—',
+        tracking: s.zkmulti__Tracking_Number__c||'—',
+        dateLabel: s.zkmulti__Ship_Date__c || (s.CreatedDate?String(s.CreatedDate).slice(0,10):''),
+      }));
+      const shipBusy = !!st.shipBusy[src.Id];
+      const completeBusy = !!st.completeBusy[src.Id];
+      const zkErr = st.zkErr[src.Id]||'';
+      const labelPrinted = !!src.Shipping_Label_Printed__c;
+
+      let combinedNote='';
+      if(src.Master_Shipment_Order__c && !src.Is_Master_Shipment_Order__c){
+        combinedNote = 'Combined shipment — this order ships together with Order ' + (src.MasterShipmentOrderNumber||src.Master_Shipment_Order__c) + '. Print the label from that order instead.';
+      } else if(src.Is_Master_Shipment_Order__c){
+        combinedNote = 'This is the primary order for a combined shipment — its address covers every order combined into it.';
+      }
+
+      const weight = src.Weight__c!=null && src.Weight__c!=='' ? Number(src.Weight__c) : null;
+
+      modal = {
+        order:(src.GOA_Order_Number__c||src.OrderNumber||src.Id), customer:(src.Customer_Order_Name__c||(src.Account&&src.Account.Name)||'—'),
+        methodLabel: DELIVERY_LABEL[src.Shipping_Delivery__c]||src.Shipping_Delivery__c||'—', methodColor:meta.color, methodIcon:meta.icon,
+        methodBg:'rgba(255,255,255,.04)', methodBorder:'#2f2f34',
+        urgColor:U[due.urg]||U.ok, dueLabel:due.label,
+        hasCombinedNote: !!combinedNote, combinedNote,
+        hasAddress: !!addr, addrLine1: addr?addr.line1:'', addrLine2: addr?addr.line2:'',
+        hasContact: !!contactLine && !!addr, hasContactOnly: !!contactLine && !addr, contactLine,
+        hasWeight: weight!=null, weightLabel: weight!=null?(weight+' lb'):'',
+        hasNotes: !!(src.Special_Notes__c||'').trim(), notes: src.Special_Notes__c||'',
+        showShipFlow: isShipFlow, showSimpleComplete: !isShipFlow,
+        shipBusy, shipSpin: shipBusy?('animation:ca-spin 1s linear infinite'):'',
+        shipNowLabel: shipBusy?'Opening Zenkraft…':((src.ShipmentCount||0)>0?'Ship Another Package':'Ship Now'),
+        hasZkErr: !!zkErr, zkErr,
+        shipments, hasNoShipments: shipments.length===0,
+        labelPrinted, labelStatusText: 'Shipping label printed' + (labelPrinted && (src.ShipmentCount||0)===0 ? ' (marked by hand)' : ''),
+        onToggleLabel: ()=>this.toggleLabel(src),
+        toggleLabelText: labelPrinted ? 'Not shipped yet — undo' : 'Mark Shipped (no Zenkraft record yet)',
+        onShipNow: ()=>this.shipNow(src),
+        completeBusy,
+        completeLabel: completeBusy ? 'Completing…' : (isShipFlow ? 'Complete Order' : (src.Shipping_Delivery__c==='Pickup' ? 'Mark Picked Up & Complete' : 'Mark Fulfilled & Complete')),
+        onComplete: ()=>this.completeOrder(src),
+      };
+    }
+
+    const clock=st.now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    let wn=''; try{ wn=localStorage.getItem('caStationWorkerName')||''; }catch(_){}
+    const live=st.connection==='live';
+    const connLabel = live?'Live':(st.connection==='loading'?'Connecting…':'Demo');
+    const connColor = live?'#7FA644':(st.connection==='loading'?'#6C665C':'#C9923A');
+    const names = VALID_NAMES.map(n=>({ label:n, onPick:()=>this.pickName(n) }));
+    const sfEnvOptions = (st.sfEnvList||[]).map(e=>{
+      const isSelected = st.sfEnvSelected===e.key;
+      const isActive = e.key===st.sfEnvActive;
+      return {
+        key:e.key, label:e.label, isActive,
+        statusLabel: e.configured ? (isActive?'Currently active':'Configured') : 'Not configured yet',
+        dotColor: isActive?'#7FA644':(e.configured?'#6C665C':'#3a3a3f'),
+        bg: isSelected?'#1a1410':'#121215',
+        border: isSelected?'#5E4214':'#232327',
+        textColor: e.configured?'#ECEAE4':'#4d483f',
+        cursor: e.configured?'pointer':'not-allowed',
+        onPick: e.configured?(()=>this.pickSfEnvKey(e.key)):(()=>{}),
+      };
+    });
+
+    return {
+      accent:ACCENT, clock, connLabel, connColor,
+      worker:wn, workerInit:((wn||'?')[0]||'?').toUpperCase(), onNameTap:()=>this.switchUser(),
+      nameGateOpen:!st.nameOk, names,
+      sfEnvLabel:st.sfEnvActiveLabel||'Dev2', onOpenSfEnv:()=>this.openSfEnvModal(),
+      sfEnvOpen:st.sfEnvOpen, onCloseSfEnv:()=>this.closeSfEnvModal(), sfEnvOptions,
+      sfEnvPin:st.sfEnvPin, onSfEnvPin:(e)=>this.setSfEnvPin(e.target.value),
+      sfEnvSubmitLabel: st.sfEnvSubmitting?'Switching…':'Switch Environment', onSubmitSfEnv:()=>this.submitSfEnv(),
+      sfEnvErr:st.sfEnvErr, sfEnvMsg:st.sfEnvMsg, sfEnvHasErr:!!st.sfEnvErr, sfEnvHasMsg:!!st.sfEnvMsg,
+      tabs, q:st.q, onSearch:(e)=>this.setState({q:e.target.value}),
+      cardGroups, boardEmpty,
+      emptyMsg: (boardEmpty && q) ? ('No matches for "'+st.q.trim()+'".') : 'Nothing in Post-Production for this view — the shop floor is caught up.',
+      modalOpen:!!modal, modal, onCloseModal:()=>this.closeModal(),
+    };
+  }
+}
+</script>
+</body>
+</html>
