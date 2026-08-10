@@ -41,7 +41,8 @@ const PM_FIELDS = [
   "Placements__c",
   "Status__c",
   "Vendor__r.Name",
-  "Films_Printed__c",
+  // Renamed from Films_Printed__c 2026-08-10 -- see ca-api.js's CHECK_FIELD.
+  "Design_Received__c",
   "Screens_Completed__c",
   "Mix_Inks__c",
   "Digitize_File__c",
@@ -160,7 +161,7 @@ export async function onRequestGet({ env }) {
           : (pm.Placement__c ? [pm.Placement__c] : []),
         Status__c: pm.Status__c,
         Vendor: (pm.Vendor__r && pm.Vendor__r.Name) || null,
-        Films_Printed__c: !!pm.Films_Printed__c,
+        Design_Received__c: !!pm.Design_Received__c,
         Screens_Completed__c: !!pm.Screens_Completed__c,
         Mix_Inks__c: !!pm.Mix_Inks__c,
         Digitize_File__c: !!pm.Digitize_File__c,
