@@ -47,6 +47,7 @@
  * checked against allow-lists below.
  */
 import { sfFetch, apiVersion, jsonError, runQuery } from "../_sf.js";
+import { rollupOrderSubstatus } from "../_pm-rollup.js";
 
 // ---------------------------------------------------------------------------
 // ORG-SPECIFIC API NAMES  (confirmed against the sandbox 2026-07-02)
@@ -324,6 +325,19 @@ export async function onRequestPost({ env, request }) {
       );
     }
 
+    // Best-effort: a brand-new method starts life at whatever Status__c the
+    // manager picked (often "Pre-Production"), which can be LESS advanced
+    // than the order's existing sibling methods. rollupOrderSubstatus only
+    // ever fires from a PATCH to an EXISTING method's Status__c, so without
+    // this call, adding a new not-yet-started method to an order that had
+    // already progressed left Order_Substatus__c stuck at its old, now-stale
+    // value until some other method's status happened to change later. See
+    // ../_pm-rollup.js.
+    const rolledUpSubstatus = await rollupOrderSubstatus(env, orderId).catch((e) => {
+      console.error("order substatus rollup failed (method create)", e);
+      return null;
+    });
+
     const byRef = (ref) => subResults.find((r) => r.referenceId === ref)?.body?.id ?? null;
     return Response.json(
       {
@@ -331,6 +345,7 @@ export async function onRequestPost({ env, request }) {
         requirementId: hasExistingPlan ? null : byRef("req"),
         planId: hasExistingPlan ? planId : byRef("plan"),
         productionMethodId: byRef("pm"),
+        rolledUpSubstatus,
         raw: data.compositeResponse,
       },
       { headers: { "Cache-Control": "no-store" } }
