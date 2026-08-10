@@ -22,7 +22,10 @@ import { sfFetch, apiVersion, jsonError } from "../_sf.js";
 const ALLOWED_FIELDS = new Set([
   "Receiving_Status__c",
   // Screen Print
-  "Films_Printed__c",
+  // Films_Printed__c was renamed to Design_Received__c as of 2026-08-10 (API
+  // name, not just label) -- film is gone from the process; art now goes
+  // straight onto an exposure unit -- see ca-api.js's CHECK_FIELD.
+  "Design_Received__c",
   "Screens_Completed__c",
   "Mix_Inks__c",
   // Embroidery
