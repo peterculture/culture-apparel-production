@@ -75,7 +75,7 @@ function buildForwardRule(field) {
   }
   const extraType = Object.keys(EXTRA_TYPES).find((t) => EXTRA_TYPES[t].checklistField === field);
   if (extraType) return { type: extraType, subStatusField: null, readySubStatus: null, readyStatus: "Ready" };
-  return null; // e.g. Films_Printed__c -- no linked item type
+  return null; // e.g. Design_Received__c (renamed from Films_Printed__c 2026-08-10) -- no linked item type
 }
 
 /**
