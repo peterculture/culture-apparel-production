@@ -152,7 +152,8 @@
             <sc-for list="{{modal.shipments}}" as="s" hint-placeholder-count="1">
               <div style="display:flex;align-items:center;gap:12px;background:#121215;border:1px solid #232327;border-radius:11px;padding:12px 15px">
                 <i class="ti ti-package" style="color:#7FA644;font-size:18px"></i>
-                <div style="min-width:0"><div style="font:600 13px/1.2 'Archivo';color:#ECEAE4">{{s.carrier}} · {{s.tracking}}</div><div style="font:400 11px/1.3 'Archivo';color:#6C665C;margin-top:3px">{{s.dateLabel}}</div></div>
+                <div style="min-width:0;flex:1"><div style="font:600 13px/1.2 'Archivo';color:#ECEAE4">{{s.carrier}} · {{s.tracking}}</div><div style="font:400 11px/1.3 'Archivo';color:#6C665C;margin-top:3px">{{s.dateLabel}}</div></div>
+                <button onClick="{{ s.onDelete }}" disabled="{{s.busy}}" title="Delete this shipment" style="flex-shrink:0;width:34px;height:34px;border-radius:9px;background:transparent;border:1px solid #2a2a2f;color:#8a8378;cursor:pointer;font-size:15px" style-hover="border-color:#7A241C;color:#E8A89F"><i class="ti {{s.busyIcon}}" style="{{s.busySpin}}"></i></button>
               </div>
             </sc-for>
           </div>
@@ -270,7 +271,7 @@ class Component extends DCLogic {
       // so pollShipments() can tell "a NEW shipment appeared" apart from
       // "shipments this order already had".
       shipBaseline:{},
-      shipBusy:{}, completeBusy:{}, zkErr:{},
+      shipBusy:{}, completeBusy:{}, zkErr:{}, shipDeleteBusy:{},
       nameOk: VALID_NAMES.includes(storedName),
       sfEnvOpen:false, sfEnvList:[], sfEnvActive:'dev2', sfEnvActiveLabel:'Dev2', sfEnvSelected:'dev2', sfEnvPin:'', sfEnvSubmitting:false, sfEnvErr:'', sfEnvMsg:'',
     };
@@ -356,7 +357,14 @@ class Component extends DCLogic {
       return Promise.resolve(demo);
     }
     return this._api.getShipments(orderId).then(list=>{
-      this.setState(st=>({ shipments:Object.assign({},st.shipments,{[orderId]:list}) }));
+      // Keep the board-view badge (o.ShipmentCount, set once at initial load
+      // by /api/shipping-orders) in sync with whatever the drawer just
+      // fetched fresh -- otherwise a delete or a newly-polled shipment only
+      // shows up here and looks stale again the moment the drawer is closed.
+      this.setState(st=>({
+        shipments:Object.assign({},st.shipments,{[orderId]:list}),
+        orders: st.orders.map(o=>o.Id===orderId?Object.assign({},o,{ShipmentCount:list.length}):o),
+      }));
       return list;
     }).catch(()=>[]);
   }
@@ -414,6 +422,40 @@ class Component extends DCLogic {
   }
   toggleLabel(order){ this.setLabelPrinted(order.Id, !order.Shipping_Label_Printed__c, false); }
 
+  // ── Delete a logged shipment (e.g. wrong carrier picked, duplicate entry,
+  // or the manager backed out of the Zenkraft wizard after it had already
+  // written a row). Removes the zkmulti__MCShipment__c record itself (and
+  // its child zkmulti__MCPackage__c -- see functions/api/shipments/[id].js),
+  // then reloads this order's shipment list so the count/history stay
+  // accurate. If that was the LAST shipment on the order and the label was
+  // only ever auto-marked "printed" by the poll in startPolling() (never
+  // confirmed by hand), clear Shipping_Label_Printed__c back to false too --
+  // otherwise the order would keep claiming a label exists after its only
+  // supporting record was just deleted as a mistake. ──
+  deleteShipmentEntry(orderId, shipmentId){
+    if(!window.confirm('Delete this shipment? This removes the Zenkraft record permanently.')) return;
+    this.setState(st=>({ shipDeleteBusy:Object.assign({},st.shipDeleteBusy,{[shipmentId]:true}) }));
+    const finish=()=>{
+      this.setState(st=>({ shipDeleteBusy:Object.assign({},st.shipDeleteBusy,{[shipmentId]:false}) }));
+      this.loadShipments(orderId).then(list=>{
+        if(list.length===0){
+          const order=(this.state.orders||[]).find(o=>o.Id===orderId);
+          if(order && order.Shipping_Label_Printed__c) this.setLabelPrinted(orderId, false, false);
+        }
+      });
+    };
+    if(!this._api || this.state.connection!=='live'){
+      const demo=(this._demoShipments[orderId]||[]).filter(s=>s.Id!==shipmentId);
+      this._demoShipments[orderId]=demo;
+      finish();
+      return;
+    }
+    this._api.deleteShipment(shipmentId).then(finish).catch(()=>{
+      this.setState(st=>({ shipDeleteBusy:Object.assign({},st.shipDeleteBusy,{[shipmentId]:false}) }));
+      window.alert('Could not delete this shipment -- try again.');
+    });
+  }
+
   // ── Complete: standard Status -> 'Complete' (see functions/api/orders/[id]/complete.js
   // for why this is its own endpoint, not a generic field patch). Drops the
   // order out of every board's Post-Production query on next load, so it's
@@ -457,8 +499,16 @@ class Component extends DCLogic {
       const meta = METHOD_META[o.Shipping_Delivery__c] || DEFAULT_META;
       const due=(api&&api.dueInfo)?api.dueInfo(o.Print_Date__c):{label:'No date',urg:'ok',days:null};
       const weight = o.Weight__c!=null && o.Weight__c!=='' ? Number(o.Weight__c) : null;
+      // GOA_Order_Number__c / Customer_Order_Name__c come back from Salesforce
+      // as an <a href="...">18171-15</a> formula-field string (built for
+      // Salesforce's own list-view rendering, not ours) -- api.text() strips
+      // the markup down to the visible text ("18171-15"). Same convention as
+      // index.html/pre-production.html; every raw Salesforce string field
+      // rendered on this board should go through it. Without it the tag
+      // shows up literally, which is the exact bug reported 2026-08-10.
+      const t = (api&&api.text) || (v=>v==null?'':String(v));
       return {
-        id:o.Id, order:(o.GOA_Order_Number__c||o.OrderNumber||o.Id), customer:(o.Customer_Order_Name__c||(o.Account&&o.Account.Name)||'—'),
+        id:o.Id, order:t(o.GOA_Order_Number__c)||o.OrderNumber||o.Id, customer:t(o.Customer_Order_Name__c)||t(o.Account&&o.Account.Name)||'—',
         methodLabel: DELIVERY_LABEL[o.Shipping_Delivery__c]||o.Shipping_Delivery__c||'—', methodColor:meta.color, methodIcon:meta.icon,
         methodBg:'rgba(255,255,255,.04)', methodBorder:'#2f2f34',
         hasWeight: weight!=null, weightLabel: weight!=null ? (weight+' lb') : '',
@@ -484,16 +534,22 @@ class Component extends DCLogic {
     let modal=null;
     const src=(st.orders||[]).find(o=>o.Id===st.modalId);
     if(src){
+      const t = (api&&api.text) || (v=>v==null?'':String(v));
       const meta = METHOD_META[src.Shipping_Delivery__c] || DEFAULT_META;
       const due=(api&&api.dueInfo)?api.dueInfo(src.Print_Date__c):{label:'No date',urg:'ok',days:null};
       const addr=(api&&api.formatAddress)?api.formatAddress(src.ShippingAddress):null;
       const contact=src.ShipToContact;
-      const contactLine=contact ? [contact.Name, contact.Phone, contact.Email].filter(Boolean).join(' · ') : '';
+      const contactLine=contact ? [t(contact.Name), t(contact.Phone), t(contact.Email)].filter(Boolean).join(' · ') : '';
       const isShipFlow = !!SHIP_FLOW_METHODS[src.Shipping_Delivery__c];
       const shipments = (st.shipments[src.Id]||[]).map(s=>({
-        carrier: s.zkmulti__Carrier__c||'—',
-        tracking: s.zkmulti__Tracking_Number__c||'—',
+        id: s.Id,
+        carrier: t(s.zkmulti__Carrier__c)||'—',
+        tracking: t(s.zkmulti__Tracking_Number__c)||'—',
         dateLabel: s.zkmulti__Ship_Date__c || (s.CreatedDate?String(s.CreatedDate).slice(0,10):''),
+        busy: !!st.shipDeleteBusy[s.Id],
+        busyIcon: st.shipDeleteBusy[s.Id] ? 'ti-loader-2' : 'ti-trash',
+        busySpin: st.shipDeleteBusy[s.Id] ? 'animation:ca-spin 1s linear infinite;display:inline-block' : '',
+        onDelete: ()=>this.deleteShipmentEntry(src.Id, s.Id),
       }));
       const shipBusy = !!st.shipBusy[src.Id];
       const completeBusy = !!st.completeBusy[src.Id];
@@ -510,7 +566,7 @@ class Component extends DCLogic {
       const weight = src.Weight__c!=null && src.Weight__c!=='' ? Number(src.Weight__c) : null;
 
       modal = {
-        order:(src.GOA_Order_Number__c||src.OrderNumber||src.Id), customer:(src.Customer_Order_Name__c||(src.Account&&src.Account.Name)||'—'),
+        order:t(src.GOA_Order_Number__c)||src.OrderNumber||src.Id, customer:t(src.Customer_Order_Name__c)||t(src.Account&&src.Account.Name)||'—',
         methodLabel: DELIVERY_LABEL[src.Shipping_Delivery__c]||src.Shipping_Delivery__c||'—', methodColor:meta.color, methodIcon:meta.icon,
         methodBg:'rgba(255,255,255,.04)', methodBorder:'#2f2f34',
         urgColor:U[due.urg]||U.ok, dueLabel:due.label,
@@ -518,7 +574,7 @@ class Component extends DCLogic {
         hasAddress: !!addr, addrLine1: addr?addr.line1:'', addrLine2: addr?addr.line2:'',
         hasContact: !!contactLine && !!addr, hasContactOnly: !!contactLine && !addr, contactLine,
         hasWeight: weight!=null, weightLabel: weight!=null?(weight+' lb'):'',
-        hasNotes: !!(src.Special_Notes__c||'').trim(), notes: src.Special_Notes__c||'',
+        hasNotes: !!t(src.Special_Notes__c), notes: t(src.Special_Notes__c),
         showShipFlow: isShipFlow, showSimpleComplete: !isShipFlow,
         shipBusy, shipSpin: shipBusy?('animation:ca-spin 1s linear infinite'):'',
         shipNowLabel: shipBusy?'Opening Zenkraft…':((src.ShipmentCount||0)>0?'Ship Another Package':'Ship Now'),
