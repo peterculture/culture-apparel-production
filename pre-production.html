@@ -695,8 +695,8 @@ class Component extends DCLogic {
     // directly on the card now instead of a separate `checks` dict, matching
     // the live per-method fields on Production_Method__c.
     this._demoOrders = seed.map(o=>Object.assign({orderId:o.id}, o));
-    this._demoOrders[0].Films_Printed__c=true; // GOA-4842
-    this._demoOrders[2].Films_Printed__c=true; this._demoOrders[2].Screens_Completed__c=true; this._demoOrders[2].Mix_Inks__c=true; // GOA-4838
+    this._demoOrders[0].Design_Received__c=true; // GOA-4842
+    this._demoOrders[2].Design_Received__c=true; this._demoOrders[2].Screens_Completed__c=true; this._demoOrders[2].Mix_Inks__c=true; // GOA-4838
     this._demoOrders[3].Digitize_File__c=true; // GOA-4845
     this._demoOrders[5].Transfers_Received__c=true; // GOA-4847
     let storedName=''; try{ storedName=localStorage.getItem('caShopWorkerName')||''; }catch(_){}
@@ -794,7 +794,7 @@ class Component extends DCLogic {
             worker:null, workerName:wn||null, recv:(api.RECV_FROM_SF[r.Receiving_Status__c]||'none'), printDateISO:r.Print_Date__c||null,
             mockupUrl:r.DesignMockupUrl||null, printSpecs:api.text(r.Specifications_for_Printing__c)||'', specialNotes:api.text(r.Special_Notes__c)||'',
             methods:(api.methodsList?api.methodsList(r):[]),
-            Films_Printed__c: !!pm.Films_Printed__c, Screens_Completed__c: !!pm.Screens_Completed__c, Mix_Inks__c: !!pm.Mix_Inks__c,
+            Design_Received__c: !!pm.Design_Received__c, Screens_Completed__c: !!pm.Screens_Completed__c, Mix_Inks__c: !!pm.Mix_Inks__c,
             Digitize_File__c: !!pm.Digitize_File__c, Thread_Color_Materials__c: !!pm.Thread_Color_Materials__c,
             Transfers_Received__c: !!pm.Transfers_Received__c, Transfers_Ready__c: !!pm.Transfers_Ready__c,
           });
@@ -1458,7 +1458,14 @@ class Component extends DCLogic {
     const st=this.state;
     const api=this._api||window.CAApi;
     const CF=(api&&api.CHECK_FIELD)||{};
-    const M={ sp:{label:'Screen Print',color:'#C6372B',icon:'ti-stack-2',prereq:['Films printed','Screens completed','Inks mixed']}, em:{label:'Embroidery',color:'#5E9B9A',icon:'ti-needle',prereq:['File digitized','Thread & materials']}, hp:{label:'Heat Press',color:'#C9923A',icon:'ti-flame',prereq:['Transfers received','Transfers ready']}, promo:{label:'Promotional Items',color:'#8E6FB0',icon:'ti-gift',prereq:[]} };
+    // sp.prereq's first item was 'Films printed' until 2026-08-10 -- the shop
+    // moved off film entirely (art now goes straight onto an exposure unit
+    // that burns the emulsion directly), so it's relabeled 'Design received'
+    // to track the precondition that's still real: has the art actually
+    // arrived. Resolved to Design_Received__c via CF/CHECK_FIELD (ca-api.js) --
+    // the underlying Salesforce field was renamed to match (Films_Printed__c
+    // -> Design_Received__c), not just the label.
+    const M={ sp:{label:'Screen Print',color:'#C6372B',icon:'ti-stack-2',prereq:['Design received','Screens completed','Inks mixed']}, em:{label:'Embroidery',color:'#5E9B9A',icon:'ti-needle',prereq:['File digitized','Thread & materials']}, hp:{label:'Heat Press',color:'#C9923A',icon:'ti-flame',prereq:['Transfers received','Transfers ready']}, promo:{label:'Promotional Items',color:'#8E6FB0',icon:'ti-gift',prereq:[]} };
     const W={ MA:{name:'Marcus A.',color:'#C6372B'}, DK:{name:'Dana K.',color:'#5E9B9A'}, PR:{name:'Priya R.',color:'#C9923A'}, JT:{name:'Jules T.',color:'#7FA644'} };
     const U={ over:'#E24A3A', today:'#E24A3A', soon:'#C9923A', ok:'#6C665C' };
     const RECV={ none:{label:'Not Received',icon:'ti-inbox',textColor:'#E8A89F',bg:'#2A100D',border:'#7A241C'}, partial:{label:'Partial',icon:'ti-progress',textColor:'#E0B870',bg:'#241a09',border:'#5E4214'}, countedin:{label:'Counted In',icon:'ti-checks',textColor:'#8FCBE0',bg:'#0D1F2A',border:'#2E6A8B'}, staged:{label:'Staged',icon:'ti-check',textColor:'#BBD382',bg:'#18230D',border:'#3D5418'} };
