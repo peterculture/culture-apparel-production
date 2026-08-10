@@ -846,6 +846,15 @@ class Component extends DCLogic {
     this.setState({methodSaving:true, methodErr:''});
     const fields={ Type__c:f.type, Placements__c:f.placements, Status__c:f.status };
     if(f.vendorId) fields.Vendor__c=f.vendorId;
+    // Include orderId alongside Status__c so the backend's Order_Substatus__c
+    // rollup fires from THIS form too -- pushMethod()/patchMethodStatus() (the
+    // board's Path stepper/CTA/drag-and-drop) already do this; this drawer
+    // form's Status dropdown used to omit it entirely, silently leaving the
+    // parent Order's Salesforce stage stuck at whatever it last was. See
+    // rollupOrderSubstatus in functions/api/_pm-rollup.js. Harmless to send
+    // on every save, not just status changes -- the backend only acts on it
+    // when Status__c is also present in the PATCH body.
+    if(orderId) fields.orderId=orderId;
     try {
       await this._api.patchMethodFields(id, fields, this.state.methodEditLoadedAt);
       this.setState({methodSaving:false, methodEditId:null, methodEditForm:null, methodEditLoadedAt:null});
