@@ -83,8 +83,17 @@
   function stageOfMethod(status){ return STAGE_KEY[status] || null; }
 
   /* pre-production checklist label -> Order boolean field */
+  // 'Design received' RELABELED 2026-08-10: the shop no longer burns screens
+  // from film -- art now goes straight to an exposure unit that burns the
+  // emulsion directly. The old "Films printed"/Films_Printed__c checklist item
+  // was repurposed to track a still-real precondition: has the customer's
+  // design/art actually arrived yet, before it can go on the exposure unit.
+  // The Salesforce field itself was renamed to match (Films_Printed__c ->
+  // Design_Received__c, on both Order and Production_Method__c, in both
+  // dev2 and Staging) -- this is the field's real, current API name, not
+  // just a display label. See also pre-production.html's M.sp.prereq.
   var CHECK_FIELD = {
-    'Films printed':'Films_Printed__c', 'Screens completed':'Screens_Completed__c', 'Inks mixed':'Mix_Inks__c',
+    'Design received':'Design_Received__c', 'Screens completed':'Screens_Completed__c', 'Inks mixed':'Mix_Inks__c',
     'File digitized':'Digitize_File__c', 'Thread & materials':'Thread_Color_Materials__c',
     'Transfers received':'Transfers_Received__c', 'Transfers ready':'Transfers_Ready__c'
   };
@@ -175,7 +184,7 @@
     return jsend('/api/production-methods/' + encodeURIComponent(id), 'PATCH', body);
   }
   // Toggles one of the 7 per-method pre-production checklist booleans
-  // (Films_Printed__c..Transfers_Ready__c -- same field names as CHECK_FIELD
+  // (Design_Received__c..Transfers_Ready__c -- same field names as CHECK_FIELD
   // below, just written to the method instead of the order). No orderId
   // needed: these don't affect Order_Substatus__c, so there's nothing to
   // roll up.
