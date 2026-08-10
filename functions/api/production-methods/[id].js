@@ -28,7 +28,7 @@
  *                                           //   the parent Order's Order_Substatus__c up
  *                                           //   to whichever sibling method is least
  *                                           //   advanced. See ../_pm-rollup.js.
- *     "Films_Printed__c": true,
+ *     "Design_Received__c": true,
  *     "Screens_Completed__c": true,
  *     "Mix_Inks__c": false,
  *     "Digitize_File__c": true,
@@ -98,11 +98,14 @@ const ALLOWED_PLACEMENTS = new Set([
 ]);
 
 // Per-method pre-production checklist booleans (mirrors the Order-level
-// fields of the same name -- see orders/[id].js CHECKLIST_FIELDS). All 7
+// fields of the same name -- see orders/[id].js ALLOWED_FIELDS). All 7
 // exist on every Production_Method__c regardless of its own Type__c; the
 // UI only shows/toggles the 2-3 relevant to that method's own method type.
+// Films_Printed__c was renamed to Design_Received__c as of 2026-08-10 (API
+// name, not just label) -- film is gone from the process, art now goes
+// straight onto an exposure unit; see ca-api.js's CHECK_FIELD.
 const CHECKLIST_FIELDS = new Set([
-  "Films_Printed__c",
+  "Design_Received__c",
   "Screens_Completed__c",
   "Mix_Inks__c",
   "Digitize_File__c",
