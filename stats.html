@@ -332,14 +332,12 @@ class Component extends DCLogic {
         preprod: { activeJobs:9, staged:4, ready:3, awaiting:6, overdue:1 },
         prod: { pipeline:11, onPressUnits:396, onPressJobs:2, misprints:6 },
         ship: { over:1, today:2, soon:3, ok:6, total:12 },
-        // Real (not label-only) dates here too, same YYYY-MM-DD shape
-        // /api/stats-trend returns, so the demo chart's date-label
-        // formatting in renderChart() doesn't need a separate code path.
-        trend: {
-          dates: Array.from({length:7}, (_,i)=>{ const d=new Date(); d.setDate(d.getDate()-(6-i)); return d.toISOString().slice(0,10); }),
-          newOrders: [4,6,3,7,5,2,4],
-          shipped: [3,5,4,6,6,1,3],
-        },
+        // Real (not label-only) dates here too, same YYYY-MM-DD shape and
+        // same weekdays-only rule /api/stats-trend uses (the shop doesn't
+        // run Sat/Sun -- see that endpoint's header), so the demo chart's
+        // date-label formatting in renderChart() doesn't need a separate
+        // code path and doesn't show two misleadingly-idle weekend bars.
+        trend: (()=>{ const out=[]; const cur=new Date(); while(out.length<7){ const dow=cur.getDay(); if(dow!==0&&dow!==6) out.unshift(cur.toISOString().slice(0,10)); cur.setDate(cur.getDate()-1); } return { dates:out, newOrders:[4,6,3,7,5,2,4], shipped:[3,5,4,6,6,1,3] }; })(),
       });
     }
   }
