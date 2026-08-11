@@ -69,7 +69,7 @@
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px">
         <sc-for list="{{g.cards}}" as="o" hint-placeholder-count="2">
-          <div onClick="{{ o.onOpen }}" style="display:flex;background:#141417;border:1px solid #232327;border-radius:14px;overflow:hidden;cursor:pointer;transition:border-color .12s,transform .12s" style-hover="border-color:{{accent}};transform:translateY(-2px)">
+          <div onClick="{{ o.onOpen }}" style="display:flex;background:{{o.cardBg}};border:1px solid {{o.cardBorder}};border-radius:14px;overflow:hidden;cursor:pointer;transition:border-color .12s,transform .12s" style-hover="border-color:{{accent}};transform:translateY(-2px)">
             <div style="width:7px;background:{{o.methodColor}};flex-shrink:0"></div>
             <div style="padding:16px 17px;flex:1;min-width:0;display:flex;flex-direction:column;gap:12px">
               <div style="display:flex;align-items:flex-start;gap:10px">
@@ -82,7 +82,7 @@
                 <sc-if value="{{o.hasShipments}}" hint-placeholder-val="{{ false }}"><span style="font:500 11px/1 'Archivo';color:#6C665C">· {{o.shipmentLabel}}</span></sc-if>
               </div>
               <div style="display:flex;align-items:center;gap:10px;padding-top:12px;border-top:1px solid #202024">
-                <span style="display:inline-flex;align-items:center;gap:5px;font:700 12px/1 'Oswald';letter-spacing:.04em;text-transform:uppercase;color:{{o.urgColor}}"><i class="ti ti-clock-hour-4"></i>{{o.dueLabel}}</span>
+                <span style="display:inline-flex;align-items:center;gap:5px;font:700 12px/1 'Oswald';letter-spacing:.04em;text-transform:uppercase;color:{{o.urgColor}}"><i class="ti {{o.urgIcon}}"></i>{{o.dueLabel}}</span>
                 <span style="margin-left:auto;display:inline-flex;align-items:center;gap:6px;font:700 11px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:{{accent}}">Open<i class="ti ti-arrow-right"></i></span>
               </div>
             </div>
@@ -107,7 +107,7 @@
           <div style="font:600 26px/1.15 'Oswald';color:#ECEAE4">{{modal.order}}</div>
           <div style="font:400 13px/1 'Archivo';color:#8a8378;margin-top:10px">{{modal.customer}}</div>
           <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:14px">
-            <div style="display:inline-flex;align-items:center;gap:8px;font:700 13px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:{{modal.urgColor}}"><i class="ti ti-clock-hour-4"></i>{{modal.dueLabel}}</div>
+            <div style="display:inline-flex;align-items:center;gap:8px;font:700 13px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:{{modal.urgColor}}"><i class="ti {{modal.urgIcon}}"></i>{{modal.dueLabel}}</div>
             <span style="display:inline-flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:{{modal.methodColor}};background:{{modal.methodBg}};border:1px solid {{modal.methodBorder}};border-radius:7px;padding:7px 10px"><i class="ti {{modal.methodIcon}}"></i>{{modal.methodLabel}}</span>
           </div>
         </div>
@@ -728,6 +728,14 @@ class Component extends DCLogic {
         hasShipments: (o.ShipmentCount||0)>0, shipmentLabel: (o.ShipmentCount||0)+(o.ShipmentCount===1?' shipment logged':' shipments logged'),
         labelPrinted: !!o.Shipping_Label_Printed__c,
         urgColor:U[due.urg]||U.ok, dueLabel:due.label, urg:due.urg, days:due.days,
+        // Urgency icon + bolder overdue card (added 2026-08-11) -- see
+        // URG_ICON/urgCardStyle in ca-api.js, shared across every board.
+        // The left stripe here stays method-colored (delivery method, not
+        // urgency -- see methodColor above), so only the background/border
+        // change for an overdue card; the stripe still tells you HOW it
+        // ships, the tint tells you it's late.
+        urgIcon: (api.URG_ICON && api.URG_ICON[due.urg]) || 'ti-clock-hour-4',
+        cardBg: api.urgCardStyle(due.urg).bg, cardBorder: api.urgCardStyle(due.urg).border,
         onOpen:()=>this.openOrder(o.Id),
       };
     };
@@ -783,6 +791,7 @@ class Component extends DCLogic {
         methodLabel: DELIVERY_LABEL[src.Shipping_Delivery__c]||src.Shipping_Delivery__c||'—', methodColor:meta.color, methodIcon:meta.icon,
         methodBg:'rgba(255,255,255,.04)', methodBorder:'#2f2f34',
         urgColor:U[due.urg]||U.ok, dueLabel:due.label,
+        urgIcon: (api.URG_ICON && api.URG_ICON[due.urg]) || 'ti-clock-hour-4',
         hasCombinedNote: !!combinedNote, combinedNote,
         hasAddress: !!addr, addrLine1: addr?addr.line1:'', addrLine2: addr?addr.line2:'',
         hasContact: !!contactLine && !!addr, hasContactOnly: !!contactLine && !addr, contactLine,
