@@ -1292,7 +1292,12 @@ class Component extends DCLogic {
         // isn't genuinely public (Vault file not marked Public) fails silently
         // as a blank box otherwise, since there's no alt text to fall back to.
         hasThumb: !!o.mockupUrl && !st.thumbErr[o.id], noThumb: !o.mockupUrl || !!st.thumbErr[o.id],
-        onThumbErr: ()=>this.setState(s2=>({thumbErr:Object.assign({},s2.thumbErr,{[o.id]:true})})),
+        // try/catch added 2026-08-11: a console exception was observed firing
+        // from inside this handler on a card whose mockup URL genuinely
+        // failed to load (pre-dating the mockup-proxy fix) -- whatever the
+        // exact cause, a broken fallback handler must never leave a card
+        // stuck showing a dead <img> forever, so this can't throw past here.
+        onThumbErr: ()=>{ try{ const cid=o.id; this.setState(s2=>({thumbErr:Object.assign({},s2.thumbErr,{[cid]:true})})); }catch(err){ console.error('onThumbErr failed for', o&&o.id, err); } },
         cardOpacity: st.dragId===o.id ? 0.35 : 1,
         onOpen: ()=>this.openCard(o.id),
         onDragStart: (e)=>{ if(e&&e.dataTransfer){ e.dataTransfer.effectAllowed='move'; try{e.dataTransfer.setData('text/plain',o.id);}catch(_){}} this.setState({dragId:o.id}); },
