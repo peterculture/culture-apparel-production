@@ -143,6 +143,7 @@ class Component extends DCLogic {
       { label:'Production Dashboard', sub:'Kanban · print → ship', href:'index.html', color:'#C6372B', icon:'ti-layout-kanban' },
       { label:'Station Board', sub:'Ink · screens · transfers', href:'station.html', color:'#5E9B9A', icon:'ti-device-tablet' },
       { label:'Shipping/Receiving', sub:'Post-production · ship · complete', href:'shipping.html', color:'#3E7CB1', icon:'ti-truck-delivery' },
+      { label:'Stats', sub:'Prep-time buffer · team status · board totals', href:'stats.html', color:'#7FA644', icon:'ti-chart-bar' },
     ];
     const nm=st.name.trim();
     const names=VALID_NAMES.map(n=>({ label:n, onPick:()=>this.pickName(n) }));
