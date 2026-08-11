@@ -1526,7 +1526,10 @@ class Component extends DCLogic {
         // Public) fails silently as a blank box otherwise, since there's no
         // alt text to fall back to.
         hasThumb: !!o.mockupUrl && !st.thumbErr[o.id], noThumb: !o.mockupUrl || !!st.thumbErr[o.id],
-        onThumbErr: ()=>this.setState(s2=>({thumbErr:Object.assign({},s2.thumbErr,{[o.id]:true})})),
+        // try/catch added 2026-08-11 -- see index.html's copy of this same
+        // fix for why: a broken fallback handler must never leave a card
+        // stuck showing a dead <img> forever.
+        onThumbErr: ()=>{ try{ const cid=o.id; this.setState(s2=>({thumbErr:Object.assign({},s2.thumbErr,{[cid]:true})})); }catch(err){ console.error('onThumbErr failed for', o&&o.id, err); } },
         onOpen:()=>this.openOrder(o.id),
       });
     };
