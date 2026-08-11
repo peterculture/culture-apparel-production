@@ -46,9 +46,21 @@ export async function fetchMockupsByOpportunity(env, opportunityIds) {
       console.error("Design mockup query failed", status);
       return new Map();
     }
+    // Route every mockup URL through /api/mockup-proxy instead of handing
+    // the raw Mockup_URL__c value to the browser. Found 2026-08-11: despite
+    // this field being documented (below) as a public Vault link, it's
+    // actually populated with Salesforce's session-gated file-download
+    // servlet URL, which no browser here can authenticate against directly
+    // (see mockup-proxy/index.js's header for the full story). The proxy
+    // re-fetches the file server-side using the same OAuth token _sf.js
+    // already holds, so this one change point fixes every consumer of
+    // DesignMockupUrl (card thumbnails on both boards, the order drawer)
+    // without touching any front-end file.
     const map = new Map();
     for (const rec of records) {
-      if (!map.has(rec.Opportunity__c)) map.set(rec.Opportunity__c, rec.Mockup_URL__c);
+      if (!map.has(rec.Opportunity__c) && rec.Mockup_URL__c) {
+        map.set(rec.Opportunity__c, "/api/mockup-proxy?url=" + encodeURIComponent(rec.Mockup_URL__c));
+      }
     }
     return map;
   } catch (err) {
