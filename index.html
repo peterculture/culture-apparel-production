@@ -99,7 +99,7 @@
         <sc-for list="{{col.items}}" as="o" hint-placeholder-count="2">
           <div draggable="true" onDragStart="{{ o.onDragStart }}" onDragEnd="{{ o.onDragEnd }}" onClick="{{ o.onOpen }}" style="display:flex;background:#141417;border:1px solid #232327;border-radius:11px;overflow:hidden;cursor:pointer;opacity:{{o.cardOpacity}};transition:border-color .12s,transform .12s" style-hover="border-color:#3a3a40;transform:translateY(-1px)">
             <div style="width:6px;background:{{o.urgColor}};flex-shrink:0"></div>
-            <sc-if value="{{o.hasThumb}}" hint-placeholder-val="{{ false }}"><img src="{{o.mockupUrl}}" alt="" style="width:64px;height:auto;align-self:stretch;object-fit:cover;flex-shrink:0;background:#121215;border-right:1px solid #202024"></sc-if>
+            <sc-if value="{{o.hasThumb}}" hint-placeholder-val="{{ false }}"><img src="{{o.mockupUrl}}" alt="" onError="{{ o.onThumbErr }}" style="width:64px;height:auto;align-self:stretch;object-fit:cover;flex-shrink:0;background:#121215;border-right:1px solid #202024"></sc-if>
             <sc-if value="{{o.noThumb}}" hint-placeholder-val="{{ true }}"><div style="width:64px;flex-shrink:0;align-self:stretch;background-image:repeating-linear-gradient(45deg,#17171b 0 8px,#131317 8px 16px);border-right:1px solid #202024;display:flex;align-items:center;justify-content:center"><i class="ti ti-shirt" style="color:#3a3a40;font-size:20px"></i></div></sc-if>
             <div style="padding:13px 14px;flex:1;min-width:0;display:flex;flex-direction:column;gap:10px">
               <div style="display:flex;align-items:flex-start;gap:8px">
@@ -647,6 +647,12 @@ class Component extends DCLogic {
       // deliberately mid-pack (yellow) rather than green, so a broken fetch
       // doesn't read as a false "all clear."
       prep: { count:0, knownCount:0, worst:1.8, avg:1.8, status:'yellow' },
+      // Card-face thumbnails: keyed by card id, set true once that card's
+      // <img> has fired onError (bad/expired/non-public Mockup_URL__c, or a
+      // host that blocks hotlinking). Falls back to the same hatched
+      // placeholder as "no mockup" instead of leaving a blank image box --
+      // see mk()'s hasThumb/noThumb below.
+      thumbErr: {},
     };
   }
   componentDidMount(){ this._t = setInterval(()=>this.setState({ now:new Date() }), 1000); this.load(); this.loadSfEnv(); this.loadPrep(); this._ar = setInterval(()=>{ if(this.state.connection==='live' && !this.state.openId && !this.state.dragId) this.load(); }, 15000); this._pr = setInterval(()=>this.loadPrep(), 30000); }
@@ -1281,8 +1287,12 @@ class Component extends DCLogic {
         // board card so a worker can recognize a job by its design instead of
         // reading order numbers. Falls back to a plain shirt icon on a hatched
         // background (same "no mockup" treatment as the drawer) when a Design__c
-        // record hasn't been linked or Mockup_URL__c is empty.
-        hasThumb: !!o.mockupUrl, noThumb: !o.mockupUrl,
+        // record hasn't been linked, Mockup_URL__c is empty, OR the URL failed
+        // to actually load (see thumbErr/onThumbErr) -- a Mockup_URL__c that
+        // isn't genuinely public (Vault file not marked Public) fails silently
+        // as a blank box otherwise, since there's no alt text to fall back to.
+        hasThumb: !!o.mockupUrl && !st.thumbErr[o.id], noThumb: !o.mockupUrl || !!st.thumbErr[o.id],
+        onThumbErr: ()=>this.setState(s2=>({thumbErr:Object.assign({},s2.thumbErr,{[o.id]:true})})),
         cardOpacity: st.dragId===o.id ? 0.35 : 1,
         onOpen: ()=>this.openCard(o.id),
         onDragStart: (e)=>{ if(e&&e.dataTransfer){ e.dataTransfer.effectAllowed='move'; try{e.dataTransfer.setData('text/plain',o.id);}catch(_){}} this.setState({dragId:o.id}); },
