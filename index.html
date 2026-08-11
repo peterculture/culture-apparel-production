@@ -26,6 +26,7 @@
     ::-webkit-scrollbar-track{background:transparent}
     @keyframes ca-pulse{0%,100%{box-shadow:0 0 0 0 rgba(226,74,58,.5)}50%{box-shadow:0 0 0 5px rgba(226,74,58,0)}}
     @keyframes ca-slide{from{transform:translateX(30px);opacity:0}to{transform:translateX(0);opacity:1}}
+    @keyframes ca-glow{0%,100%{box-shadow:0 0 6px 2px var(--glow-c)}50%{box-shadow:0 0 16px 5px var(--glow-c)}}
   </style>
 </helmet>
 
@@ -42,6 +43,7 @@
       <span style="font:600 10px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#ECEAE4;background:#1a1a1e;border:1px solid #3a2422;border-radius:8px;padding:9px 12px">Production</span>
       <a href="station.html" style="font:600 10px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#8a8378;border:1px solid #242428;border-radius:8px;padding:9px 12px">Station</a>
       <a href="shipping.html" style="font:600 10px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#8a8378;border:1px solid #242428;border-radius:8px;padding:9px 12px">Shipping →</a>
+      <a href="stats.html" style="font:600 10px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#8a8378;border:1px solid #242428;border-radius:8px;padding:9px 12px">Stats</a>
     </nav>
     <div style="margin-left:auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:flex-end">
       <div style="font:600 13px/1 'Oswald';letter-spacing:.1em;color:#9C978C;white-space:nowrap">{{clock}} <span style="color:#4d483f">·</span> {{dateStr}}</div>
@@ -70,7 +72,7 @@
 
   <div style="display:flex;gap:12px;padding:14px 26px;flex-wrap:wrap">
     <sc-for list="{{kpis}}" as="k" hint-placeholder-count="6">
-      <div style="flex:1;min-width:150px;display:flex;gap:11px;align-items:stretch;background:#0D0D0F;border:1px solid #1b1b1e;border-radius:12px;padding:14px 16px">
+      <div style="position:relative;flex:1;min-width:150px;display:flex;gap:11px;align-items:stretch;background:#0D0D0F;border:1px solid #1b1b1e;border-radius:12px;padding:14px 16px">
         <div style="width:4px;border-radius:3px;background:{{k.accent}};flex-shrink:0"></div>
         <div style="min-width:0">
           <div style="font:500 10px/1 'Oswald';letter-spacing:.13em;text-transform:uppercase;color:#6C665C;margin-bottom:9px">{{k.label}}</div>
@@ -80,6 +82,7 @@
             <span style="font:400 9px/1.3 'Archivo';color:#4d483f">{{k.sub}}</span>
           </div>
         </div>
+        <sc-if value="{{k.hasGlow}}" hint-placeholder-val="{{ false }}"><div title="{{k.glowLabel}}" style="position:absolute;top:10px;right:10px;width:10px;height:10px;border-radius:50%;background:{{k.glowColor}};--glow-c:{{k.glowColor}};box-shadow:0 0 6px 2px {{k.glowColor}};animation:ca-glow 1.8s ease-in-out infinite"></div></sc-if>
       </div>
     </sc-for>
   </div>
@@ -633,10 +636,31 @@ class Component extends DCLogic {
       // functions/api/admin/sf-env.js. sfEnvActive/sfEnvActiveLabel default
       // to dev2 to match _sf.js's DEFAULT_ENV until the real value loads.
       sfEnvOpen:false, sfEnvList:[], sfEnvActive:'dev2', sfEnvActiveLabel:'Dev2', sfEnvSelected:'dev2', sfEnvPin:'', sfEnvSubmitting:false, sfEnvErr:'', sfEnvMsg:'',
+      // Prep Time KPI (added 2026-08-11) -- worst-case/avg days of runway
+      // left before Print_Date__c across every order still sitting in
+      // Pre-Production. Computed by CAApi.prepBufferStats() from a second,
+      // independent fetch of getOrders() (the same data pre-production.html
+      // reads) so this board can show it without duplicating that board's
+      // query. See loadPrep()/prep in renderVals(). Demo default below is
+      // deliberately mid-pack (yellow) rather than green, so a broken fetch
+      // doesn't read as a false "all clear."
+      prep: { count:0, knownCount:0, worst:1.8, avg:1.8, status:'yellow' },
     };
   }
-  componentDidMount(){ this._t = setInterval(()=>this.setState({ now:new Date() }), 1000); this.load(); this.loadSfEnv(); this._ar = setInterval(()=>{ if(this.state.connection==='live' && !this.state.openId && !this.state.dragId) this.load(); }, 15000); }
-  componentWillUnmount(){ clearInterval(this._t); clearInterval(this._ar); }
+  componentDidMount(){ this._t = setInterval(()=>this.setState({ now:new Date() }), 1000); this.load(); this.loadSfEnv(); this.loadPrep(); this._ar = setInterval(()=>{ if(this.state.connection==='live' && !this.state.openId && !this.state.dragId) this.load(); }, 15000); this._pr = setInterval(()=>this.loadPrep(), 30000); }
+  componentWillUnmount(){ clearInterval(this._t); clearInterval(this._ar); clearInterval(this._pr); }
+  // Independent fetch/failure path from load() -- a hiccup fetching the
+  // Pre-Production queue shouldn't flip this board's own "Live · Salesforce"
+  // badge to Demo, and vice versa. Leaves whatever prep value was last
+  // computed in place on error rather than resetting it, so a single missed
+  // poll doesn't make the KPI card flash back to its demo default.
+  async loadPrep(){
+    try{
+      const api = window.CAApi; if(!api) throw new Error('CAApi not loaded');
+      const prepOrders = await api.getOrders();
+      this.setState({ prep: api.prepBufferStats(prepOrders) });
+    } catch(_) { /* keep last known value */ }
+  }
   // Advances/rewinds ONE card (== one Production_Method__c). cardId is the
   // method's Id; orderId is passed in from the caller (always has it handy)
   // rather than looked up, since this fires from inside the drawer where the
@@ -1285,13 +1309,22 @@ class Component extends DCLogic {
     const rushCount = st.orders.filter(o=>o.urg==='today'||o.urg==='over').length + st.orders.filter(o=>o.urg==='soon').length;
     const pipeline = st.orders.filter(o=>o.stage!=='done').length;
 
+    // Prep Time: worst-case days of runway left before Print_Date__c across
+    // every order still in Pre-Production -- see CAApi.prepBufferStats()
+    // (ca-api.js) for the 3+/1-3/under-1 thresholds and the "worst case
+    // wins" rollup, which is the single source of truth this card and the
+    // Stats page (stats.html) both read from. fmtDays keeps "no orders
+    // currently in prep" and "no Print_Date__c on any of them" both reading
+    // as an em dash instead of "null"/"NaN".
+    const fmtDays = (n)=> (n===null||n===undefined) ? '—' : (Math.round(n*10)/10).toFixed(1);
+    const prepMeta = (window.CAApi && window.CAApi.PREP_STATUS_META && window.CAApi.PREP_STATUS_META[st.prep.status]) || { color:'#6C665C', label:'—' };
     const kpis = [
-      { label:'In Pipeline', value:String(pipeline), unit:'orders', sub:'across four stages', accent:'#ECEAE4', hasTrend:false },
-      { label:'Due This Week', value:'5', unit:'orders', sub:'within 48 hours', accent:'#C9923A', hasTrend:true, trendIcon:'ti-alert-triangle', trendColor:'#C9923A', trendVal:'3 rush' },
-      { label:'On Press Now', value:String(inProdUnits), unit:'pcs', sub:inProd.length+' orders in production', accent:accent, hasTrend:false },
-      { label:'On-Time', value:'96', unit:'%', sub:'trailing 30 days', accent:'#7FA644', hasTrend:true, trendIcon:'ti-trending-up', trendColor:'#7FA644', trendVal:'+2 pts' },
-      { label:'Misprint Rate', value:'1.8', unit:'%', sub:'6 of 328 pcs', accent:'#7FA644', hasTrend:true, trendIcon:'ti-trending-down', trendColor:'#7FA644', trendVal:'−0.4' },
-      { label:'Shipped · 7d', value:'14', unit:'orders', sub:'3,120 pcs out', accent:'#ECEAE4', hasTrend:true, trendIcon:'ti-trending-up', trendColor:'#7FA644', trendVal:'+9%' },
+      { label:'In Pipeline', value:String(pipeline), unit:'orders', sub:'across four stages', accent:'#ECEAE4', hasTrend:false, hasGlow:false },
+      { label:'Prep Time', value:fmtDays(st.prep.worst), unit:'days', sub: st.prep.knownCount ? ('worst case · avg '+fmtDays(st.prep.avg)+'d · '+st.prep.count+' in prep') : 'prep queue empty', accent:prepMeta.color, hasTrend:false, hasGlow:true, glowColor:prepMeta.color, glowLabel:prepMeta.label },
+      { label:'On Press Now', value:String(inProdUnits), unit:'pcs', sub:inProd.length+' orders in production', accent:accent, hasTrend:false, hasGlow:false },
+      { label:'On-Time', value:'96', unit:'%', sub:'trailing 30 days', accent:'#7FA644', hasTrend:true, trendIcon:'ti-trending-up', trendColor:'#7FA644', trendVal:'+2 pts', hasGlow:false },
+      { label:'Misprint Rate', value:'1.8', unit:'%', sub:'6 of 328 pcs', accent:'#7FA644', hasTrend:true, trendIcon:'ti-trending-down', trendColor:'#7FA644', trendVal:'−0.4', hasGlow:false },
+      { label:'Shipped · 7d', value:'14', unit:'orders', sub:'3,120 pcs out', accent:'#ECEAE4', hasTrend:true, trendIcon:'ti-trending-up', trendColor:'#7FA644', trendVal:'+9%', hasGlow:false },
     ];
 
     const methodFilters = ['sp','em','hp','promo'].map(k=>{ const on=st.methods[k]; return { key:k, label:M[k].label, color:M[k].color, onToggle:()=>this.setState(s2=>({methods:Object.assign({},s2.methods,{[k]:!s2.methods[k]})})), bg:on?'#1a1a1e':'transparent', border:on?'#3a3a40':'#242428', textColor:on?'#ECEAE4':'#6C665C' }; });
