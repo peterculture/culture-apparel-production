@@ -258,6 +258,12 @@
   // order has finished production -- see functions/api/shipping-orders/index.js
   // for why that's the right gate) and Status isn't already 'Complete'.
   function getShippingOrders(){ return jget('/api/shipping-orders').then(function (d) { return d.records || []; }); }
+  // Day-over-day trend data for the Stats page (stats.html) -- real
+  // Salesforce history (Order.CreatedDate / LastModifiedDate), not a
+  // snapshot/tracking system. Returns { dates, newOrders, shipped }, each
+  // an array of length 7 (oldest day first). See
+  // functions/api/stats-trend/index.js for the query.
+  function getStatsTrend(){ return jget('/api/stats-trend'); }
   // Closes an order out from the shipping/receiving board: standard
   // Status -> 'Complete'. Deliberately its own endpoint/call, not a generic
   // patchOrder({Status:'Complete'}) -- see functions/api/orders/[id]/complete.js
@@ -513,7 +519,7 @@
     VALID_NAMES: VALID_NAMES, ROLE_KEY: ROLE_KEY, NAME_KEY: NAME_KEY, role: role, workerName: workerName, setRole: setRole, setWorkerName: setWorkerName, logout: logout, isManager: isManager, confirmManager: confirmManager, MANAGER_NAMES: MANAGER_NAMES,
     SUBSTATUS_VALUE: SUBSTATUS_VALUE, SUBSTATUS_LABEL: SUBSTATUS_LABEL, STAGE_KEY: STAGE_KEY, STAGE_SUBSTATUS: STAGE_SUBSTATUS, stageOf: stageOf, stageOfMethod: stageOfMethod,
     DELIVERY_LABEL: DELIVERY_LABEL, DELIVERY_METHODS: DELIVERY_METHODS, formatAddress: formatAddress,
-    getShippingOrders: getShippingOrders, completeOrder: completeOrder,
+    getShippingOrders: getShippingOrders, completeOrder: completeOrder, getStatsTrend: getStatsTrend,
     CHECK_FIELD: CHECK_FIELD, RECV_FROM_SF: RECV_FROM_SF, RECV_TO_SF: RECV_TO_SF,
     PLACEMENTS: PLACEMENTS, methodsList: methodsList, METHOD_META: METHOD_META,
     getOrders: getOrders, getProductionOrders: getProductionOrders, getInbox: getInbox, getPreProductionItems: getPreProductionItems, patchItem: patchItem, deleteItem: deleteItem, createItem: createItem, searchVendors: searchVendors, searchPlans: searchPlans, searchPresses: searchPresses, createMethod: createMethod, createProductionRun: createProductionRun, getProductionRuns: getProductionRuns, patchProductionRun: patchProductionRun, deleteProductionRun: deleteProductionRun, patchMethodStatus: patchMethodStatus, patchMethodChecklist: patchMethodChecklist, getMethodsForOrder: getMethodsForOrder, patchMethodFields: patchMethodFields, deleteMethod: deleteMethod, patchOrder: patchOrder, getOrderSizes: getOrderSizes, createReprintOrder: createReprintOrder,
