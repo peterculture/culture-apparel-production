@@ -99,6 +99,8 @@
         <sc-for list="{{col.items}}" as="o" hint-placeholder-count="2">
           <div draggable="true" onDragStart="{{ o.onDragStart }}" onDragEnd="{{ o.onDragEnd }}" onClick="{{ o.onOpen }}" style="display:flex;background:#141417;border:1px solid #232327;border-radius:11px;overflow:hidden;cursor:pointer;opacity:{{o.cardOpacity}};transition:border-color .12s,transform .12s" style-hover="border-color:#3a3a40;transform:translateY(-1px)">
             <div style="width:6px;background:{{o.urgColor}};flex-shrink:0"></div>
+            <sc-if value="{{o.hasThumb}}" hint-placeholder-val="{{ false }}"><img src="{{o.mockupUrl}}" alt="" style="width:64px;height:auto;align-self:stretch;object-fit:cover;flex-shrink:0;background:#121215;border-right:1px solid #202024"></sc-if>
+            <sc-if value="{{o.noThumb}}" hint-placeholder-val="{{ true }}"><div style="width:64px;flex-shrink:0;align-self:stretch;background-image:repeating-linear-gradient(45deg,#17171b 0 8px,#131317 8px 16px);border-right:1px solid #202024;display:flex;align-items:center;justify-content:center"><i class="ti ti-shirt" style="color:#3a3a40;font-size:20px"></i></div></sc-if>
             <div style="padding:13px 14px;flex:1;min-width:0;display:flex;flex-direction:column;gap:10px">
               <div style="display:flex;align-items:flex-start;gap:8px">
                 <div style="min-width:0">
@@ -1274,6 +1276,13 @@ class Component extends DCLogic {
         methLabel:m.label, methShort: (o.placements&&o.placements.length) ? (m.short+' · '+o.placements.join(' + ')) : m.short, methColor:m.color,
         hasWorker:!!wname, noWorker:!wname, workerName:wname||'Unassigned', workerInit:o.workerInit||o.worker||(wname?wname.trim().slice(0,2).toUpperCase():'—'), workerColor:o.workerColor||(w&&w.color)||'#3a3a40',
         urgColor:U[o.urg]||U.ok, hasProgress:typeof o.pct==='number', progressWidth:(o.pct||0)+'%', hasMisprints:(o.mis||0)>0,
+        // Card-face mockup thumbnail (added 2026-08-11) -- same DesignMockupUrl
+        // already fetched for the drawer (see load()); showing it right on the
+        // board card so a worker can recognize a job by its design instead of
+        // reading order numbers. Falls back to a plain shirt icon on a hatched
+        // background (same "no mockup" treatment as the drawer) when a Design__c
+        // record hasn't been linked or Mockup_URL__c is empty.
+        hasThumb: !!o.mockupUrl, noThumb: !o.mockupUrl,
         cardOpacity: st.dragId===o.id ? 0.35 : 1,
         onOpen: ()=>this.openCard(o.id),
         onDragStart: (e)=>{ if(e&&e.dataTransfer){ e.dataTransfer.effectAllowed='move'; try{e.dataTransfer.setData('text/plain',o.id);}catch(_){}} this.setState({dragId:o.id}); },
