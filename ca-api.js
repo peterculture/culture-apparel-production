@@ -403,6 +403,37 @@
     yellow: { color:'#C9923A', label:'Watch Close' },
     red:    { color:'#E24A3A', label:'Behind Schedule' }
   };
+  /* ── Urgency icon per dueInfo() bucket (added 2026-08-11) ──
+     Every board colored the due-date icon+text by urgency but always used
+     the SAME icon (ti-clock-hour-4) regardless of level -- color was doing
+     100% of the signaling, which washes out under bright shop-floor
+     lighting and is a real problem for colorblind workers. Each bucket now
+     gets its own icon SHAPE too, so urgency reads even with color removed.
+     Single source of truth here so index.html/pre-production.html/
+     shipping.html/station.html can't drift into using different icons for
+     the same bucket. 'done' isn't a dueInfo() bucket (dueInfo never returns
+     it) but index.html's kanban assigns urg:'done' directly for completed
+     cards, so it's included here too rather than silently falling back to
+     the 'ok' icon. */
+  var URG_ICON = {
+    over: 'ti-alert-triangle',
+    today: 'ti-clock-exclamation',
+    soon: 'ti-hourglass-high',
+    ok: 'ti-calendar-check',
+    done: 'ti-circle-check'
+  };
+  /* ── Overdue card background/border (added 2026-08-11) ──
+     Per Anthony: a 6px color stripe is too easy to miss at a glance /
+     under bright light. Overdue cards now get the same tinted-panel
+     treatment already used for other "this is a problem" UI elsewhere in
+     these boards (misprint badges, Zenkraft error banners) instead of
+     just a thin stripe -- everything else about the card (text, stripe,
+     icon) stays the same, only urg==='over' gets this. */
+  var URG_CARD_BG = { over: '#2A100D' };
+  var URG_CARD_BORDER = { over: '#7A241C' };
+  function urgCardStyle(urg) {
+    return { bg: URG_CARD_BG[urg] || '#141417', border: URG_CARD_BORDER[urg] || '#232327' };
+  }
   // ── multi-method / multi-placement orders ──
   // An order can have more than one Production_Method__c child: one per
   // decoration location (e.g. "Front - Screen Print", "Back - Screen Print",
@@ -493,6 +524,7 @@
     getStationItems: getStationItems, updateItemStatus: updateItemStatus, updateOrderReceiving: updateOrderReceiving,
     getInventory: getInventory, postInventory: postInventory, stationLogin: stationLogin,
     SIZE_ORDER: SIZE_ORDER, text: text, initials: initials, colorForName: colorForName, methodOf: methodOf, dueInfo: dueInfo, parseSfDate: parseSfDate, pivotItems: pivotItems,
-    prepBufferStats: prepBufferStats, PREP_STATUS_META: PREP_STATUS_META
+    prepBufferStats: prepBufferStats, PREP_STATUS_META: PREP_STATUS_META,
+    URG_ICON: URG_ICON, urgCardStyle: urgCardStyle
   };
 })();
