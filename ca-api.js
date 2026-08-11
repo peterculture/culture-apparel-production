@@ -364,6 +364,45 @@
     if (days === 1) return { label:'Due tomorrow', urg:'soon', days:days };
     return { label: md + ' \u00b7 ' + days + 'd', urg: days <= 2 ? 'soon' : 'ok', days:days };
   }
+  /* \u2500\u2500 Prep-time buffer (added 2026-08-11) \u2500\u2500
+     "Prep time" here means runway, not elapsed time: for an order still
+     sitting in Pre-Production, how many days are left between now and its
+     Print_Date__c. Per Anthony: 3+ days left is healthy, 1-3 is getting
+     tight, under 1 (including negative, i.e. already past the print date
+     while still in prep) is a real problem.
+     Takes the array of orders returned by getOrders() (one entry per order
+     with at least one Production_Method__c still in Pre-Production, each
+     carrying Order-level Print_Date__c) and rolls every order's buffer into
+     ONE team-wide status using "worst case wins": a single order under 1
+     day of buffer flips the whole indicator red, regardless of how
+     comfortable the rest of the queue looks -- deliberate, not averaged
+     away by a healthy queue.
+     This is the single source of truth for the thresholds so the Prep Time
+     KPI card (index.html) and the Stats page (stats.html) can never drift
+     out of sync with each other -- change the 3/1 cutoffs here once. */
+  function prepBufferStats(orders){
+    var today = new Date(); today.setHours(12,0,0,0);
+    var known = [];
+    (orders || []).forEach(function (o) {
+      if (!o.Print_Date__c) return;
+      var d = parseSfDate(o.Print_Date__c);
+      if (!d) return;
+      known.push((d - today) / 86400000);
+    });
+    var count = (orders || []).length;
+    var worst = known.length ? Math.min.apply(null, known) : null;
+    var avg = known.length ? known.reduce(function (a, b) { return a + b; }, 0) / known.length : null;
+    var status = 'green';
+    if (worst !== null) status = worst >= 3 ? 'green' : (worst >= 1 ? 'yellow' : 'red');
+    return { count: count, knownCount: known.length, worst: worst, avg: avg, status: status };
+  }
+  /* Shared color/label per status bucket so every page that shows the
+     glowing indicator (KPI card, Stats page) reads identically. */
+  var PREP_STATUS_META = {
+    green:  { color:'#7FA644', label:'On Track' },
+    yellow: { color:'#C9923A', label:'Watch Close' },
+    red:    { color:'#E24A3A', label:'Behind Schedule' }
+  };
   // ── multi-method / multi-placement orders ──
   // An order can have more than one Production_Method__c child: one per
   // decoration location (e.g. "Front - Screen Print", "Back - Screen Print",
@@ -453,6 +492,7 @@
     getSfEnv: getSfEnv, setSfEnv: setSfEnv,
     getStationItems: getStationItems, updateItemStatus: updateItemStatus, updateOrderReceiving: updateOrderReceiving,
     getInventory: getInventory, postInventory: postInventory, stationLogin: stationLogin,
-    SIZE_ORDER: SIZE_ORDER, text: text, initials: initials, colorForName: colorForName, methodOf: methodOf, dueInfo: dueInfo, parseSfDate: parseSfDate, pivotItems: pivotItems
+    SIZE_ORDER: SIZE_ORDER, text: text, initials: initials, colorForName: colorForName, methodOf: methodOf, dueInfo: dueInfo, parseSfDate: parseSfDate, pivotItems: pivotItems,
+    prepBufferStats: prepBufferStats, PREP_STATUS_META: PREP_STATUS_META
   };
 })();
