@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+<script src="./ca-api.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css" rel="stylesheet">
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;background:#08080A;font-family:'Archivo',system-ui,sans-serif;-webkit-font-smoothing:antialiased;color:#ECEAE4}
+    a{color:#E24A3A;text-decoration:none}
+    a:hover{color:#C6372B}
+    .ti{font-size:inherit;line-height:1;display:inline-block}
+    ::-webkit-scrollbar{width:9px;height:9px}
+    ::-webkit-scrollbar-thumb{background:#2a2a2e;border-radius:6px}
+    ::-webkit-scrollbar-track{background:transparent}
+    @keyframes ca-glow{0%,100%{box-shadow:0 0 6px 2px var(--glow-c)}50%{box-shadow:0 0 16px 5px var(--glow-c)}}
+    @keyframes ca-glow-lg{0%,100%{box-shadow:0 0 14px 4px var(--glow-c)}50%{box-shadow:0 0 34px 10px var(--glow-c)}}
+    @keyframes ca-fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  </style>
+</helmet>
+
+<div style="display:flex;flex-direction:column;min-height:100vh;background:radial-gradient(circle at 30% -10%,#101013,#08080A 55%)">
+
+  <header style="position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:16px;padding:14px 26px;background:rgba(6,6,7,.92);backdrop-filter:blur(10px);border-bottom:1px solid rgba(198,55,43,.4);flex-wrap:wrap">
+    <svg width="34" height="34" viewBox="0 0 48 48" aria-hidden="true" style="flex-shrink:0"><g fill="#C6372B"><rect x="12" y="9" width="24" height="3.1" rx="1.5"/><rect x="8" y="14" width="32" height="3.1" rx="1.5"/><rect x="5" y="19" width="38" height="3.1" rx="1.5"/><rect x="5" y="24" width="38" height="3.1" rx="1.5"/><rect x="6" y="29" width="36" height="3.1" rx="1.5"/><rect x="9" y="34" width="30" height="3.1" rx="1.5"/><rect x="13" y="39" width="22" height="3.1" rx="1.5"/></g></svg>
+    <div style="min-width:0">
+      <div style="font:700 16px/1 'Oswald';letter-spacing:.12em;color:#ECEAE4">CULTURE APPAREL</div>
+      <div style="font:500 9px/1 'Oswald';letter-spacing:.4em;text-transform:uppercase;color:#C6372B;margin-top:4px">Production Floor</div>
+    </div>
+    <nav style="display:flex;gap:4px;margin-left:18px;flex-wrap:wrap">
+      <a href="pre-production.html" style="font:600 10px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#8a8378;border:1px solid #242428;border-radius:8px;padding:9px 12px">Pre-Production</a>
+      <a href="index.html" style="font:600 10px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#8a8378;border:1px solid #242428;border-radius:8px;padding:9px 12px">Production</a>
+      <a href="station.html" style="font:600 10px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#8a8378;border:1px solid #242428;border-radius:8px;padding:9px 12px">Station</a>
+      <a href="shipping.html" style="font:600 10px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#8a8378;border:1px solid #242428;border-radius:8px;padding:9px 12px">Shipping</a>
+      <span style="font:600 10px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#ECEAE4;background:#1a1a1e;border:1px solid #3a2422;border-radius:8px;padding:9px 12px">Stats</span>
+    </nav>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:flex-end">
+      <div style="font:600 13px/1 'Oswald';letter-spacing:.1em;color:#9C978C;white-space:nowrap">{{clock}} <span style="color:#4d483f">·</span> {{dateStr}}</div>
+      <div style="display:flex;align-items:center;gap:7px;font:600 10px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#9C978C;white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:{{connColor}};box-shadow:0 0 7px {{connColor}}"></span>{{connLabel}}</div>
+      <button onClick="{{ onRefresh }}" style="display:inline-flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#9C978C;background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:9px 12px;cursor:pointer" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-refresh"></i>Refresh</button>
+    </div>
+  </header>
+
+  <div style="flex:1;padding:6px 26px 44px;max-width:1220px;margin:0 auto;width:100%">
+
+    <!-- Hero: glowing team-status indicator -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:12px;margin:26px auto 6px;max-width:600px;background:{{statusBg}};border:1px solid {{statusBorder}};border-radius:18px;padding:32px 28px;text-align:center;animation:ca-fade .25s ease">
+      <div style="width:24px;height:24px;border-radius:50%;background:{{statusColor}};--glow-c:{{statusColor}};box-shadow:0 0 14px 4px {{statusColor}};animation:ca-glow-lg 1.9s ease-in-out infinite"></div>
+      <div style="font:600 15px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#6C665C">Team Status</div>
+      <div style="font:600 30px/1 'Oswald';letter-spacing:.03em;color:#ECEAE4">{{statusLabel}}</div>
+      <div style="font:400 12px/1.5 'Archivo';color:#9C978C;max-width:440px">{{heroSub}}</div>
+      <div style="font:400 10px/1.4 'Archivo';color:#4d483f;max-width:440px;margin-top:2px">Driven by prep-time buffer: worst single order wins, so one order about to blow its print date flips this red even if the rest of the queue looks healthy.</div>
+    </div>
+
+    <!-- Prep Time -->
+    <div style="font:600 11px/1 'Oswald';letter-spacing:.16em;text-transform:uppercase;color:#6C665C;margin:26px 0 10px;padding-left:2px">Prep Time</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <sc-for list="{{prepKpis}}" as="k" hint-placeholder-count="2">
+        <div style="position:relative;flex:1;min-width:190px;display:flex;gap:11px;align-items:stretch;background:#0D0D0F;border:1px solid #1b1b1e;border-radius:12px;padding:14px 16px">
+          <div style="width:4px;border-radius:3px;background:{{k.accent}};flex-shrink:0"></div>
+          <div style="min-width:0">
+            <div style="font:500 10px/1 'Oswald';letter-spacing:.13em;text-transform:uppercase;color:#6C665C;margin-bottom:9px">{{k.label}}</div>
+            <div style="display:flex;align-items:baseline;gap:4px"><span style="font:600 27px/0.85 'Oswald';color:#ECEAE4">{{k.value}}</span><span style="font:500 10px/1 'Archivo';color:#6C665C">{{k.unit}}</span></div>
+            <div style="margin-top:8px"><span style="font:400 9px/1.3 'Archivo';color:#4d483f">{{k.sub}}</span></div>
+          </div>
+          <sc-if value="{{k.hasGlow}}" hint-placeholder-val="{{ false }}"><div title="{{k.glowLabel}}" style="position:absolute;top:10px;right:10px;width:10px;height:10px;border-radius:50%;background:{{k.glowColor}};--glow-c:{{k.glowColor}};box-shadow:0 0 6px 2px {{k.glowColor}};animation:ca-glow 1.8s ease-in-out infinite"></div></sc-if>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- Pre-Production -->
+    <div style="font:600 11px/1 'Oswald';letter-spacing:.16em;text-transform:uppercase;color:#6C665C;margin:26px 0 10px;padding-left:2px">Pre-Production</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <sc-for list="{{preprodKpis}}" as="k" hint-placeholder-count="5">
+        <div style="flex:1;min-width:150px;display:flex;gap:11px;align-items:stretch;background:#0D0D0F;border:1px solid #1b1b1e;border-radius:12px;padding:14px 16px">
+          <div style="width:4px;border-radius:3px;background:{{k.accent}};flex-shrink:0"></div>
+          <div style="min-width:0">
+            <div style="font:500 10px/1 'Oswald';letter-spacing:.13em;text-transform:uppercase;color:#6C665C;margin-bottom:9px">{{k.label}}</div>
+            <div style="display:flex;align-items:baseline;gap:4px"><span style="font:600 27px/0.85 'Oswald';color:#ECEAE4">{{k.value}}</span><span style="font:500 10px/1 'Archivo';color:#6C665C">{{k.unit}}</span></div>
+            <div style="margin-top:8px"><span style="font:400 9px/1.3 'Archivo';color:#4d483f">{{k.sub}}</span></div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- Production -->
+    <div style="font:600 11px/1 'Oswald';letter-spacing:.16em;text-transform:uppercase;color:#6C665C;margin:26px 0 10px;padding-left:2px">Production</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <sc-for list="{{prodKpis}}" as="k" hint-placeholder-count="3">
+        <div style="flex:1;min-width:150px;display:flex;gap:11px;align-items:stretch;background:#0D0D0F;border:1px solid #1b1b1e;border-radius:12px;padding:14px 16px">
+          <div style="width:4px;border-radius:3px;background:{{k.accent}};flex-shrink:0"></div>
+          <div style="min-width:0">
+            <div style="font:500 10px/1 'Oswald';letter-spacing:.13em;text-transform:uppercase;color:#6C665C;margin-bottom:9px">{{k.label}}</div>
+            <div style="display:flex;align-items:baseline;gap:4px"><span style="font:600 27px/0.85 'Oswald';color:#ECEAE4">{{k.value}}</span><span style="font:500 10px/1 'Archivo';color:#6C665C">{{k.unit}}</span></div>
+            <div style="margin-top:8px"><span style="font:400 9px/1.3 'Archivo';color:#4d483f">{{k.sub}}</span></div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- Shipping -->
+    <div style="font:600 11px/1 'Oswald';letter-spacing:.16em;text-transform:uppercase;color:#6C665C;margin:26px 0 10px;padding-left:2px">Shipping</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <sc-for list="{{shipKpis}}" as="k" hint-placeholder-count="4">
+        <div style="flex:1;min-width:150px;display:flex;gap:11px;align-items:stretch;background:#0D0D0F;border:1px solid #1b1b1e;border-radius:12px;padding:14px 16px">
+          <div style="width:4px;border-radius:3px;background:{{k.accent}};flex-shrink:0"></div>
+          <div style="min-width:0">
+            <div style="font:500 10px/1 'Oswald';letter-spacing:.13em;text-transform:uppercase;color:#6C665C;margin-bottom:9px">{{k.label}}</div>
+            <div style="display:flex;align-items:baseline;gap:4px"><span style="font:600 27px/0.85 'Oswald';color:#ECEAE4">{{k.value}}</span><span style="font:500 10px/1 'Archivo';color:#6C665C">{{k.unit}}</span></div>
+            <div style="margin-top:8px"><span style="font:400 9px/1.3 'Archivo';color:#4d483f">{{k.sub}}</span></div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+  </div>
+</div>
+
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#C6372B"/><text x="50" y="60" font-family="Oswald,Arial" font-size="30" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="2">CA</text><text x="50" y="78" font-family="Arial" font-size="9" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="1">STATS</text></svg></template></x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+// Prereq checklist fields per method-type, keyed by CAApi.METHOD_META's short
+// key (sp/em/hp/promo) -- same mapping pre-production.html's own `M` object
+// uses locally, duplicated here (rather than imported) since pre-production.html
+// isn't touched by this page and the two are allowed to drift only if that
+// checklist shape itself changes, which is rare and already means editing
+// both files' M/PREREQ tables by hand today.
+const PREREQ_FIELDS = {
+  sp: ['Design_Received__c','Screens_Completed__c','Mix_Inks__c'],
+  em: ['Digitize_File__c','Thread_Color_Materials__c'],
+  hp: ['Transfers_Received__c','Transfers_Ready__c'],
+  promo: [],
+};
+function methodKeyFor(pmType, api){
+  const meta = (api.METHOD_META && api.METHOD_META[pmType]) || null;
+  return (meta && meta.key) || 'sp';
+}
+
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    this.state = {
+      now: new Date(),
+      connection: 'loading',
+      prep: { count:0, knownCount:0, worst:null, avg:null, status:'green' },
+      preprod: { activeJobs:0, staged:0, ready:0, awaiting:0, overdue:0 },
+      prod: { pipeline:0, onPressUnits:0, onPressJobs:0, misprints:0 },
+      ship: { over:0, today:0, soon:0, ok:0, total:0 },
+    };
+  }
+  componentDidMount(){
+    this._t = setInterval(()=>this.setState({ now:new Date() }), 1000);
+    this.load();
+    this._ar = setInterval(()=>this.load(), 20000);
+  }
+  componentWillUnmount(){ clearInterval(this._t); clearInterval(this._ar); }
+
+  // ── Pre-Production: mirrors pre-production.html's own staged/ready/awaiting/
+  // overdue logic (see that file's M/isReady/prereqDone), but counts across the
+  // WHOLE queue rather than that board's current week filter -- this page is a
+  // snapshot, not a workload planner, so "all jobs currently in prep" is the
+  // more useful number here. Counts per Production_Method__c (one "job" =
+  // one method card on that board), not per Order, to match what the board
+  // itself calls a job.
+  computePreProdStats(orders, api){
+    let staged=0, ready=0, overdue=0, jobs=0;
+    (orders||[]).forEach(o=>{
+      const isStaged = o.Receiving_Status__c === 'Staged';
+      const urg = api.dueInfo(o.Print_Date__c).urg;
+      (o.ProductionMethods||[]).forEach(pm=>{
+        jobs++;
+        const key = methodKeyFor(pm.Type__c, api);
+        const list = PREREQ_FIELDS[key] || [];
+        const prereqOk = list.filter(f=>pm[f]).length === list.length;
+        if (isStaged) staged++;
+        if (isStaged && prereqOk) ready++;
+        if (urg === 'over') overdue++;
+      });
+    });
+    return { activeJobs: jobs, staged, ready, awaiting: jobs - ready, overdue };
+  }
+
+  // ── Production: same per-method-card model as index.html's own KPI strip,
+  // so "On Press Now" here reads identically to the Production Dashboard
+  // instead of quietly disagreeing with it over a multi-method order. Misprint
+  // total is deduped per Order (TotalQtyMisprints__c is an Order-level rollup
+  // field repeated onto every sibling method card), since summing it per-card
+  // would double-count any multi-method order.
+  computeProductionStats(recs, api){
+    let pipeline=0, onPressUnits=0, onPressJobs=0;
+    const misprintByOrder = new Map();
+    (recs||[]).forEach(r=>{
+      const orderCompleted = r.Status === 'Complete';
+      const piv = api.pivotItems(r);
+      const qty = parseInt(piv.qty, 10) || 0;
+      if (r.Id && r.TotalQtyMisprints__c != null) misprintByOrder.set(r.Id, Number(r.TotalQtyMisprints__c) || 0);
+      (r.ProductionMethods||[]).forEach(pm=>{
+        const stage = orderCompleted ? 'done' : api.stageOfMethod(pm.Status__c);
+        if (!stage) return;
+        if (stage !== 'done') pipeline++;
+        if (stage === 'ip') { onPressUnits += qty; onPressJobs++; }
+      });
+    });
+    const misprints = Array.from(misprintByOrder.values()).reduce((a,b)=>a+b, 0);
+    return { pipeline, onPressUnits, onPressJobs, misprints };
+  }
+
+  // ── Shipping: same over/today/soon/ok buckets as shipping.html's own
+  // GROUP_DEFS, keyed off the same dueInfo() urgency used everywhere else.
+  computeShippingStats(recs, api){
+    const buckets = { over:0, today:0, soon:0, ok:0 };
+    (recs||[]).forEach(r=>{
+      const urg = api.dueInfo(r.Print_Date__c).urg;
+      if (buckets[urg] !== undefined) buckets[urg]++; else buckets.ok++;
+    });
+    return Object.assign({ total: (recs||[]).length }, buckets);
+  }
+
+  async load(){
+    try{
+      this._api = window.CAApi; if(!this._api) throw new Error('CAApi not loaded');
+      const api = this._api;
+      const [prepOrders, prodRecs, shipRecs] = await Promise.all([
+        api.getOrders(), api.getProductionOrders(), api.getShippingOrders(),
+      ]);
+      this.setState({
+        prep: api.prepBufferStats(prepOrders),
+        preprod: this.computePreProdStats(prepOrders, api),
+        prod: this.computeProductionStats(prodRecs, api),
+        ship: this.computeShippingStats(shipRecs, api),
+        connection: 'live',
+      });
+    } catch(_) {
+      // Demo snapshot deliberately shows a mixed/yellow-ish picture (not all
+      // green), same reasoning as index.html's Prep Time default -- a failed
+      // fetch shouldn't read as reassuring.
+      this.setState({
+        connection: 'demo',
+        prep: { count:4, knownCount:4, worst:0.6, avg:2.1, status:'red' },
+        preprod: { activeJobs:9, staged:4, ready:3, awaiting:6, overdue:1 },
+        prod: { pipeline:11, onPressUnits:396, onPressJobs:2, misprints:6 },
+        ship: { over:1, today:2, soon:3, ok:6, total:12 },
+      });
+    }
+  }
+
+  renderVals(){
+    const st = this.state;
+    const now = st.now;
+    const clock = now.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+    const dateStr = now.toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' });
+    const connColor = st.connection==='live' ? '#7FA644' : (st.connection==='demo' ? '#C9923A' : '#4d483f');
+    const connLabel = st.connection==='live' ? 'Live · Salesforce' : (st.connection==='demo' ? 'Demo data' : 'Connecting…');
+
+    const api = this._api || window.CAApi || {};
+    const STATUS_ICON = { green:'ti-mood-smile', yellow:'ti-mood-neutral', red:'ti-mood-sad' };
+    const STATUS_BG = { green:'#101a09', yellow:'#241a09', red:'#2A100D' };
+    const STATUS_BORDER = { green:'#3D5418', yellow:'#5E4214', red:'#7A241C' };
+    const meta = (api.PREP_STATUS_META && api.PREP_STATUS_META[st.prep.status]) || { color:'#6C665C', label:'—' };
+
+    const fmtDays = (n)=> (n===null||n===undefined) ? '—' : (Math.round(n*10)/10).toFixed(1);
+    const heroSub = st.prep.knownCount
+      ? ('Worst case ' + fmtDays(st.prep.worst) + ' days of buffer left · avg ' + fmtDays(st.prep.avg) + 'd across ' + st.prep.count + (st.prep.count===1?' order':' orders') + ' in Pre-Production')
+      : 'No orders currently sitting in Pre-Production';
+
+    const prepKpis = [
+      { label:'Prep Buffer (Worst)', value:fmtDays(st.prep.worst), unit:'days', sub:'least runway of any order in prep', accent:meta.color, hasGlow:true, glowColor:meta.color, glowLabel:meta.label },
+      { label:'Prep Buffer (Avg)', value:fmtDays(st.prep.avg), unit:'days', sub:st.prep.count+' orders in Pre-Production', accent:'#ECEAE4', hasGlow:false },
+    ];
+    const preprodKpis = [
+      { label:'In Pre-Production', value:String(st.preprod.activeJobs), unit:'jobs', sub:'across all methods', accent:'#ECEAE4' },
+      { label:'Garments Staged', value:String(st.preprod.staged), unit:'jobs', sub:'counted in & ready', accent:'#7FA644' },
+      { label:'Awaiting Prep', value:String(st.preprod.awaiting), unit:'jobs', sub:'checklist incomplete', accent:'#C9923A' },
+      { label:'Ready to Send', value:String(st.preprod.ready), unit:'jobs', sub:'clear for production', accent:'#C6372B' },
+      { label:'Overdue', value:String(st.preprod.overdue), unit:'jobs', sub:'print date passed', accent:'#E24A3A' },
+    ];
+    const prodKpis = [
+      { label:'In Pipeline', value:String(st.prod.pipeline), unit:'jobs', sub:'ready for print → post-production', accent:'#ECEAE4' },
+      { label:'On Press Now', value:String(st.prod.onPressUnits), unit:'pcs', sub:st.prod.onPressJobs+' jobs in production', accent:'#C6372B' },
+      { label:'Misprints', value:String(st.prod.misprints), unit:'pcs', sub:'across active orders', accent:'#C9923A' },
+    ];
+    const shipKpis = [
+      { label:'Overdue', value:String(st.ship.over), unit:'orders', sub:'past print date', accent:'#E24A3A' },
+      { label:'Ship Today', value:String(st.ship.today), unit:'orders', sub:'due today', accent:'#E24A3A' },
+      { label:'Ship Soon', value:String(st.ship.soon), unit:'orders', sub:'due within 2 days', accent:'#C9923A' },
+      { label:'On Schedule', value:String(st.ship.ok), unit:'orders', sub:st.ship.total+' total post-production', accent:'#6C665C' },
+    ];
+
+    return {
+      clock, dateStr, connColor, connLabel,
+      statusColor: meta.color, statusLabel: meta.label,
+      statusIcon: STATUS_ICON[st.prep.status] || 'ti-mood-neutral',
+      statusBg: STATUS_BG[st.prep.status] || '#101013',
+      statusBorder: STATUS_BORDER[st.prep.status] || '#242428',
+      heroSub,
+      prepKpis, preprodKpis, prodKpis, shipKpis,
+      onRefresh: ()=>this.load(),
+    };
+  }
+}
+</script>
+</body>
+</html>
