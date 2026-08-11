@@ -61,6 +61,12 @@
       <div style="font:400 10px/1.4 'Archivo';color:#4d483f;max-width:440px;margin-top:2px">Driven by prep-time buffer: worst single order wins, so one order about to blow its print date flips this red even if the rest of the queue looks healthy.</div>
     </div>
 
+    <!-- Trend: last 7 days, real Salesforce history (CreatedDate / LastModifiedDate) -->
+    <div style="font:600 11px/1 'Oswald';letter-spacing:.16em;text-transform:uppercase;color:#6C665C;margin:26px 0 10px;padding-left:2px">Last 7 Days</div>
+    <div style="background:#0D0D0F;border:1px solid #1b1b1e;border-radius:12px;padding:16px;height:220px;position:relative">
+      <canvas id="ca-trend-chart"></canvas>
+    </div>
+
     <!-- Prep Time -->
     <div style="font:600 11px/1 'Oswald';letter-spacing:.16em;text-transform:uppercase;color:#6C665C;margin:26px 0 10px;padding-left:2px">Prep Time</div>
     <div style="display:flex;gap:12px;flex-wrap:wrap">
@@ -154,14 +160,91 @@ class Component extends DCLogic {
       preprod: { activeJobs:0, staged:0, ready:0, awaiting:0, overdue:0 },
       prod: { pipeline:0, onPressUnits:0, onPressJobs:0, misprints:0 },
       ship: { over:0, today:0, soon:0, ok:0, total:0 },
+      // Day-over-day trend (added 2026-08-11) -- real Salesforce history,
+      // not a snapshot system (see /api/stats-trend's header for why).
+      // dates/newOrders/shipped are parallel arrays, oldest day first.
+      trend: { dates:[], newOrders:[], shipped:[] },
     };
   }
   componentDidMount(){
     this._t = setInterval(()=>this.setState({ now:new Date() }), 1000);
     this.load();
     this._ar = setInterval(()=>this.load(), 20000);
+    this.renderChart();
   }
-  componentWillUnmount(){ clearInterval(this._t); clearInterval(this._ar); }
+  componentDidUpdate(){ this.renderChart(); }
+  componentWillUnmount(){
+    clearInterval(this._t); clearInterval(this._ar);
+    if (this._chart) { this._chart.destroy(); this._chart = null; }
+  }
+  // Chart.js isn't loaded via <helmet> like the fonts/icons -- script
+  // execution through the dc template compiler's synthetic <template>
+  // parsing step is untested territory, so this loads it the same way any
+  // vanilla page would: a real <script> element appended directly to
+  // document.head, which browsers reliably execute regardless of how the
+  // rest of the page got built. Cached on window so remounts/other
+  // component instances don't re-fetch it.
+  loadChartJs(){
+    if (window.Chart) return Promise.resolve(window.Chart);
+    if (window.__caChartJsPromise) return window.__caChartJsPromise;
+    window.__caChartJsPromise = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js';
+      s.onload = () => resolve(window.Chart);
+      s.onerror = () => reject(new Error('chart.js failed to load'));
+      document.head.appendChild(s);
+    });
+    return window.__caChartJsPromise;
+  }
+  // Creates the chart once, then just updates its data in place on every
+  // later call (poll tick, clock tick, etc.) instead of tearing down and
+  // rebuilding -- rebuilding on every 1-second clock tick would both thrash
+  // the canvas and lose any hover/tooltip state. A cheap signature check
+  // skips the update entirely when the trend data hasn't actually changed.
+  renderChart(){
+    const trend = this.state.trend;
+    if (!trend || !trend.dates || !trend.dates.length) return;
+    const sig = JSON.stringify(trend);
+    if (this._trendSig === sig && this._chart) return;
+    this._trendSig = sig;
+    this.loadChartJs().then((Chart) => {
+      const canvas = document.getElementById('ca-trend-chart');
+      if (!canvas) return;
+      const labels = trend.dates.map((d) => {
+        const dt = new Date(d + 'T12:00:00');
+        return dt.toLocaleDateString([], { weekday:'short', month:'numeric', day:'numeric' });
+      });
+      const data = {
+        labels,
+        datasets: [
+          { label:'New Orders', data:trend.newOrders, backgroundColor:'#3E7CB1', borderRadius:4, maxBarThickness:28 },
+          { label:'Shipped / Completed', data:trend.shipped, backgroundColor:'#7FA644', borderRadius:4, maxBarThickness:28 },
+        ],
+      };
+      if (this._chart) {
+        this._chart.data = data;
+        this._chart.update();
+        return;
+      }
+      this._chart = new Chart(canvas.getContext('2d'), {
+        type: 'bar',
+        data,
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode:'index', intersect:false },
+          plugins: {
+            legend: { position:'top', align:'end', labels:{ color:'#9C978C', boxWidth:10, boxHeight:10, font:{ family:'Archivo', size:11 } } },
+            tooltip: { backgroundColor:'#141417', borderColor:'#2a2a2f', borderWidth:1, titleColor:'#ECEAE4', bodyColor:'#C9C6BF', titleFont:{ family:'Oswald' }, bodyFont:{ family:'Archivo' } },
+          },
+          scales: {
+            x: { ticks:{ color:'#6C665C', font:{ family:'Oswald', size:10 } }, grid:{ color:'#1b1b1e', drawTicks:false } },
+            y: { beginAtZero:true, ticks:{ color:'#6C665C', precision:0, font:{ family:'Archivo', size:10 } }, grid:{ color:'#1b1b1e', drawTicks:false } },
+          },
+        },
+      });
+    }).catch((err) => { console.error('renderChart failed', err); });
+  }
 
   // ── Pre-Production: mirrors pre-production.html's own staged/ready/awaiting/
   // overdue logic (see that file's M/isReady/prereqDone), but counts across the
@@ -228,14 +311,15 @@ class Component extends DCLogic {
     try{
       this._api = window.CAApi; if(!this._api) throw new Error('CAApi not loaded');
       const api = this._api;
-      const [prepOrders, prodRecs, shipRecs] = await Promise.all([
-        api.getOrders(), api.getProductionOrders(), api.getShippingOrders(),
+      const [prepOrders, prodRecs, shipRecs, trend] = await Promise.all([
+        api.getOrders(), api.getProductionOrders(), api.getShippingOrders(), api.getStatsTrend(),
       ]);
       this.setState({
         prep: api.prepBufferStats(prepOrders),
         preprod: this.computePreProdStats(prepOrders, api),
         prod: this.computeProductionStats(prodRecs, api),
         ship: this.computeShippingStats(shipRecs, api),
+        trend: (trend && trend.dates) ? trend : this.state.trend,
         connection: 'live',
       });
     } catch(_) {
@@ -248,6 +332,14 @@ class Component extends DCLogic {
         preprod: { activeJobs:9, staged:4, ready:3, awaiting:6, overdue:1 },
         prod: { pipeline:11, onPressUnits:396, onPressJobs:2, misprints:6 },
         ship: { over:1, today:2, soon:3, ok:6, total:12 },
+        // Real (not label-only) dates here too, same YYYY-MM-DD shape
+        // /api/stats-trend returns, so the demo chart's date-label
+        // formatting in renderChart() doesn't need a separate code path.
+        trend: {
+          dates: Array.from({length:7}, (_,i)=>{ const d=new Date(); d.setDate(d.getDate()-(6-i)); return d.toISOString().slice(0,10); }),
+          newOrders: [4,6,3,7,5,2,4],
+          shipped: [3,5,4,6,6,1,3],
+        },
       });
     }
   }
