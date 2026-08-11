@@ -92,7 +92,7 @@
         <sc-for list="{{col.items}}" as="o" hint-placeholder-count="2">
           <div onClick="{{ o.onOpen }}" style="display:flex;background:#141417;border:1px solid #232327;border-radius:11px;overflow:hidden;cursor:pointer;transition:border-color .12s,transform .12s" style-hover="border-color:#3a3a40;transform:translateY(-1px)">
             <div style="width:6px;background:{{o.urgColor}};flex-shrink:0"></div>
-            <sc-if value="{{o.hasThumb}}" hint-placeholder-val="{{ false }}"><img src="{{o.mockupUrl}}" alt="" style="width:64px;height:auto;align-self:stretch;object-fit:cover;flex-shrink:0;background:#121215;border-right:1px solid #202024"></sc-if>
+            <sc-if value="{{o.hasThumb}}" hint-placeholder-val="{{ false }}"><img src="{{o.mockupUrl}}" alt="" onError="{{ o.onThumbErr }}" style="width:64px;height:auto;align-self:stretch;object-fit:cover;flex-shrink:0;background:#121215;border-right:1px solid #202024"></sc-if>
             <sc-if value="{{o.noThumb}}" hint-placeholder-val="{{ true }}"><div style="width:64px;flex-shrink:0;align-self:stretch;background-image:repeating-linear-gradient(45deg,#17171b 0 8px,#131317 8px 16px);border-right:1px solid #202024;display:flex;align-items:center;justify-content:center"><i class="ti ti-shirt" style="color:#3a3a40;font-size:20px"></i></div></sc-if>
             <div style="padding:13px 14px;flex:1;min-width:0;display:flex;flex-direction:column;gap:10px">
               <div style="display:flex;align-items:flex-start;gap:8px">
@@ -717,6 +717,12 @@ class Component extends DCLogic {
       // box). See openMgr()/mgrVals() below.
       mgrQ:'',
       sent:{},
+      // Card-face thumbnails: keyed by card id, set true once that card's
+      // <img> has fired onError (bad/expired/non-public Mockup_URL__c, or a
+      // host that blocks hotlinking). Falls back to the same hatched
+      // placeholder as "no mockup" instead of leaving a blank image box --
+      // see mk()'s hasThumb/noThumb.
+      thumbErr:{},
       // Post-creation "Production Method Created" panel + the Create
       // Production Run modal it launches -- see submitMethod()/submitRun().
       createdPanel:null, runModalOpen:false, runForm:null, runPressResults:[], runSubmitting:false, runErr:'', runMsg:'',
@@ -1514,8 +1520,13 @@ class Component extends DCLogic {
         // Card-face mockup thumbnail (added 2026-08-11) -- mirrors the same
         // treatment on index.html's board cards. o.mockupUrl already rides
         // along from load() (DesignMockupUrl); falls back to a shirt icon on
-        // a hatched background when no Design__c/Mockup_URL__c is linked yet.
-        hasThumb: !!o.mockupUrl, noThumb: !o.mockupUrl,
+        // a hatched background when no Design__c/Mockup_URL__c is linked, OR
+        // the URL failed to actually load (see thumbErr/onThumbErr) -- a
+        // Mockup_URL__c that isn't genuinely public (Vault file not marked
+        // Public) fails silently as a blank box otherwise, since there's no
+        // alt text to fall back to.
+        hasThumb: !!o.mockupUrl && !st.thumbErr[o.id], noThumb: !o.mockupUrl || !!st.thumbErr[o.id],
+        onThumbErr: ()=>this.setState(s2=>({thumbErr:Object.assign({},s2.thumbErr,{[o.id]:true})})),
         onOpen:()=>this.openOrder(o.id),
       });
     };
