@@ -23,40 +23,52 @@
  * Both queries use SOQL's LAST_N_DAYS:n date literal (org-timezone based,
  * same as every other "today" boundary in this app being an approximation
  * across timezones) rather than hand-computing date bounds.
+ *
+ * WEEKDAYS ONLY (added 2026-08-11): the shop doesn't run Saturday/Sunday,
+ * so the chart shows the last 7 WEEKDAYS, not the last 7 calendar days --
+ * otherwise two of the seven bars would always read zero and the "week"
+ * would only really cover 5 working days of signal. QUERY_WINDOW_DAYS pulls
+ * a wider calendar window than DAYS so there's always enough history behind
+ * it to find 7 real weekdays no matter where today falls in the week (worst
+ * case -- today just past a weekend -- 7 weekdays can span up to 11
+ * calendar days).
  */
 import { runQuery, jsonError } from "../_sf.js";
 
 const DAYS = 7;
+const QUERY_WINDOW_DAYS = 14;
 
 function dateKey(iso) {
   // Salesforce datetimes come back "YYYY-MM-DDTHH:MM:SS.sss+0000" -- the
-  // first 10 characters are always the org-local calendar date SOQL itself
-  // used to decide which LAST_N_DAYS bucket a row fell into.
+  // first 10 characters are always the org-local calendar date.
   return String(iso).slice(0, 10);
 }
 
-// Last `days` calendar dates, oldest first, ending today (UTC) -- a KPI
-// chart bucketed by day doesn't need to be more precise than that, and
-// every other "today" boundary in this app has the same approximation.
-function lastNDates(days) {
+// Last `n` WEEKDAYS (Mon-Fri), oldest first, walking back from today (UTC)
+// and skipping Saturday/Sunday entirely -- including if today itself is a
+// weekend, in which case the most recent bucket is simply the last weekday
+// before it.
+function lastNWeekdays(n) {
   const out = [];
   const now = new Date();
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - i));
-    out.push(d.toISOString().slice(0, 10));
+  const cursor = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  while (out.length < n) {
+    const dow = cursor.getUTCDay(); // 0 = Sunday, 6 = Saturday
+    if (dow !== 0 && dow !== 6) out.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() - 1);
   }
-  return out;
+  return out.reverse();
 }
 
 export async function onRequestGet({ env }) {
   try {
-    const dates = lastNDates(DAYS);
+    const dates = lastNWeekdays(DAYS);
 
     const [newResult, shippedResult] = await Promise.all([
-      runQuery(env, `SELECT Id, CreatedDate FROM Order WHERE CreatedDate = LAST_N_DAYS:${DAYS}`),
+      runQuery(env, `SELECT Id, CreatedDate FROM Order WHERE CreatedDate = LAST_N_DAYS:${QUERY_WINDOW_DAYS}`),
       runQuery(
         env,
-        `SELECT Id, LastModifiedDate FROM Order WHERE Status = 'Complete' AND LastModifiedDate = LAST_N_DAYS:${DAYS}`,
+        `SELECT Id, LastModifiedDate FROM Order WHERE Status = 'Complete' AND LastModifiedDate = LAST_N_DAYS:${QUERY_WINDOW_DAYS}`,
       ),
     ]);
 
