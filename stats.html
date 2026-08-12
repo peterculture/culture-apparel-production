@@ -25,30 +25,45 @@
     @keyframes ca-glow{0%,100%{box-shadow:0 0 6px 2px var(--glow-c)}50%{box-shadow:0 0 16px 5px var(--glow-c)}}
     @keyframes ca-glow-lg{0%,100%{box-shadow:0 0 14px 4px var(--glow-c)}50%{box-shadow:0 0 34px 10px var(--glow-c)}}
     @keyframes ca-fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes ca-slide-left{from{transform:translateX(-30px);opacity:0}to{transform:translateX(0);opacity:1}}
   </style>
 </helmet>
 
 <div style="display:flex;flex-direction:column;min-height:100vh;background:radial-gradient(circle at 30% -10%,#101013,#08080A 55%)">
 
   <header style="position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:16px;padding:14px 26px;background:rgba(6,6,7,.92);backdrop-filter:blur(10px);border-bottom:1px solid rgba(198,55,43,.4);flex-wrap:wrap">
+    <button onClick="{{ onOpenNav }}" title="All dashboards" style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:9px;background:#16161a;border:1px solid #2a2a2f;color:#9C978C;cursor:pointer;flex-shrink:0" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-menu-2" style="font-size:18px"></i></button>
     <svg width="34" height="34" viewBox="0 0 48 48" aria-hidden="true" style="flex-shrink:0"><g fill="#C6372B"><rect x="12" y="9" width="24" height="3.1" rx="1.5"/><rect x="8" y="14" width="32" height="3.1" rx="1.5"/><rect x="5" y="19" width="38" height="3.1" rx="1.5"/><rect x="5" y="24" width="38" height="3.1" rx="1.5"/><rect x="6" y="29" width="36" height="3.1" rx="1.5"/><rect x="9" y="34" width="30" height="3.1" rx="1.5"/><rect x="13" y="39" width="22" height="3.1" rx="1.5"/></g></svg>
     <div style="min-width:0">
       <div style="font:700 16px/1 'Oswald';letter-spacing:.12em;color:#ECEAE4">CULTURE APPAREL</div>
       <div style="font:500 9px/1 'Oswald';letter-spacing:.4em;text-transform:uppercase;color:#C6372B;margin-top:4px">Production Floor</div>
     </div>
-    <nav style="display:flex;gap:4px;margin-left:18px;flex-wrap:wrap">
-      <a href="pre-production.html" style="font:600 10px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#8a8378;border:1px solid #242428;border-radius:8px;padding:9px 12px">Pre-Production</a>
-      <a href="index.html" style="font:600 10px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#8a8378;border:1px solid #242428;border-radius:8px;padding:9px 12px">Production</a>
-      <a href="station.html" style="font:600 10px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#8a8378;border:1px solid #242428;border-radius:8px;padding:9px 12px">Station</a>
-      <a href="shipping.html" style="font:600 10px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#8a8378;border:1px solid #242428;border-radius:8px;padding:9px 12px">Shipping</a>
-      <span style="font:600 10px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#ECEAE4;background:#1a1a1e;border:1px solid #3a2422;border-radius:8px;padding:9px 12px">Stats</span>
-    </nav>
     <div style="margin-left:auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:flex-end">
       <div style="font:600 13px/1 'Oswald';letter-spacing:.1em;color:#9C978C;white-space:nowrap">{{clock}} <span style="color:#4d483f">·</span> {{dateStr}}</div>
       <div style="display:flex;align-items:center;gap:7px;font:600 10px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#9C978C;white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:{{connColor}};box-shadow:0 0 7px {{connColor}}"></span>{{connLabel}}</div>
       <button onClick="{{ onRefresh }}" style="display:inline-flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#9C978C;background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:9px 12px;cursor:pointer" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-refresh"></i>Refresh</button>
     </div>
   </header>
+
+  <sc-if value="{{navOpen}}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ onCloseNav }}" style="position:fixed;inset:0;z-index:90;background:rgba(6,6,7,.66);backdrop-filter:blur(3px)"></div>
+    <aside style="position:fixed;top:0;left:0;bottom:0;z-index:91;width:min(300px,86vw);background:#0C0C0E;border-right:1px solid #232327;box-shadow:30px 0 70px -20px rgba(0,0,0,.8);display:flex;flex-direction:column;animation:ca-slide-left .2s ease">
+      <div style="display:flex;align-items:center;gap:12px;padding:20px 22px;border-bottom:1px solid #1b1b1e">
+        <svg width="28" height="28" viewBox="0 0 48 48" aria-hidden="true" style="flex-shrink:0"><g fill="#C6372B"><rect x="12" y="9" width="24" height="3.1" rx="1.5"/><rect x="8" y="14" width="32" height="3.1" rx="1.5"/><rect x="5" y="19" width="38" height="3.1" rx="1.5"/><rect x="5" y="24" width="38" height="3.1" rx="1.5"/><rect x="6" y="29" width="36" height="3.1" rx="1.5"/><rect x="9" y="34" width="30" height="3.1" rx="1.5"/><rect x="13" y="39" width="22" height="3.1" rx="1.5"/></g></svg>
+        <div style="font:700 13px/1 'Oswald';letter-spacing:.1em;color:#ECEAE4">CULTURE APPAREL</div>
+        <button onClick="{{ onCloseNav }}" style="margin-left:auto;flex-shrink:0;width:30px;height:30px;border-radius:8px;background:#16161a;border:1px solid #2a2a2f;color:#9C978C;cursor:pointer" style-hover="color:#ECEAE4;border-color:#3a3a40"><i class="ti ti-x"></i></button>
+      </div>
+      <div style="padding:14px;display:flex;flex-direction:column;gap:8px;overflow-y:auto">
+        <sc-for list="{{navBoards}}" as="b" hint-placeholder-count="5">
+          <a href="{{b.href}}" style="display:flex;align-items:center;gap:13px;background:{{b.bg}};border:1px solid {{b.border}};border-left:4px solid {{b.color}};border-radius:11px;padding:14px 15px;text-decoration:none" style-hover="border-color:#3a3a40">
+            <i class="ti {{b.icon}}" style="color:{{b.color}};font-size:19px;flex-shrink:0"></i>
+            <div style="min-width:0"><div style="font:600 13px/1 'Oswald';color:#ECEAE4">{{b.label}}</div><div style="font:400 10px/1.3 'Archivo';color:#6C665C;margin-top:3px">{{b.sub}}</div></div>
+            <sc-if value="{{b.isActive}}" hint-placeholder-val="{{ false }}"><i class="ti ti-circle-check" style="margin-left:auto;color:{{b.color}};font-size:16px;flex-shrink:0"></i></sc-if>
+          </a>
+        </sc-for>
+      </div>
+    </aside>
+  </sc-if>
 
   <div style="flex:1;padding:6px 26px 44px;max-width:1220px;margin:0 auto;width:100%">
 
@@ -164,6 +179,8 @@ class Component extends DCLogic {
       // not a snapshot system (see /api/stats-trend's header for why).
       // dates/newOrders/shipped are parallel arrays, oldest day first.
       trend: { dates:[], newOrders:[], shipped:[] },
+      // All-boards sidebar -- see NAV_BOARDS/buildNavBoards in ca-api.js.
+      navOpen:false,
     };
   }
   componentDidMount(){
@@ -393,6 +410,8 @@ class Component extends DCLogic {
       heroSub,
       prepKpis, preprodKpis, prodKpis, shipKpis,
       onRefresh: ()=>this.load(),
+      navOpen: st.navOpen, onOpenNav:()=>this.setState({navOpen:true}), onCloseNav:()=>this.setState({navOpen:false}),
+      navBoards: api.buildNavBoards ? api.buildNavBoards('stats') : [],
     };
   }
 }
