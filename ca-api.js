@@ -30,7 +30,12 @@
   function workerName(){ try { return localStorage.getItem(NAME_KEY) || ''; } catch (_) { return ''; } }
   function setRole(r){ try { localStorage.setItem(ROLE_KEY, r); } catch (_) {} }
   function setWorkerName(n){ try { localStorage.setItem(NAME_KEY, (n || '').slice(0, 80)); } catch (_) {} }
-  function logout(){ try { localStorage.removeItem(ROLE_KEY); localStorage.removeItem(NAME_KEY); } catch (_) {} }
+  // Clears both this shared identity (used by index.html/pre-production.html)
+  // AND station.html/shipping.html's separate 'caStationWorkerName' key --
+  // those two pages never adopted ROLE_KEY/NAME_KEY (see their own header
+  // comments), so a real "log everyone off this tablet" action has to know
+  // about both systems to actually work regardless of which board you're on.
+  function logout(){ try { localStorage.removeItem(ROLE_KEY); localStorage.removeItem(NAME_KEY); localStorage.removeItem('caStationWorkerName'); } catch (_) {} }
   /* ── manager-only action gate ──
      role() reflects whichever PIN was entered at login.html and is easy to
      go stale on a shared tablet: tapping "Switch user" (the repeat icon on
