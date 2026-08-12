@@ -25,12 +25,24 @@
  * -- then stream the bytes back same-origin so the browser never needs a
  * Salesforce session of its own.
  *
- * SECURITY: only a Salesforce-Id-shaped substring is ever extracted from
- * the caller-supplied `url` param -- the actual outbound request URL is
- * always built from OUR OWN env/instance_url via sfFetch, never from the
- * caller's host. That means this endpoint can't be turned into an open
- * proxy for arbitrary URLs the way a naive "refetch whatever url= says"
- * implementation could.
+ * SECURITY: when `url` is a Salesforce servlet link, only the Id-shaped
+ * substring is ever used -- the outbound request is always built from OUR
+ * OWN env/instance_url via sfFetch, never from the caller's host, so that
+ * path can't be turned into an open proxy for arbitrary URLs.
+ *
+ * FALLBACK (added 2026-08-12): found live on a dev2 order whose Design__c
+ * record had a plain external image link in Mockup_URL__c (a Google Images
+ * thumbnail, gstatic.com) instead of a Salesforce Vault/servlet URL --
+ * apparently a staff member pasted a placeholder image rather than
+ * uploading through the documented Vault flow. ID_RE correctly finds no
+ * Salesforce Id in a URL like that, and the endpoint used to just 400 there,
+ * so the card thumbnail silently failed for any order whose mockup wasn't
+ * routed through Vault. Since Mockup_URL__c is documented as "a public
+ * image link" in the first place (see _mockup.js), any http(s) URL that
+ * isn't a Salesforce Id is now fetched directly instead of rejected --
+ * still same-origin from the browser's perspective (no open redirect: we
+ * stream the bytes back ourselves rather than 302'ing the browser to the
+ * caller-supplied host), and still scoped to GET/no credentials forwarded.
  */
 import { sfFetch, apiVersion, jsonError } from "../_sf.js";
 
@@ -40,6 +52,19 @@ import { sfFetch, apiVersion, jsonError } from "../_sf.js";
 // or, in the future, just a bare Id someone passes directly.
 const ID_RE = /([a-zA-Z0-9]{15,18})(?:[/?#].*)?$/;
 
+function streamResponse(resp) {
+  const contentType = resp.headers.get("content-type") || "application/octet-stream";
+  return new Response(resp.body, {
+    headers: {
+      "Content-Type": contentType,
+      // Private (not a shared/public cache) since this is proxied through
+      // an authenticated org session; short-lived since a design mockup
+      // can be replaced. Same-origin only, no CORS headers needed.
+      "Cache-Control": "private, max-age=600",
+    },
+  });
+}
+
 export async function onRequestGet({ request, env }) {
   try {
     const reqUrl = new URL(request.url);
@@ -48,27 +73,46 @@ export async function onRequestGet({ request, env }) {
 
     const m = raw.match(ID_RE);
     const id = m && m[1];
-    if (!id) return jsonError("no_id_found", 400);
 
-    const resp = await sfFetch(
-      env,
-      `/services/data/${apiVersion(env)}/sobjects/ContentVersion/${encodeURIComponent(id)}/VersionData`,
-    );
-    if (!resp.ok) {
-      console.error("mockup-proxy: ContentVersion VersionData fetch failed", id, resp.status);
-      return jsonError("fetch_failed", resp.status);
+    if (id) {
+      const resp = await sfFetch(
+        env,
+        `/services/data/${apiVersion(env)}/sobjects/ContentVersion/${encodeURIComponent(id)}/VersionData`,
+      );
+      if (!resp.ok) {
+        console.error("mockup-proxy: ContentVersion VersionData fetch failed", id, resp.status);
+        return jsonError("fetch_failed", resp.status);
+      }
+      return streamResponse(resp);
     }
 
-    const contentType = resp.headers.get("content-type") || "application/octet-stream";
-    return new Response(resp.body, {
-      headers: {
-        "Content-Type": contentType,
-        // Private (not a shared/public cache) since this is proxied through
-        // an authenticated org session; short-lived since a design mockup
-        // can be replaced. Same-origin only, no CORS headers needed.
-        "Cache-Control": "private, max-age=600",
-      },
-    });
+    // Not a Salesforce servlet link -- if it's still a plain http(s) URL,
+    // fetch it directly (see FALLBACK note above). Anything else (bad
+    // scheme, unparseable) still 400s same as before.
+    let parsed;
+    try {
+      parsed = new URL(raw);
+    } catch (_) {
+      return jsonError("no_id_found", 400);
+    }
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return jsonError("no_id_found", 400);
+    }
+    try {
+      const resp = await fetch(parsed.toString(), {
+        method: "GET",
+        redirect: "follow",
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!resp.ok) {
+        console.error("mockup-proxy: external mockup fetch failed", parsed.toString(), resp.status);
+        return jsonError("fetch_failed", resp.status);
+      }
+      return streamResponse(resp);
+    } catch (err) {
+      console.error("mockup-proxy: external mockup fetch error", parsed.toString(), err);
+      return jsonError("fetch_failed", 502);
+    }
   } catch (err) {
     console.error(err);
     return jsonError("internal_error", 500);
