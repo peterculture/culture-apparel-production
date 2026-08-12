@@ -77,6 +77,31 @@
      DELIVERY_LABEL maps the real stored value -> what to show a human;
      DELIVERY_METHODS is the fixed tab order the Shipping/Receiving
      Dashboard (shipping.html) uses, stored-value keyed. */
+  /* ── all-boards sidebar (added 2026-08-11) ──
+     Single source of truth for the "jump to any board" sidebar every page
+     now shares, so the list/order/icons/colors can't drift board to board
+     the way the old per-page inline nav pills had (each page had its own
+     copy, in a different order, mixed in with page-specific controls).
+     Keep in sync with the board list login.html's post-login screen shows
+     if that one ever changes -- login.html doesn't load this because it
+     already needs its own duplicate list before a role/name exists. */
+  var NAV_BOARDS = [
+    { key:'pre-production', label:'Pre-Production', sub:'Design · screens · receiving', href:'pre-production.html', color:'#C9923A', icon:'ti-clipboard-check' },
+    { key:'index', label:'Production Dashboard', sub:'Kanban · print → ship', href:'index.html', color:'#C6372B', icon:'ti-layout-kanban' },
+    { key:'station', label:'Station Board', sub:'Ink · screens · transfers', href:'station.html', color:'#5E9B9A', icon:'ti-device-tablet' },
+    { key:'shipping', label:'Shipping/Receiving', sub:'Post-production · ship · complete', href:'shipping.html', color:'#3E7CB1', icon:'ti-truck-delivery' },
+    { key:'stats', label:'Stats', sub:'Prep-time buffer · team status · board totals', href:'stats.html', color:'#7FA644', icon:'ti-chart-bar' },
+  ];
+  function buildNavBoards(currentKey){
+    return NAV_BOARDS.map(function (b) {
+      var active = b.key === currentKey;
+      return Object.assign({}, b, {
+        isActive: active,
+        bg: active ? 'rgba(255,255,255,.05)' : '#141417',
+        border: active ? '#3a3a40' : '#232327',
+      });
+    });
+  }
   var DELIVERY_LABEL = { 'Shipping':'Shipping', 'Delivery':'Delivery', 'Pickup':'Pick-up', 'Split Ship':'Split Ship', 'Order Fulfillment':'Order Fulfillment' };
   var DELIVERY_METHODS = ['Shipping', 'Delivery', 'Pickup', 'Split Ship', 'Order Fulfillment'];
   var STAGE_KEY = { 'Ready for Print':'rfp', 'In Production':'ip', 'Post-Production':'pp', 'Completed':'done' };
@@ -519,6 +544,7 @@
     VALID_NAMES: VALID_NAMES, ROLE_KEY: ROLE_KEY, NAME_KEY: NAME_KEY, role: role, workerName: workerName, setRole: setRole, setWorkerName: setWorkerName, logout: logout, isManager: isManager, confirmManager: confirmManager, MANAGER_NAMES: MANAGER_NAMES,
     SUBSTATUS_VALUE: SUBSTATUS_VALUE, SUBSTATUS_LABEL: SUBSTATUS_LABEL, STAGE_KEY: STAGE_KEY, STAGE_SUBSTATUS: STAGE_SUBSTATUS, stageOf: stageOf, stageOfMethod: stageOfMethod,
     DELIVERY_LABEL: DELIVERY_LABEL, DELIVERY_METHODS: DELIVERY_METHODS, formatAddress: formatAddress,
+    NAV_BOARDS: NAV_BOARDS, buildNavBoards: buildNavBoards,
     getShippingOrders: getShippingOrders, completeOrder: completeOrder, getStatsTrend: getStatsTrend,
     CHECK_FIELD: CHECK_FIELD, RECV_FROM_SF: RECV_FROM_SF, RECV_TO_SF: RECV_TO_SF,
     PLACEMENTS: PLACEMENTS, methodsList: methodsList, METHOD_META: METHOD_META,
