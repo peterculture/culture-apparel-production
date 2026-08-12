@@ -789,8 +789,16 @@ class Component extends DCLogic {
       // Management inbox instead of the board view.
       wantsMgr = params.get('view') === 'mgr';
     } catch (_) {}
-    this.load().then(()=>{ if (addMethodForOrder) this.openMgrForOrder(addMethodForOrder); });
-    if (wantsMgr && !addMethodForOrder) this.openMgr();
+    // openMgr() -> loadInbox() bails out with an empty list whenever
+    // state.connection isn't 'live' yet (see loadInbox() below), so this
+    // deep link has to wait for load() to resolve (and set connection)
+    // the same way addMethodForOrder already does -- calling openMgr()
+    // immediately here raced ahead of that and showed the "empty demo
+    // mode" placeholder even when Salesforce had real inbox orders.
+    this.load().then(()=>{
+      if (addMethodForOrder) this.openMgrForOrder(addMethodForOrder);
+      else if (wantsMgr) this.openMgr();
+    });
     this.loadSfEnv();
     this._ar=setInterval(()=>{ if(this.state.connection==='live' && !this.state.openId && this.state.view!=='mgr') this.load(); },15000);
   }
