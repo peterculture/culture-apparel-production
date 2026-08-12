@@ -87,6 +87,7 @@
      already needs its own duplicate list before a role/name exists. */
   var NAV_BOARDS = [
     { key:'pre-production', label:'Pre-Production', sub:'Design · screens · receiving', href:'pre-production.html', color:'#C9923A', icon:'ti-clipboard-check' },
+    { key:'management', label:'Pre-Production Management', sub:'Order intake · methods · production runs', href:'pre-production.html?view=mgr', color:'#6C7686', icon:'ti-settings' },
     { key:'index', label:'Production Dashboard', sub:'Kanban · print → ship', href:'index.html', color:'#C6372B', icon:'ti-layout-kanban' },
     { key:'station', label:'Station Board', sub:'Ink · screens · transfers', href:'station.html', color:'#5E9B9A', icon:'ti-device-tablet' },
     { key:'shipping', label:'Shipping/Receiving', sub:'Post-production · ship · complete', href:'shipping.html', color:'#3E7CB1', icon:'ti-truck-delivery' },
