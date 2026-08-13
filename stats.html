@@ -158,8 +158,13 @@
 // isn't touched by this page and the two are allowed to drift only if that
 // checklist shape itself changes, which is rare and already means editing
 // both files' M/PREREQ tables by hand today.
+// sp DROPPED Design_Received__c 2026-08-13: Salesforce removed it from the
+// Order page layouts, the Production Status flow's Screen Print Checklist
+// outcome, the PrintShop Production path's Key Fields, and the
+// ReadyforPrintStatus validation rule (dev2 + staging) -- it no longer gates
+// readiness there, so it shouldn't gate this board's "ready" count either.
 const PREREQ_FIELDS = {
-  sp: ['Design_Received__c','Screens_Completed__c','Mix_Inks__c'],
+  sp: ['Screens_Completed__c','Mix_Inks__c'],
   em: ['Digitize_File__c','Thread_Color_Materials__c'],
   hp: ['Transfers_Received__c','Transfers_Ready__c'],
   promo: [],
