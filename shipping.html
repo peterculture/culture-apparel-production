@@ -40,7 +40,7 @@
     </div>
     <div style="margin-left:auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end">
       <div style="display:flex;align-items:center;gap:7px;font:600 12px/1 'Oswald';letter-spacing:.09em;color:#9C978C;white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:{{connColor}}"></span>{{connLabel}} · {{clock}}</div>
-      <button onClick="{{ onOpenSfEnv }}" title="Salesforce environment -- click to switch" style="display:flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#9C978C;background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:8px 11px;cursor:pointer;white-space:nowrap" style-hover="border-color:{{accent}};color:{{accent}}"><i class="ti ti-cloud" style="font-size:12px"></i>{{sfEnvLabel}}</button>
+      <sc-if value="{{isAdmin}}" hint-placeholder-val="{{ false }}"><button onClick="{{ onOpenSfEnv }}" title="Salesforce environment -- click to switch" style="display:flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#9C978C;background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:8px 11px;cursor:pointer;white-space:nowrap" style-hover="border-color:{{accent}};color:{{accent}}"><i class="ti ti-cloud" style="font-size:12px"></i>{{sfEnvLabel}}</button></sc-if>
       <button onClick="{{ onNameTap }}" style="display:flex;align-items:center;gap:8px;background:#141417;border:1px solid #2a2a2f;border-radius:22px;padding:6px 12px 6px 6px;cursor:pointer"><span style="width:28px;height:28px;border-radius:50%;background:{{accent}};color:#08080A;font:700 10px/28px 'Oswald';text-align:center">{{workerInit}}</span><span style="font:500 12px/1 'Archivo';color:#ECEAE4;white-space:nowrap">{{worker}}</span></button>
     </div>
   </header>
@@ -452,15 +452,21 @@ class Component extends DCLogic {
   onGateBackspace(){ if(this.state.gateSubmitting) return; this.setState(st=>({gatePin:st.gatePin.slice(0,-1), gateErr:''})); }
   // Verifies the switch-account PIN SERVER-SIDE via the same
   // POST /api/worker-login endpoint login.html uses -- replaces the old
-  // pickName(nm) which just trusted whichever name button was tapped.
+  // pickName(nm) which just trusted whichever name button was tapped. Name
+  // is stored under this page's own 'caStationWorkerName' key (unchanged),
+  // but role now ALSO gets written to the shared 'caShopRole' key (same one
+  // login.html uses) so role()-based UI gating -- the env switcher's
+  // isAdmin() check, buildNavBoards()'s Pre-Production Management filter --
+  // stays correct even on a tablet that only ever used this page's own gate
+  // and never went through login.html itself.
   async submitGatePin(pin){
     if(this.state.gateSubmitting) return;
     this.setState({gateSubmitting:true, gateErr:''});
     try{
       const api=this._api||window.CAApi; if(!api || !api.workerLogin) throw new Error('CAApi not loaded');
       const res=await api.workerLogin(pin);
-      if(!res || !res.name) throw new Error('bad_response');
-      try{ localStorage.setItem('caStationWorkerName',res.name); }catch(_){}
+      if(!res || !res.name || !res.role) throw new Error('bad_response');
+      try{ localStorage.setItem('caStationWorkerName',res.name); localStorage.setItem(api.ROLE_KEY||'caShopRole',res.role); }catch(_){}
       this.setState({gateSubmitting:false, gatePin:'', gateErr:'', nameOk:true});
     }catch(e){
       const msg = (e && e.status===401) ? 'Incorrect PIN — try again'
@@ -909,6 +915,12 @@ class Component extends DCLogic {
 
     const clock=st.now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
     let wn=''; try{ wn=localStorage.getItem('caStationWorkerName')||''; }catch(_){}
+    // Env switcher is admin-only (Anthony) as of 2026-08-13 -- see index.html's
+    // matching comment. Reads the shared caShopRole key (set at login.html,
+    // and now also by this page's own switch-account PIN pad -- see
+    // submitGatePin() above) even though this page's WORKER NAME uses a
+    // separate 'caStationWorkerName' key.
+    const isAdmin = !!(window.CAApi && window.CAApi.isAdmin && window.CAApi.isAdmin());
     const live=st.connection==='live';
     const connLabel = live?'Live':(st.connection==='loading'?'Connecting…':'Demo');
     const connColor = live?'#7FA644':(st.connection==='loading'?'#6C665C':'#C9923A');
@@ -937,7 +949,7 @@ class Component extends DCLogic {
     });
 
     return {
-      accent:ACCENT, clock, connLabel, connColor,
+      accent:ACCENT, clock, connLabel, connColor, isAdmin,
       worker:wn, workerInit:((wn||'?')[0]||'?').toUpperCase(), onNameTap:()=>this.switchUser(),
       nameGateOpen:!st.nameOk, gateDots, gatePad, gateStatusText, gateStatusColor, gateShakeAnim: st.gateShake?'ca-shake .45s':'none',
       sfEnvLabel:st.sfEnvActiveLabel||'Dev2', onOpenSfEnv:()=>this.openSfEnvModal(),
