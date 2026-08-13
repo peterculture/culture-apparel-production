@@ -15,6 +15,28 @@
   <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css" rel="stylesheet">
   <style>
     *{box-sizing:border-box}
+    :root{
+      /* Portrait-phone layout knobs (added 2026-08-13) -- referenced from the
+         inline styles below via var(...) instead of literal px, so the one
+         media query underneath can retune the whole page's density for a
+         narrow/portrait phone without touching every inline style block by
+         hand. Desktop/tablet keep today's exact values (nothing below
+         changes on a wide screen). */
+      --pad-x:24px;       /* horizontal gutter used by the header, station
+                              pills, search, tabs, board and modal sections */
+      --header-icon:46px; /* station-icon square in the sticky header */
+      --header-title:20px;/* station name font-size in the sticky header */
+    }
+    @media (max-width:480px){
+      :root{ --pad-x:14px; --header-icon:38px; --header-title:17px; }
+      /* Status/step picker buttons in the card modal (grid-template-
+         columns:1fr 1fr in the markup) -- stage labels like "Pantone Label
+         Printed" or "Ready for Exposure" wrap to 2 lines in a ~155px-wide
+         half-column on a real phone, which reads fine, but the fixed
+         18px/10px padding those buttons ship with makes that second line
+         feel cramped. Trim it slightly only at this width. */
+      .ca-status-btn{padding:14px 8px!important;font-size:12px!important}
+    }
     body{margin:0;background:#08080A;font-family:'Archivo',system-ui,sans-serif;-webkit-font-smoothing:antialiased;color:#ECEAE4}
     a{color:#E24A3A;text-decoration:none}
     a:hover{color:#C6372B}
@@ -29,11 +51,11 @@
 
 <div style="display:flex;flex-direction:column;min-height:100vh;background:radial-gradient(circle at 50% -8%,#101013,#08080A 55%)">
 
-  <header style="position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:16px;padding:15px 24px;background:rgba(6,6,7,.94);backdrop-filter:blur(10px);border-bottom:2px solid {{accent}}">
+  <header style="position:sticky;top:0;z-index:40;display:flex;align-items:center;flex-wrap:wrap;gap:12px 16px;padding:15px var(--pad-x);background:rgba(6,6,7,.94);backdrop-filter:blur(10px);border-bottom:2px solid {{accent}}">
     <button onClick="{{ onOpenNav }}" title="All dashboards" style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:9px;background:#16161a;border:1px solid #2a2a2f;color:#9C978C;cursor:pointer;flex-shrink:0" style-hover="border-color:{{accent}};color:{{accent}}"><i class="ti ti-menu-2" style="font-size:18px"></i></button>
-    <div style="width:46px;height:46px;border-radius:12px;background:{{accent}};display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti {{stationIcon}}" style="color:#08080A;font-size:24px"></i></div>
+    <div style="width:var(--header-icon);height:var(--header-icon);border-radius:12px;background:{{accent}};display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti {{stationIcon}}" style="font-size:24px;color:#08080A"></i></div>
     <div style="min-width:0">
-      <div style="font:600 20px/1 'Oswald';letter-spacing:.04em;color:#ECEAE4">{{stationName}}</div>
+      <div style="font:600 var(--header-title)/1 'Oswald';letter-spacing:.04em;color:#ECEAE4">{{stationName}}</div>
       <div style="font:500 9px/1 'Oswald';letter-spacing:.34em;text-transform:uppercase;color:{{accent}};margin-top:5px">Culture Apparel · Pre-Production</div>
     </div>
     <div style="margin-left:auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end">
@@ -67,27 +89,27 @@
     </aside>
   </sc-if>
 
-  <div style="display:flex;align-items:center;gap:8px;padding:14px 24px 4px;flex-wrap:wrap;border-bottom:1px solid #16161a">
+  <div style="display:flex;align-items:center;gap:8px;padding:14px var(--pad-x) 4px;flex-wrap:wrap;border-bottom:1px solid #16161a">
     <span style="font:600 10px/1 'Oswald';letter-spacing:.12em;text-transform:uppercase;color:#4d483f;margin-right:4px">Station</span>
     <sc-for list="{{stationPills}}" as="s" hint-placeholder-count="4">
       <button onClick="{{ s.onPick }}" style="display:inline-flex;align-items:center;gap:7px;font:600 11px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:{{s.textColor}};background:{{s.bg}};border:1px solid {{s.border}};border-radius:9px;padding:9px 13px;cursor:pointer"><i class="ti {{s.icon}}"></i>{{s.label}}</button>
     </sc-for>
   </div>
 
-  <div style="display:flex;align-items:center;padding:14px 24px 0">
+  <div style="display:flex;align-items:center;padding:14px var(--pad-x) 0">
     <div style="position:relative;flex:1;min-width:200px;max-width:360px">
       <i class="ti ti-search" style="position:absolute;left:13px;top:50%;transform:translateY(-50%);color:#4d483f;font-size:15px"></i>
       <input value="{{q}}" onInput="{{ onSearch }}" placeholder="Search order #, customer…" style="width:100%;background:#121215;border:1px solid #242428;border-radius:9px;padding:11px 13px 11px 36px;font-size:13px;color:#ECEAE4;outline:none">
     </div>
   </div>
 
-  <div style="display:flex;gap:8px;padding:16px 24px 6px;flex-wrap:wrap;overflow-x:auto">
+  <div style="display:flex;gap:8px;padding:16px var(--pad-x) 6px;flex-wrap:wrap;overflow-x:auto">
     <sc-for list="{{tabs}}" as="t" hint-placeholder-count="4">
       <button onClick="{{ t.onPick }}" style="display:inline-flex;align-items:center;gap:8px;font:600 12px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:{{t.textColor}};background:{{t.bg}};border:1px solid {{t.border}};border-radius:10px;padding:12px 15px;cursor:pointer;white-space:nowrap">{{t.label}}<span style="font:700 11px/1 'Oswald';color:{{t.countColor}};background:{{t.countBg}};border-radius:20px;padding:3px 8px">{{t.count}}</span></button>
     </sc-for>
   </div>
 
-  <div style="flex:1;padding:12px 24px 44px">
+  <div style="flex:1;padding:12px var(--pad-x) 44px">
     <sc-if value="{{showInventory}}" hint-placeholder-val="{{ false }}">
       <div style="max-width:640px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><span style="font:600 12px/1 'Oswald';letter-spacing:.12em;text-transform:uppercase;color:#8a8378">{{invTitle}}</span><span style="margin-left:auto;font:600 12px/1 'Oswald';color:#9C978C">Total {{invTotal}}</span></div>
@@ -140,11 +162,11 @@
 
   <sc-if value="{{modalOpen}}" hint-placeholder-val="{{ false }}">
     <div style="position:fixed;inset:0;z-index:70;background:#08080A;overflow-y:auto;animation:ca-fade .18s ease">
-      <div style="position:sticky;top:0;display:flex;align-items:center;gap:14px;padding:16px 24px;background:rgba(6,6,7,.94);backdrop-filter:blur(10px);border-bottom:2px solid {{accent}}">
+      <div style="position:sticky;top:0;display:flex;align-items:center;gap:14px;padding:16px var(--pad-x);background:rgba(6,6,7,.94);backdrop-filter:blur(10px);border-bottom:2px solid {{accent}}">
         <button onClick="{{ onCloseModal }}" style="display:inline-flex;align-items:center;gap:8px;font:600 13px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#ECEAE4;background:#141417;border:1px solid #2a2a2f;border-radius:10px;padding:12px 16px;cursor:pointer"><i class="ti ti-arrow-left"></i>Board</button>
         <span style="margin-left:auto;font:600 12px/1 'Oswald';letter-spacing:.16em;text-transform:uppercase;color:{{accent}}">{{stationName}}</span>
       </div>
-      <div style="max-width:620px;margin:0 auto;padding:28px 24px 60px">
+      <div style="max-width:620px;margin:0 auto;padding:28px var(--pad-x) 60px">
         <div style="margin-bottom:22px">
           <sc-if value="{{modal.hasMockup}}" hint-placeholder-val="{{ false }}">{{modal.mockupNode}}</sc-if>
           <sc-if value="{{modal.noMockup}}" hint-placeholder-val="{{ true }}"><div style="width:100%;height:220px;border-radius:16px;background-image:repeating-linear-gradient(45deg,#17171b 0 11px,#131317 11px 22px);border:1px solid #232327;display:flex;align-items:center;justify-content:center;font:500 10px/1.4 ui-monospace,monospace;letter-spacing:.22em;color:#4d483f;text-transform:uppercase">No Mockup</div></sc-if>
@@ -170,7 +192,7 @@
           <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:16px">Status — tap any to set</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
             <sc-for list="{{modal.statusOptions}}" as="s" hint-placeholder-count="4">
-              <button onClick="{{ s.onPick }}" style="display:flex;align-items:center;justify-content:center;gap:8px;font:700 13px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:{{s.color}};background:{{s.bg}};border:1px solid {{s.border}};border-radius:12px;padding:18px 10px;cursor:pointer"><i class="ti ti-circle-check"></i>{{s.label}}</button>
+              <button onClick="{{ s.onPick }}" class="ca-status-btn" style="display:flex;align-items:center;justify-content:center;gap:8px;font:700 13px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:{{s.color}};background:{{s.bg}};border:1px solid {{s.border}};border-radius:12px;padding:18px 10px;cursor:pointer"><i class="ti ti-circle-check"></i>{{s.label}}</button>
             </sc-for>
           </div>
         </sc-if>
@@ -192,7 +214,7 @@
           <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:16px">Status — tap any to set</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
             <sc-for list="{{modal.statusOptions}}" as="s" hint-placeholder-count="4">
-              <button onClick="{{ s.onPick }}" style="display:flex;align-items:center;justify-content:center;gap:8px;font:700 13px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:{{s.color}};background:{{s.bg}};border:1px solid {{s.border}};border-radius:12px;padding:18px 10px;cursor:pointer"><i class="ti ti-circle-check"></i>{{s.label}}</button>
+              <button onClick="{{ s.onPick }}" class="ca-status-btn" style="display:flex;align-items:center;justify-content:center;gap:8px;font:700 13px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:{{s.color}};background:{{s.bg}};border:1px solid {{s.border}};border-radius:12px;padding:18px 10px;cursor:pointer"><i class="ti ti-circle-check"></i>{{s.label}}</button>
             </sc-for>
           </div>
           <button onClick="{{ modal.onError }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:8px;font:600 12px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#E8A89F;background:transparent;border:1px solid #7A241C;border-radius:12px;padding:15px;cursor:pointer" style-hover="background:#2A100D"><i class="ti ti-alert-triangle"></i>{{modal.errorLabel}}</button>
@@ -202,7 +224,7 @@
   </sc-if>
 
   <sc-if value="{{sfEnvOpen}}" hint-placeholder-val="{{ false }}">
-    <div style="position:fixed;inset:0;z-index:96;background:rgba(6,6,7,.82);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:24px">
+    <div style="position:fixed;inset:0;z-index:96;background:rgba(6,6,7,.82);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:var(--pad-x)">
       <div style="width:100%;max-width:440px;background:#0D0D0F;border:1px solid #1f1f23;border-radius:18px;box-shadow:0 40px 90px -30px rgba(0,0,0,.8);position:relative">
         <div style="display:flex;align-items:center;gap:12px;padding:18px 22px;border-bottom:1px solid #1f1f23">
           <div>
@@ -240,7 +262,7 @@
   </sc-if>
 
   <sc-if value="{{nameGateOpen}}" hint-placeholder-val="{{ false }}">
-    <div style="position:fixed;inset:0;z-index:90;background:rgba(6,6,7,.88);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:24px">
+    <div style="position:fixed;inset:0;z-index:90;background:rgba(6,6,7,.88);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:var(--pad-x)">
       <div style="width:100%;max-width:420px;background:#0D0D0F;border:1px solid #1f1f23;border-radius:18px;padding:30px 26px;text-align:center;box-shadow:0 40px 90px -30px rgba(0,0,0,.8)">
         <div style="font:600 19px/1.1 'Oswald';color:#ECEAE4;margin-bottom:8px">Who's this?</div>
         <div style="font:400 12px/1.5 'Archivo';color:#8a8378;margin-bottom:20px">Pick your name so status changes on this station can be traced back to you.</div>
