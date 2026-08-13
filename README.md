@@ -87,10 +87,34 @@ using `/api/orders` (Status = 'Pre-Production'), unchanged.
 `name -> PIN`, e.g. `{"Anthony":"7042","Gian":"3391"}` — set in the Cloudflare
 Pages dashboard, never in the repo) instead of the old shared, on-screen `1234`
 / `6767` codes. One PIN identifies both who's logging in and their role (see
-`MANAGER_NAMES` in `functions/api/_worker-auth.js`) in a single step — there's
-no separate "pick your name" screen anymore. The verified name + role still
-get written to `localStorage` (`caShopRole`, `caShopWorkerName`) exactly as
-before, so every other board's own identity check is unchanged.
+`ADMIN_NAMES`/`MANAGER_NAMES` in `functions/api/_worker-auth.js`) in a single
+step — there's no separate "pick your name" screen anymore. The verified name
++ role still get written to `localStorage` (`caShopRole`, `caShopWorkerName`)
+exactly as before, so every other board's own identity check is unchanged.
+
+**Three-tier role & dashboard visibility (2026-08-13):** role is one of
+`admin` (Anthony only), `manager` (Gian, Parker), or `worker` (everyone
+else) — decided server-side in `functions/api/_worker-auth.js` and never
+client-editable. What each tier sees:
+
+| | Dashboards (sidebar) | Pre-Production Management | Salesforce env switcher | Login badge |
+|---|---|---|---|---|
+| `admin` | all | yes | yes | "Systems Operator" |
+| `manager` | all | yes | no | "Manager" |
+| `worker` | all except Management | no | no | "Worker" |
+
+This is enforced in `ca-api.js`: `buildNavBoards()` drops the "Pre-Production
+Management" sidebar entry unless `canAccessManagement()` (admin or manager)
+is true, and `isAdmin()` gates the env-switcher button in every board's
+header. `pre-production.html` also re-checks `canAccessManagement()` live
+inside `openMgr()`/`openMgrForOrder()` — not just the sidebar link — so a
+worker can't reach the Management view via a direct URL (`?view=mgr`) or the
+deep link from index.html's "Add another method" button either; both of
+those entry points are hidden for workers too, but the live re-check is what
+actually stops it if someone still has the link. This is separate from (and
+layered on top of) `confirmManager()`'s existing destructive-action PIN
+re-check, which is unchanged and still treats admin + manager as equally
+"elevated" for that one purpose.
 
 This is app-level auth, same caveat as `station.html`'s PIN gate: it's not a
 replacement for **Cloudflare Access** in front of the whole project and
@@ -108,6 +132,9 @@ accounts on any of those four boards re-runs the same `POST
 the old grid of name buttons), and the identity that gets set is whatever the
 server verifies the PIN belongs to — not whichever name was tapped. On
 index.html/pre-production.html this also re-derives `caShopRole`, so a worker
-PIN can no longer combine with a stale manager role to grant manager rights.
-`station.html`/`shipping.html` only store the verified name (they have no
-role concept of their own).
+PIN can no longer combine with a stale manager/admin role to grant elevated
+rights. `station.html`/`shipping.html` store the verified name under their
+own `caStationWorkerName` key as before, but now ALSO write the verified role
+to the shared `caShopRole` key, so the three-tier visibility rules above work
+correctly even on a tablet that only ever used one of those two boards' own
+switch-account gate and never went through `login.html` itself.
