@@ -9,7 +9,7 @@
  * printed on the login screen itself. The PIN map itself never leaves this
  * function -- only the matched name + role go back to the browser.
  *
- * Response, success:  { ok:true, name:"Anthony", role:"manager" }
+ * Response, success:  { ok:true, name:"Anthony", role:"admin"|"manager"|"worker" }
  * Response, no match: 401 { error:"invalid_pin" }
  * Response, WORKER_PINS unset/invalid: 500 { error:"server_misconfigured" }
  *
