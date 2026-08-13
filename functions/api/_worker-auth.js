@@ -28,21 +28,36 @@
  * the way the old client-only check did, so every other board's existing
  * localStorage-based identity model keeps working unchanged. Only the
  * VERIFICATION step at login became real; nothing downstream had to change.
+ *
+ * THREE-TIER ROLE (2026-08-13): originally just manager/worker (manager ==
+ * Gian/Anthony/Parker). Split further so per-person UI access can differ
+ * within the old "manager" bucket:
+ *   admin   -- Anthony only. Every dashboard (including Pre-Production
+ *              Management) plus the Salesforce environment switcher.
+ *   manager -- Gian, Parker. Every dashboard including Pre-Production
+ *              Management, but NOT the environment switcher.
+ *   worker  -- everyone else. Every dashboard EXCEPT Pre-Production
+ *              Management; no environment switcher.
+ * ADMIN_NAMES/MANAGER_NAMES below are the AUTHORITATIVE roster: this is the
+ * only place that decides which role a name gets. ca-api.js never reads
+ * these lists directly -- it just trusts whatever role() comes back from
+ * here (via login.html's or a switch-account gate's call to this endpoint)
+ * and stored in localStorage, then gates on that string (buildNavBoards()'s
+ * canAccessManagement(), isAdmin() for the env-switcher button). Separate
+ * from ca-api.js's OWN MANAGER_NAMES (['Gian','Anthony','Parker']), which
+ * still gates the confirmManager() destructive-action re-check and is
+ * intentionally unchanged -- that feature draws the line at "elevated"
+ * (admin or manager), not at this finer admin/manager split.
  */
 import { safeEqual } from "./_station.js";
 
-// Manager role only sticks for this named roster, regardless of whose PIN
-// was entered -- same list as MANAGER_NAMES in ca-api.js. Keep both in sync
-// if it ever changes; this server-side copy is now the AUTHORITATIVE one
-// (it's what actually decides the role written into the login response),
-// ca-api.js's copy remains for the isManager()/confirmManager() UI checks
-// that run after login.
-export const MANAGER_NAMES = ["Gian", "Anthony", "Parker"];
+export const ADMIN_NAMES = ["Anthony"];
+export const MANAGER_NAMES = ["Gian", "Parker"];
 
 /**
  * @param {string} pin - raw PIN string from the request body.
- * @returns {Promise<{name:string, role:'manager'|'worker'}|null>} the
- *   matching person + their role, or null if the PIN matched nobody.
+ * @returns {Promise<{name:string, role:'admin'|'manager'|'worker'}|null>}
+ *   the matching person + their role, or null if the PIN matched nobody.
  *   Throws if WORKER_PINS is missing/invalid JSON (server misconfigured --
  *   distinct from "wrong PIN" so the caller can tell those apart).
  */
@@ -68,6 +83,6 @@ export async function matchWorkerPin(env, pin) {
   }
   if (!matched) return null;
 
-  const role = MANAGER_NAMES.includes(matched) ? "manager" : "worker";
+  const role = ADMIN_NAMES.includes(matched) ? "admin" : MANAGER_NAMES.includes(matched) ? "manager" : "worker";
   return { name: matched, role };
 }
