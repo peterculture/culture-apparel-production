@@ -714,13 +714,15 @@ class Component extends DCLogic {
       this._api = window.CAApi; if(!this._api) throw new Error('CAApi not loaded');
       const api=this._api;
       const recs = await api.getProductionOrders();
-      // sp's first field drives this board's progress % only (no on-screen
-      // label here) -- it displays as "Design Received" in pre-production.html's
-      // checklist as of 2026-08-10, now that the shop burns screens straight
-      // from art on an exposure unit instead of printing film. The Salesforce
-      // field itself was renamed to match (Films_Printed__c -> Design_Received__c,
-      // both objects, both orgs), so this must read the new name too.
-      const PREREQ={ sp:['Design_Received__c','Screens_Completed__c','Mix_Inks__c'], em:['Digitize_File__c','Thread_Color_Materials__c'], hp:['Transfers_Received__c','Transfers_Ready__c'] };
+      // sp's checklist drives this board's progress % only (no on-screen
+      // label here). Design_Received__c was DROPPED from this list 2026-08-13:
+      // Salesforce removed it from the Order page layouts, the Production
+      // Status flow's Screen Print Checklist outcome, the PrintShop
+      // Production path's Key Fields, and the ReadyforPrintStatus validation
+      // rule (both dev2 and staging) -- it no longer drives readiness there,
+      // so it shouldn't drive this board's progress % either. The field
+      // still exists on the schema (not yet deleted), just unused here now.
+      const PREREQ={ sp:['Screens_Completed__c','Mix_Inks__c'], em:['Digitize_File__c','Thread_Color_Materials__c'], hp:['Transfers_Received__c','Transfers_Ready__c'] };
       // One order can carry several Production_Method__c children (one per
       // decoration location/method -- e.g. "Front - Screen Print" and
       // "Tag - Heat Press" on the same order). Flatten those into one BOARD
