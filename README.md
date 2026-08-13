@@ -97,13 +97,17 @@ replacement for **Cloudflare Access** in front of the whole project and
 `/api/*` — keep that as the real perimeter. Fonts + Tabler icons load from a
 CDN, so the pages need internet.
 
-**Known gap:** each board's own "Who's this?" switch-user picker (the repeat
-icon on index.html/pre-production.html/shipping.html/stats.html) still lets
-someone pick any name from the roster directly, with no PIN — it exists for
-quickly switching attribution mid-shift on a shared tablet without a full
-re-login. That means the PIN only gates the FIRST login on a given
-tablet/browser; anyone with physical access to an already-logged-in tablet
-(or one with cleared `localStorage`) can still attribute their own changes to
-someone else's name via that picker. Worth closing if PIN-level accountability
-needs to be airtight, but left as-is for now since it wasn't part of this
-change.
+**Update (2026-08-13):** each board's own "Who's this?" switch-user picker
+(the repeat icon on index.html/pre-production.html/shipping.html/
+station.html) used to let someone pick any name from the roster directly,
+with no PIN — meaning the PIN only gated the FIRST login on a tablet, and
+anyone with physical access to an already-logged-in tablet could attribute
+their own changes to someone else's name. That gap is now closed: switching
+accounts on any of those four boards re-runs the same `POST
+/api/worker-login` PIN check as the initial login (a numeric PIN pad replaces
+the old grid of name buttons), and the identity that gets set is whatever the
+server verifies the PIN belongs to — not whichever name was tapped. On
+index.html/pre-production.html this also re-derives `caShopRole`, so a worker
+PIN can no longer combine with a stale manager role to grant manager rights.
+`station.html`/`shipping.html` only store the verified name (they have no
+role concept of their own).
