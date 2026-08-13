@@ -63,8 +63,27 @@
      distinction mean something in the UI. Worth moving onto real per-person
      PINs too if that gap needs closing -- see README's "Known gap". */
   var MANAGER_PIN = '6767';
+  // Destructive-action roster: unchanged by the 2026-08-13 three-tier role
+  // split below (admin/manager/worker) -- confirmManager() only cares about
+  // "elevated or not," so isManager() now accepts EITHER the 'admin' role
+  // (Anthony) or the 'manager' role (Gian, Parker) as long as the attributed
+  // name is still on this roster. See functions/api/_worker-auth.js's
+  // ADMIN_NAMES/MANAGER_NAMES for the server-side source of truth that
+  // actually decides role() in the first place.
   var MANAGER_NAMES = ['Gian', 'Anthony', 'Parker'];
-  function isManager(){ return role() === 'manager' && MANAGER_NAMES.indexOf(workerName()) !== -1; }
+  function isManager(){ var r = role(); return (r === 'manager' || r === 'admin') && MANAGER_NAMES.indexOf(workerName()) !== -1; }
+  // Systems Operator only -- Anthony. Gates the Salesforce environment
+  // switcher button itself (not just the PIN-protected switch action, which
+  // was already gated server-side by SF_ENV_SWITCH_PIN regardless of role --
+  // see functions/api/admin/sf-env.js). Gian/Parker hold 'manager', not
+  // 'admin', so this deliberately excludes them.
+  function isAdmin(){ return role() === 'admin'; }
+  // Pre-Production Management dashboard: visible to admin (Anthony) and
+  // manager (Gian, Parker) alike -- everyone else gets every OTHER
+  // dashboard. See buildNavBoards() below, which is what actually hides the
+  // sidebar link; this is exposed too in case a page wants to gate an
+  // in-page entry point (a button, a deep link) the same way.
+  function canAccessManagement(){ var r = role(); return r === 'admin' || r === 'manager'; }
   function confirmManager(actionLabel){
     if (isManager()) return true;
     if (MANAGER_NAMES.indexOf(workerName()) === -1) {
@@ -116,8 +135,15 @@
     { key:'shipping', label:'Shipping/Receiving', sub:'Post-production · ship · complete', href:'shipping.html', color:'#3E7CB1', icon:'ti-truck-delivery' },
     { key:'stats', label:'Stats', sub:'Prep-time buffer · team status · board totals', href:'stats.html', color:'#7FA644', icon:'ti-chart-bar' },
   ];
+  // Pre-Production Management (NAV_BOARDS entry key:'management') is hidden
+  // from the sidebar for anyone who isn't admin or manager (2026-08-13) --
+  // see canAccessManagement() above. Reads role() itself rather than taking
+  // a parameter so every existing buildNavBoards(currentKey) call site
+  // (index.html/pre-production.html/station.html/shipping.html) picks this
+  // up with no changes needed there.
   function buildNavBoards(currentKey){
-    return NAV_BOARDS.map(function (b) {
+    var boards = canAccessManagement() ? NAV_BOARDS : NAV_BOARDS.filter(function (b) { return b.key !== 'management'; });
+    return boards.map(function (b) {
       var active = b.key === currentKey;
       return Object.assign({}, b, {
         isActive: active,
@@ -588,7 +614,7 @@
   ];
 
   window.CAApi = {
-    VALID_NAMES: VALID_NAMES, ROLE_KEY: ROLE_KEY, NAME_KEY: NAME_KEY, role: role, workerName: workerName, setRole: setRole, setWorkerName: setWorkerName, logout: logout, isManager: isManager, confirmManager: confirmManager, MANAGER_NAMES: MANAGER_NAMES, workerLogin: workerLogin,
+    VALID_NAMES: VALID_NAMES, ROLE_KEY: ROLE_KEY, NAME_KEY: NAME_KEY, role: role, workerName: workerName, setRole: setRole, setWorkerName: setWorkerName, logout: logout, isManager: isManager, isAdmin: isAdmin, canAccessManagement: canAccessManagement, confirmManager: confirmManager, MANAGER_NAMES: MANAGER_NAMES, workerLogin: workerLogin,
     SUBSTATUS_VALUE: SUBSTATUS_VALUE, SUBSTATUS_LABEL: SUBSTATUS_LABEL, STAGE_KEY: STAGE_KEY, STAGE_SUBSTATUS: STAGE_SUBSTATUS, stageOf: stageOf, stageOfMethod: stageOfMethod,
     DELIVERY_LABEL: DELIVERY_LABEL, DELIVERY_METHODS: DELIVERY_METHODS, formatAddress: formatAddress,
     NAV_BOARDS: NAV_BOARDS, buildNavBoards: buildNavBoards,
