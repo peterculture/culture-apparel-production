@@ -1121,7 +1121,18 @@ class Component extends DCLogic {
   // so it re-enters the pipeline from scratch via the existing Management
   // inbox -- no new board logic needed. See functions/api/orders/[id]/reprint.js.
   openReprintModal(orderId,num){
-    this.setState({ reprintOpen:true, reprintOrderId:orderId, reprintNum:num||'', reprintRows:null, reprintLoading:true, reprintDetails:this.state.misDetails[orderId]||'', reprintErr:'', reprintMsg:'' });
+    // reprintDetails ALWAYS starts blank (2026-08-13 fix) -- this used to
+    // seed from this.state.misDetails[orderId], the order's general
+    // "Misprints" notes field (open.misDetails, a couple sections up in this
+    // drawer). That field can carry text from an unrelated earlier incident
+    // on the SAME order (a prior stepper note, or a previous reprint's own
+    // reason), and submitReprint() below writes whatever's in this box onto
+    // BOTH the new reprint child order's Misprint_Details__c AND back onto
+    // this original order's -- so a manager who didn't notice/clear the
+    // pre-filled text would file a brand-new, different misprint under the
+    // OLD one's description. Every "Create Reprint" now opens with an empty
+    // reason, independent of whatever's already saved on the order.
+    this.setState({ reprintOpen:true, reprintOrderId:orderId, reprintNum:num||'', reprintRows:null, reprintLoading:true, reprintDetails:'', reprintErr:'', reprintMsg:'' });
     if(!this._api || this.state.connection!=='live'){ this.setState({reprintLoading:false, reprintErr:'Not connected to Salesforce (demo mode) — deploy to file a production error'}); return; }
     this._api.getOrderSizes(orderId).then(rows=>{
       const lines=(rows||[]).filter(r=>r.Size__c).map(r=>({
