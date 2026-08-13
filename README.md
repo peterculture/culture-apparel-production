@@ -82,7 +82,28 @@ shows in the right column. The Pre-Production board and the Garment station keep
 using `/api/orders` (Status = 'Pre-Production'), unchanged.
 
 ## Auth & offline
-`login.html` stores role + name in `localStorage` (`caShopRole`,
-`caShopWorkerName`) — client-side PIN only (worker `1234` / manager `6767`), not
-security. Keep **Cloudflare Access** in front of the project and `/api/*`. Fonts
-+ Tabler icons load from a CDN, so the pages need internet.
+`login.html` verifies a real, personal PIN per worker server-side (`POST
+/api/worker-login`, checked against the `WORKER_PINS` env var — a JSON map of
+`name -> PIN`, e.g. `{"Anthony":"7042","Gian":"3391"}` — set in the Cloudflare
+Pages dashboard, never in the repo) instead of the old shared, on-screen `1234`
+/ `6767` codes. One PIN identifies both who's logging in and their role (see
+`MANAGER_NAMES` in `functions/api/_worker-auth.js`) in a single step — there's
+no separate "pick your name" screen anymore. The verified name + role still
+get written to `localStorage` (`caShopRole`, `caShopWorkerName`) exactly as
+before, so every other board's own identity check is unchanged.
+
+This is app-level auth, same caveat as `station.html`'s PIN gate: it's not a
+replacement for **Cloudflare Access** in front of the whole project and
+`/api/*` — keep that as the real perimeter. Fonts + Tabler icons load from a
+CDN, so the pages need internet.
+
+**Known gap:** each board's own "Who's this?" switch-user picker (the repeat
+icon on index.html/pre-production.html/shipping.html/stats.html) still lets
+someone pick any name from the roster directly, with no PIN — it exists for
+quickly switching attribution mid-shift on a shared tablet without a full
+re-login. That means the PIN only gates the FIRST login on a given
+tablet/browser; anyone with physical access to an already-logged-in tablet
+(or one with cleared `localStorage`) can still attribute their own changes to
+someone else's name via that picker. Worth closing if PIN-level accountability
+needs to be airtight, but left as-is for now since it wasn't part of this
+change.
