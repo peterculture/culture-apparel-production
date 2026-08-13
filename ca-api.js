@@ -46,17 +46,22 @@
      of trusting the stored role, so a stale session can't carry manager
      privileges to whoever picks up the tablet next.
 
-     MANAGER_PIN is printed right on login.html's own screen (Worker PIN
-     1234 / Manager PIN 6767), so it was never actually a secret -- anyone
-     could pick "manager" at login and get the role. Manager status is now
-     scoped to a specific named roster (MANAGER_NAMES) instead: only the
-     person currently attributed as Gian, Anthony, or Parker can hold or
-     re-confirm manager, regardless of who typed the PIN. Keep MANAGER_NAMES
-     and MANAGER_PIN in sync with login.html if either changes.
+     MANAGER_PIN below is a leftover from before 2026-08-13: login.html
+     itself no longer uses a shared PIN (see functions/api/_worker-auth.js --
+     it now checks one real, personal PIN per person server-side), but this
+     confirmManager() live re-check is a SEPARATE feature -- a manager typing
+     a PIN into a plain window.prompt() to re-confirm mid-session on a shared
+     tablet -- and it wasn't part of that change, so it's still comparing
+     against this one shared, hardcoded value. Manager status is scoped to a
+     specific named roster (MANAGER_NAMES) on top of that: only the person
+     currently attributed as Gian, Anthony, or Parker can hold or re-confirm
+     manager, regardless of what PIN was typed here.
      NOT real security (same caveat as the rest of this file's PIN model --
-     it's a plain string/name compared in the browser). Cloudflare Access is
-     the actual perimeter; this is just making the existing worker/manager
-     distinction mean something in the UI. */
+     it's a plain string compared in the browser, and unlike login.html's own
+     PIN it's still shared/hardcoded, not personal). Cloudflare Access is the
+     actual perimeter; this is just making the existing worker/manager
+     distinction mean something in the UI. Worth moving onto real per-person
+     PINs too if that gap needs closing -- see README's "Known gap". */
   var MANAGER_PIN = '6767';
   var MANAGER_NAMES = ['Gian', 'Anthony', 'Parker'];
   function isManager(){ return role() === 'manager' && MANAGER_NAMES.indexOf(workerName()) !== -1; }
@@ -71,6 +76,19 @@
     if (entered !== MANAGER_PIN) { window.alert('Incorrect manager PIN.'); return false; }
     return true;
   }
+
+  /* ── real per-worker PIN login (2026-08-13) ──
+     Verifies a PERSONAL PIN server-side against functions/api/_worker-auth.js's
+     WORKER_PINS map and returns who it belongs to, instead of login.html
+     comparing against the two shared, on-screen PINs itself. Login is the
+     only caller (see login.html's submit()) -- everything downstream still
+     just reads role()/workerName() from localStorage as before, so this is
+     a drop-in replacement for the OLD client-side check, not a new auth
+     model the rest of the app needs to know about.
+     Throws (via jsend) on a non-2xx response -- login.html distinguishes
+     err.status 401 ("wrong PIN") from 500 ("WORKER_PINS not configured")
+     to show the right message. */
+  function workerLogin(pin){ return jsend('/api/worker-login', 'POST', { pin: pin }); }
 
   /* ── Order_Substatus__c: the "In Production" label is stored as "Production" ── */
   var SUBSTATUS_VALUE = { 'Pre-Production':'Pre-Production', 'Ready for Print':'Ready for Print', 'In Production':'Production', 'Post-Production':'Post-Production', 'Completed':'Completed' };
@@ -570,7 +588,7 @@
   ];
 
   window.CAApi = {
-    VALID_NAMES: VALID_NAMES, ROLE_KEY: ROLE_KEY, NAME_KEY: NAME_KEY, role: role, workerName: workerName, setRole: setRole, setWorkerName: setWorkerName, logout: logout, isManager: isManager, confirmManager: confirmManager, MANAGER_NAMES: MANAGER_NAMES,
+    VALID_NAMES: VALID_NAMES, ROLE_KEY: ROLE_KEY, NAME_KEY: NAME_KEY, role: role, workerName: workerName, setRole: setRole, setWorkerName: setWorkerName, logout: logout, isManager: isManager, confirmManager: confirmManager, MANAGER_NAMES: MANAGER_NAMES, workerLogin: workerLogin,
     SUBSTATUS_VALUE: SUBSTATUS_VALUE, SUBSTATUS_LABEL: SUBSTATUS_LABEL, STAGE_KEY: STAGE_KEY, STAGE_SUBSTATUS: STAGE_SUBSTATUS, stageOf: stageOf, stageOfMethod: stageOfMethod,
     DELIVERY_LABEL: DELIVERY_LABEL, DELIVERY_METHODS: DELIVERY_METHODS, formatAddress: formatAddress,
     NAV_BOARDS: NAV_BOARDS, buildNavBoards: buildNavBoards,
