@@ -123,17 +123,15 @@
   function stageOfMethod(status){ return STAGE_KEY[status] || null; }
 
   /* pre-production checklist label -> Order boolean field */
-  // 'Design received' RELABELED 2026-08-10: the shop no longer burns screens
-  // from film -- art now goes straight to an exposure unit that burns the
-  // emulsion directly. The old "Films printed"/Films_Printed__c checklist item
-  // was repurposed to track a still-real precondition: has the customer's
-  // design/art actually arrived yet, before it can go on the exposure unit.
-  // The Salesforce field itself was renamed to match (Films_Printed__c ->
-  // Design_Received__c, on both Order and Production_Method__c, in both
-  // dev2 and Staging) -- this is the field's real, current API name, not
-  // just a display label. See also pre-production.html's M.sp.prereq.
+  // 'Design received' (Films_Printed__c, renamed to Design_Received__c
+  // 2026-08-10) was DROPPED as a checklist item 2026-08-13: Salesforce
+  // removed the field from the Order page layouts, the Production Status
+  // flow's Screen Print Checklist outcome, the PrintShop Production path's
+  // Key Fields, and the ReadyforPrintStatus validation rule (dev2 +
+  // staging). No label maps to it here anymore -- see
+  // pre-production.html's M.sp.prereq, which no longer lists it either.
   var CHECK_FIELD = {
-    'Design received':'Design_Received__c', 'Screens completed':'Screens_Completed__c', 'Inks mixed':'Mix_Inks__c',
+    'Screens completed':'Screens_Completed__c', 'Inks mixed':'Mix_Inks__c',
     'File digitized':'Digitize_File__c', 'Thread & materials':'Thread_Color_Materials__c',
     'Transfers received':'Transfers_Received__c', 'Transfers ready':'Transfers_Ready__c'
   };
