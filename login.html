@@ -135,7 +135,20 @@ class Component extends DCLogic {
     pad.push({ label:'0', isText:true, isIcon:false, onPress:()=>this.press('0'), bg:'#16161a', border:'#242428', color:'#ECEAE4' });
     pad.push({ label:'', isText:false, isIcon:true, icon:'ti-arrow-right', onPress:()=>{ if(st.pin.length===4) this.submit(st.pin); }, bg:'#C6372B', border:'#C6372B', color:'#08080A' });
 
-    const isMgr=st.role==='manager';
+    // Three-tier role (2026-08-13): admin (Anthony) sees every dashboard
+    // plus the Salesforce environment switcher; manager (Gian, Parker) sees
+    // every dashboard but not the switcher; worker (everyone else) sees
+    // every dashboard except Pre-Production Management. See
+    // functions/api/_worker-auth.js for the server-side roster that decides
+    // this and ca-api.js's isAdmin()/canAccessManagement() for where it's
+    // enforced. This badge is just the label/color -- the actual gating
+    // lives on the boards themselves.
+    const ROLE_META = {
+      admin:   { label:'Systems Operator', icon:'ti-settings',     color:'#C6372B', bg:'#2A100D', border:'#7A241C' },
+      manager: { label:'Manager',          icon:'ti-shield-check', color:'#C9923A', bg:'#241a09', border:'#5E4214' },
+      worker:  { label:'Worker',           icon:'ti-user-check',   color:'#7FA644', bg:'#18230D', border:'#3D5418' },
+    };
+    const roleMeta = ROLE_META[st.role] || ROLE_META.worker;
     const boards=[
       { label:'Pre-Production', sub:'Design · screens · receiving', href:'pre-production.html', color:'#C9923A', icon:'ti-clipboard-check' },
       { label:'Production Dashboard', sub:'Kanban · print → ship', href:'index.html', color:'#C6372B', icon:'ti-layout-kanban' },
@@ -154,8 +167,8 @@ class Component extends DCLogic {
       dots, pad, statusText, statusColor, shakeAnim: st.shake?'ca-shake .45s':'none',
       name:st.name,
       nameInit:(nm[0]||'?').toUpperCase(),
-      roleLabel:isMgr?'Manager':'Worker', roleIcon:isMgr?'ti-shield-check':'ti-user-check',
-      roleColor:isMgr?'#C6372B':'#7FA644', roleBg:isMgr?'#2A100D':'#18230D', roleBorder:isMgr?'#7A241C':'#3D5418',
+      roleLabel:roleMeta.label, roleIcon:roleMeta.icon,
+      roleColor:roleMeta.color, roleBg:roleMeta.bg, roleBorder:roleMeta.border,
       boards, onLogout:()=>this.logout(),
     };
   }
