@@ -25,6 +25,7 @@
     ::-webkit-scrollbar-thumb{background:#2a2a2e;border-radius:6px}
     ::-webkit-scrollbar-track{background:transparent}
     @keyframes ca-slide{from{transform:translateX(30px);opacity:0}to{transform:translateX(0);opacity:1}}
+    @keyframes ca-shake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(4px)}30%,50%,70%{transform:translateX(-7px)}40%,60%{transform:translateX(7px)}}
     @keyframes ca-slide-left{from{transform:translateX(-30px);opacity:0}to{transform:translateX(0);opacity:1}}
   </style>
 </helmet>
@@ -393,14 +394,20 @@
 
 <sc-if value="{{nameGateOpen}}" hint-placeholder-val="{{ false }}">
   <div style="position:fixed;inset:0;z-index:90;background:rgba(6,6,7,.82);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:24px">
-    <div style="width:100%;max-width:420px;background:#0D0D0F;border:1px solid #1f1f23;border-radius:18px;padding:34px 30px;text-align:center;box-shadow:0 40px 90px -30px rgba(0,0,0,.8);position:relative;overflow:hidden">
+    <div style="width:100%;max-width:380px;background:#0D0D0F;border:1px solid #1f1f23;border-radius:18px;padding:34px 30px;text-align:center;box-shadow:0 40px 90px -30px rgba(0,0,0,.8);position:relative;overflow:hidden">
       <div style="position:absolute;top:0;left:0;right:0;height:4px;background:#C6372B"></div>
       <div style="width:52px;height:52px;border-radius:14px;background:#1a1a1e;border:1px solid #2a2a2f;display:flex;align-items:center;justify-content:center;margin:0 auto 18px"><i class="ti ti-user" style="color:#C6372B;font-size:26px"></i></div>
       <div style="font:600 21px/1.1 'Oswald';color:#ECEAE4;margin-bottom:8px">Who's this?</div>
-      <div style="font:400 12px/1.5 'Archivo';color:#8a8378;margin-bottom:22px">Pick your name so changes made this shift can be traced back to you.</div>
+      <div style="font:400 12px/1.5 'Archivo';color:#8a8378;margin-bottom:20px">Enter your PIN so changes made this shift can be traced back to you.</div>
+      <div style="display:flex;justify-content:center;gap:12px;margin-bottom:8px;animation:{{gateShakeAnim}}">
+        <sc-for list="{{gateDots}}" as="d" hint-placeholder-count="4">
+          <div style="width:13px;height:13px;border-radius:50%;border:2px solid {{d.border}};background:{{d.bg}};transition:all .12s"></div>
+        </sc-for>
+      </div>
+      <div style="height:18px;text-align:center;font:600 10px/18px 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:{{gateStatusColor}};margin-bottom:12px">{{gateStatusText}}</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px">
-        <sc-for list="{{names}}" as="n" hint-placeholder-count="12">
-          <button onClick="{{ n.onPick }}" style="font:600 13px/1 'Oswald';letter-spacing:.02em;color:#ECEAE4;background:#16161a;border:1px solid #2a2a2f;border-radius:10px;padding:13px 6px;cursor:pointer" style-hover="border-color:#C6372B;color:#C6372B">{{n.label}}</button>
+        <sc-for list="{{gatePad}}" as="p" hint-placeholder-count="12">
+          <button onClick="{{ p.onPress }}" style="background:{{p.bg}};border:1px solid {{p.border}};color:{{p.color}};font:600 20px/1 'Oswald';border-radius:10px;padding:16px 0;cursor:pointer"><sc-if value="{{p.isIcon}}" hint-placeholder-val="{{ false }}"><i class="ti {{p.icon}}"></i></sc-if><sc-if value="{{p.isText}}" hint-placeholder-val="{{ true }}">{{p.label}}</sc-if></button>
         </sc-for>
       </div>
     </div>
@@ -729,7 +736,13 @@ class Component extends DCLogic {
     this._demoOrders[5].Transfers_Received__c=true; // GOA-4847
     let storedName=''; try{ storedName=localStorage.getItem('caShopWorkerName')||''; }catch(_){}
     this.state = {
-      now:new Date(), nameOk: VALID_NAMES.includes(storedName), orders:[], connection:'loading', q:'', openId:null, ppItemsById:{}, weekMode:'all', pickDate:'',
+      now:new Date(), nameOk: VALID_NAMES.includes(storedName),
+      // Switch-account PIN pad (2026-08-13) -- see index.html's matching
+      // comment. Tapping a name in "Who's this?" used to claim that identity
+      // (and, for Gian/Anthony/Parker, manager rights) instantly; it now
+      // requires that person's real PIN via POST /api/worker-login first.
+      gatePin:'', gateErr:'', gateSubmitting:false, gateShake:false,
+      orders:[], connection:'loading', q:'', openId:null, ppItemsById:{}, weekMode:'all', pickDate:'',
       view:'board', inbox:[], inboxLoaded:false, mgrId:null, mgrSource:null, form:null, vendorResults:[], planResults:[], submitting:false, mgrErr:'', mgrMsg:'',
       // Order name / order number search for the Management inbox list
       // (separate from the board's own `q` above -- different view, own
@@ -865,12 +878,33 @@ class Component extends DCLogic {
     this.setState(st=>({orders:st.orders.map(o=>o.id===cardId?Object.assign({},o,{[field]:nv}):o)}));
     if(this._api && this.state.connection==='live') this._api.patchMethodChecklist(cardId,{[field]:nv}).catch(()=>{});
   }
-  pickName(nm){ if(!VALID_NAMES.includes(nm)) return; try{localStorage.setItem('caShopWorkerName',nm);}catch(_){} this.setState({nameOk:true}); }
   // Also clears the stored role (not just the name) -- otherwise a stale
   // 'manager' role from a prior login could combine with re-picking
   // Gian/Anthony/Parker's name here to grant manager rights with no PIN
   // re-entry at all, defeating confirmManager()'s live re-check.
-  switchUser(){ try{localStorage.removeItem('caShopWorkerName'); localStorage.removeItem('caShopRole');}catch(_){} this.setState({nameOk:false}); }
+  switchUser(){ try{localStorage.removeItem('caShopWorkerName'); localStorage.removeItem('caShopRole');}catch(_){} this.setState({nameOk:false, gatePin:'', gateErr:''}); }
+  onGatePress(d){ if(this.state.gatePin.length>=4 || this.state.gateSubmitting) return; const pin=this.state.gatePin+d; this.setState({gatePin:pin, gateErr:''}); if(pin.length===4) setTimeout(()=>this.submitGatePin(pin),140); }
+  onGateBackspace(){ if(this.state.gateSubmitting) return; this.setState(st=>({gatePin:st.gatePin.slice(0,-1), gateErr:''})); }
+  // Verifies the switch-account PIN SERVER-SIDE via the same
+  // POST /api/worker-login endpoint login.html uses -- replaces the old
+  // pickName(nm) which just trusted whichever name button was tapped.
+  async submitGatePin(pin){
+    if(this.state.gateSubmitting) return;
+    this.setState({gateSubmitting:true, gateErr:''});
+    try{
+      const api=this._api||window.CAApi; if(!api || !api.workerLogin) throw new Error('CAApi not loaded');
+      const res=await api.workerLogin(pin);
+      if(!res || !res.name || !res.role) throw new Error('bad_response');
+      try{ localStorage.setItem('caShopWorkerName',res.name); localStorage.setItem('caShopRole',res.role); }catch(_){}
+      this.setState({gateSubmitting:false, gatePin:'', gateErr:'', nameOk:true});
+    }catch(e){
+      const msg = (e && e.status===401) ? 'Incorrect PIN — try again'
+        : (e && e.status===500) ? "PIN login isn't set up yet — ask a manager"
+        : 'Could not verify — check connection and try again';
+      this.setState({gateSubmitting:false, gateErr:msg, gatePin:'', gateShake:true});
+      setTimeout(()=>this.setState({gateShake:false}),500);
+    }
+  }
   // ── Salesforce environment switcher (global -- affects every board/tablet) ──
   loadSfEnv(){
     if(!this._api) return;
@@ -1677,7 +1711,15 @@ class Component extends DCLogic {
     const live=st.connection==='live';
     const connLabel = live?'Live · Salesforce':(st.connection==='loading'?'Connecting…':'Demo data');
     const connColor = live?'#7FA644':(st.connection==='loading'?'#6C665C':'#C9923A');
-    const names = VALID_NAMES.map(n=>({ label:n, onPick:()=>this.pickName(n) }));
+    // Switch-account PIN pad (mirrors login.html/index.html's keypad).
+    const gateDots=[0,1,2,3].map(i=>{ const f=i<st.gatePin.length; return { bg:f?'#C6372B':'transparent', border:f?'#C6372B':'#3a3a40' }; });
+    const gateKeys=['1','2','3','4','5','6','7','8','9'];
+    const gatePad=gateKeys.map(k=>({ label:k, isText:true, isIcon:false, onPress:()=>this.onGatePress(k), bg:'#16161a', border:'#242428', color:'#ECEAE4' }));
+    gatePad.push({ label:'', isText:false, isIcon:true, icon:'ti-backspace', onPress:()=>this.onGateBackspace(), bg:'transparent', border:'#242428', color:'#8a8378' });
+    gatePad.push({ label:'0', isText:true, isIcon:false, onPress:()=>this.onGatePress('0'), bg:'#16161a', border:'#242428', color:'#ECEAE4' });
+    gatePad.push({ label:'', isText:false, isIcon:true, icon:'ti-arrow-right', onPress:()=>{ if(st.gatePin.length===4) this.submitGatePin(st.gatePin); }, bg:'#C6372B', border:'#C6372B', color:'#08080A' });
+    const gateStatusText = st.gateErr || (st.gateSubmitting ? 'Verifying…' : '');
+    const gateStatusColor = st.gateErr ? '#E8A89F' : '#6C665C';
     // Salesforce environment switcher -- mirrors index.html's copy of the
     // same feature. Lives in `base` (shared by both the board header and the
     // Management view's header) since it's global regardless of which view
@@ -1696,7 +1738,7 @@ class Component extends DCLogic {
         onPick: e.configured?(()=>this.pickSfEnvKey(e.key)):(()=>{}),
       };
     });
-    const base = { columns, kpis, clock, dateStr, worker:wn, workerInit:(window.CAApi&&window.CAApi.initials?window.CAApi.initials(wn):wn.slice(0,2).toUpperCase()), shownLabel, weekBtns:['week','all','pick'].map(k=>({ key:k, label:({week:'This week',all:'All',pick:'Pick week'})[k], onPick:()=>this.setState({weekMode:k}), bg:st.weekMode===k?'#1a1a1e':'transparent', border:st.weekMode===k?'#C6372B':'#242428', color:st.weekMode===k?'#ECEAE4':'#8a8378' })), showPick:st.weekMode==='pick', pickDate:st.pickDate, onPickDate:(e)=>this.setState({pickDate:e.target.value}), connLabel, connColor, q:st.q, onSearch:(e)=>this.setState({q:e.target.value}), onRefresh:()=>this.load(), drawerOpen:!!open, open, onClose:()=>this.setState({openId:null}), nameGateOpen:!st.nameOk, names, onSwitchUser:()=>this.switchUser(),
+    const base = { columns, kpis, clock, dateStr, worker:wn, workerInit:(window.CAApi&&window.CAApi.initials?window.CAApi.initials(wn):wn.slice(0,2).toUpperCase()), shownLabel, weekBtns:['week','all','pick'].map(k=>({ key:k, label:({week:'This week',all:'All',pick:'Pick week'})[k], onPick:()=>this.setState({weekMode:k}), bg:st.weekMode===k?'#1a1a1e':'transparent', border:st.weekMode===k?'#C6372B':'#242428', color:st.weekMode===k?'#ECEAE4':'#8a8378' })), showPick:st.weekMode==='pick', pickDate:st.pickDate, onPickDate:(e)=>this.setState({pickDate:e.target.value}), connLabel, connColor, q:st.q, onSearch:(e)=>this.setState({q:e.target.value}), onRefresh:()=>this.load(), drawerOpen:!!open, open, onClose:()=>this.setState({openId:null}), nameGateOpen:!st.nameOk, gateDots, gatePad, gateStatusText, gateStatusColor, gateShakeAnim: st.gateShake?'ca-shake .45s':'none', onSwitchUser:()=>this.switchUser(),
       sfEnvLabel:st.sfEnvActiveLabel||'Dev2', onOpenSfEnv:()=>this.openSfEnvModal(),
       sfEnvOpen:st.sfEnvOpen, onCloseSfEnv:()=>this.closeSfEnvModal(), sfEnvOptions,
       sfEnvPin:st.sfEnvPin, onSfEnvPin:(e)=>this.setSfEnvPin(e.target.value),
