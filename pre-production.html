@@ -1519,14 +1519,17 @@ class Component extends DCLogic {
     const st=this.state;
     const api=this._api||window.CAApi;
     const CF=(api&&api.CHECK_FIELD)||{};
-    // sp.prereq's first item was 'Films printed' until 2026-08-10 -- the shop
-    // moved off film entirely (art now goes straight onto an exposure unit
-    // that burns the emulsion directly), so it's relabeled 'Design received'
-    // to track the precondition that's still real: has the art actually
-    // arrived. Resolved to Design_Received__c via CF/CHECK_FIELD (ca-api.js) --
-    // the underlying Salesforce field was renamed to match (Films_Printed__c
-    // -> Design_Received__c), not just the label.
-    const M={ sp:{label:'Screen Print',color:'#C6372B',icon:'ti-stack-2',prereq:['Design received','Screens completed','Inks mixed']}, em:{label:'Embroidery',color:'#5E9B9A',icon:'ti-needle',prereq:['File digitized','Thread & materials']}, hp:{label:'Heat Press',color:'#C9923A',icon:'ti-flame',prereq:['Transfers received','Transfers ready']}, promo:{label:'Promotional Items',color:'#8E6FB0',icon:'ti-gift',prereq:[]} };
+    // sp.prereq's first item was 'Films printed' until 2026-08-10, then
+    // relabeled 'Design received' (Films_Printed__c renamed to
+    // Design_Received__c) once the shop moved off film onto an exposure
+    // unit that burns the emulsion directly from art. DROPPED entirely
+    // 2026-08-13: Salesforce removed Design_Received__c from the Order page
+    // layouts, the Production Status flow's Screen Print Checklist outcome,
+    // the PrintShop Production path's Key Fields, and the
+    // ReadyforPrintStatus validation rule (dev2 + staging) -- it's no
+    // longer a real checklist item there, so it's removed here too. The
+    // field still exists on the schema (not yet deleted), just unused now.
+    const M={ sp:{label:'Screen Print',color:'#C6372B',icon:'ti-stack-2',prereq:['Screens completed','Inks mixed']}, em:{label:'Embroidery',color:'#5E9B9A',icon:'ti-needle',prereq:['File digitized','Thread & materials']}, hp:{label:'Heat Press',color:'#C9923A',icon:'ti-flame',prereq:['Transfers received','Transfers ready']}, promo:{label:'Promotional Items',color:'#8E6FB0',icon:'ti-gift',prereq:[]} };
     const W={ MA:{name:'Marcus A.',color:'#C6372B'}, DK:{name:'Dana K.',color:'#5E9B9A'}, PR:{name:'Priya R.',color:'#C9923A'}, JT:{name:'Jules T.',color:'#7FA644'} };
     const U={ over:'#E24A3A', today:'#E24A3A', soon:'#C9923A', ok:'#6C665C' };
     const RECV={ none:{label:'Not Received',icon:'ti-inbox',textColor:'#E8A89F',bg:'#2A100D',border:'#7A241C'}, partial:{label:'Partial',icon:'ti-progress',textColor:'#E0B870',bg:'#241a09',border:'#5E4214'}, countedin:{label:'Counted In',icon:'ti-checks',textColor:'#8FCBE0',bg:'#0D1F2A',border:'#2E6A8B'}, staged:{label:'Staged',icon:'ti-check',textColor:'#BBD382',bg:'#18230D',border:'#3D5418'} };
