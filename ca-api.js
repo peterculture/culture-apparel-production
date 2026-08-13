@@ -139,6 +139,31 @@
   var RECV_FROM_SF = { 'Not Received':'none', 'Partial':'partial', 'Counted In':'countedin', 'Staged':'staged' };
   var RECV_TO_SF = { none:'Not Received', partial:'Partial', countedin:'Counted In', staged:'Staged' };
 
+  // Time-of-day options for the Production Run schedule/actual pickers
+  // (Scheduled Start/End, Actual Start/End) -- 15-minute increments only
+  // (00:00, 00:15, 00:30 ... 23:45), matching how Salesforce's own time
+  // picker for these fields is configured there. Added 2026-08-13: an
+  // <input type=time step=900> was tried first, but the step attribute only
+  // nudges a native spinner/arrow-key increment -- typing or scrolling in
+  // most browsers still freely lands on any minute, which isn't a real
+  // match for "only these options exist." A <select> of exactly these 96
+  // values is the only way to actually remove the other minutes as choices.
+  // value is 24-hour "HH:MM" -- the exact format buildRunDateTime()/
+  // splitDT() in index.html and pre-production.html already read and write,
+  // so no other code needs to change. label is a 12-hour clock string for
+  // display.
+  var TIME_OPTIONS = (function () {
+    var out = [];
+    for (var m = 0; m < 24 * 60; m += 15) {
+      var h = Math.floor(m / 60), mins = m % 60;
+      var hh = String(h).padStart(2, '0'), mm = String(mins).padStart(2, '0');
+      var h12 = (h % 12 === 0) ? 12 : (h % 12);
+      var ampm = h < 12 ? 'AM' : 'PM';
+      out.push({ value: hh + ':' + mm, label: h12 + ':' + mm + ' ' + ampm });
+    }
+    return out;
+  })();
+
   /* ── low-level fetch ── */
   function jget(url){
     return fetch(url, { headers: { Accept:'application/json' } }).then(function (r) {
@@ -550,7 +575,7 @@
     DELIVERY_LABEL: DELIVERY_LABEL, DELIVERY_METHODS: DELIVERY_METHODS, formatAddress: formatAddress,
     NAV_BOARDS: NAV_BOARDS, buildNavBoards: buildNavBoards,
     getShippingOrders: getShippingOrders, completeOrder: completeOrder, getStatsTrend: getStatsTrend,
-    CHECK_FIELD: CHECK_FIELD, RECV_FROM_SF: RECV_FROM_SF, RECV_TO_SF: RECV_TO_SF,
+    CHECK_FIELD: CHECK_FIELD, RECV_FROM_SF: RECV_FROM_SF, RECV_TO_SF: RECV_TO_SF, TIME_OPTIONS: TIME_OPTIONS,
     PLACEMENTS: PLACEMENTS, methodsList: methodsList, METHOD_META: METHOD_META,
     getOrders: getOrders, getProductionOrders: getProductionOrders, getInbox: getInbox, getPreProductionItems: getPreProductionItems, patchItem: patchItem, deleteItem: deleteItem, createItem: createItem, searchVendors: searchVendors, searchPlans: searchPlans, searchPresses: searchPresses, createMethod: createMethod, createProductionRun: createProductionRun, getProductionRuns: getProductionRuns, patchProductionRun: patchProductionRun, deleteProductionRun: deleteProductionRun, patchMethodStatus: patchMethodStatus, patchMethodChecklist: patchMethodChecklist, getMethodsForOrder: getMethodsForOrder, patchMethodFields: patchMethodFields, deleteMethod: deleteMethod, patchOrder: patchOrder, getOrderSizes: getOrderSizes, createReprintOrder: createReprintOrder,
     getPackaging: getPackaging, postPackaging: postPackaging, deletePackaging: deletePackaging,
