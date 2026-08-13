@@ -97,9 +97,30 @@
     <div style="margin-left:auto;font:700 30px/1 'Oswald';color:#141210">{{grand}} <span style="font:500 14px/1 'Archivo';color:#6b645c">pieces</span></div>
   </div>
 
-  <div style="break-inside:avoid">
-    <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#6b645c;margin-bottom:10px">Production Notes</div>
-    <div style="border:1.5px solid #d8d1c7;border-radius:8px;padding:14px 16px;font:400 13px/1.6 'Archivo';color:#141210;min-height:70px">{{notes}}</div>
+  <div style="break-inside:avoid;margin-bottom:26px">
+    <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#6b645c;margin-bottom:10px">Production Methods</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <sc-for list="{{methods}}" as="m" hint-placeholder-count="2">
+        <div style="display:flex;align-items:center;gap:10px;border:1.5px solid #d8d1c7;border-radius:8px;padding:10px 14px">
+          <span style="width:9px;height:9px;border-radius:50%;background:{{m.color}};flex-shrink:0"></span>
+          <span style="font:600 13px/1 'Oswald';color:#141210;flex-shrink:0">{{m.type}}</span>
+          <span style="font:400 12px/1 'Archivo';color:#6b645c">{{m.placementLabel}}</span>
+          <span style="margin-left:auto;font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#a79f92;flex-shrink:0">{{m.status}}</span>
+        </div>
+      </sc-for>
+      <sc-if value="{{methodsEmpty}}" hint-placeholder-val="{{ false }}"><div style="font:400 12px/1.4 'Archivo';color:#a79f92">No production methods linked to this order yet.</div></sc-if>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;break-inside:avoid">
+    <div>
+      <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#6b645c;margin-bottom:10px">Production Notes</div>
+      <div style="border:1.5px solid #d8d1c7;border-radius:8px;padding:14px 16px;font:400 13px/1.6 'Archivo';color:#141210;min-height:70px">{{notes}}</div>
+    </div>
+    <div>
+      <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#6b645c;margin-bottom:10px">Print Specifications</div>
+      <div style="border:1.5px solid #d8d1c7;border-radius:8px;padding:14px 16px;font:400 13px/1.6 'Archivo';color:#141210;min-height:70px">{{specs}}</div>
+    </div>
   </div>
 
   <div slot="footer" style="display:flex;align-items:center;padding-top:10px;border-top:1px solid #d8d1c7;font:400 10px/1 'Archivo';color:#a79f92">
@@ -126,6 +147,11 @@ class Component extends DCLogic {
         inkColors:'PMS 186 Red, PMS 123 Gold, White',
         totalGarments:'300 pieces',
         notes:'Run heather first, black second — reclaim gold screen between. Customer approved bright red over PMS match. Fold + poly-bag by size; box in cartons of 50. Event pickup Fri AM — must ship Thursday.',
+        specs:'160 mesh, waterbased ink, cure 320°F for 60s. Confirm placement against customer proof before pulling screens. Reclaim between colorways.',
+        methods:[
+          { id:'demo-m1', type:'Screen Print', color:'#C6372B', placementLabel:'Full Front + Left Chest', status:'Ready for Print' },
+          { id:'demo-m2', type:'Screen Print', color:'#C6372B', placementLabel:'Back', status:'Ready for Print' },
+        ],
         cols:['S','M','L','XL','2XL'],
         grids:[
           { colorLabel:'Heather Gray', dark:false, garment:'Next Level 3600', qtys:{ S:48, M:72, L:72, XL:36, '2XL':12 }, total:240 },
@@ -174,6 +200,19 @@ class Component extends DCLogic {
       const inkColors = Array.from(new Set(
         (items || []).filter(it => it.Type__c === 'Ink' && it.Pantone_Color__c).map(it => it.Pantone_Color__c)
       ));
+      // Every Production_Method__c linked to this order (not just the single
+      // guessed Method chip in the summary bar above, which infers ONE method
+      // from Printer__r.Name via api.methodOf() and can't represent a
+      // multi-method order). Reuses ca-api.js's methodsList() -- same helper
+      // the boards use for their own per-method chips -- so a screen print +
+      // heat press order (or two screen print placements) both show up here
+      // individually, and this sheet stays a correct reference regardless of
+      // which method it was printed for.
+      const methods = (api.methodsList ? api.methodsList(rec) : []).map(m => ({
+        id: m.id, type: m.type || 'Method', color: m.color || '#8a8378',
+        placementLabel: (m.placements && m.placements.length) ? m.placements.join(' + ') : '—',
+        status: m.status || '—',
+      }));
       const order = {
         goa: api.text(rec.GOA_Order_Number__c) || rec.OrderNumber || rec.Id,
         goaTail: (api.text(rec.GOA_Order_Number__c)||rec.OrderNumber||'').replace(/[^0-9-]/g,'') || (rec.OrderNumber||''),
@@ -184,7 +223,9 @@ class Component extends DCLogic {
         placement: placements.join(', ') || '—',
         inkColors: inkColors.join(', ') || '—',
         totalGarments: grand ? (String(grand) + ' pieces') : '—',
-        notes: rec.Production_Notes__c || rec.Special_Notes__c || '',
+        notes: api.text(rec.Production_Notes__c) || api.text(rec.Special_Notes__c) || '',
+        specs: api.text(rec.Specifications_for_Printing__c) || '',
+        methods,
         mockupUrl: rec.DesignMockupUrl || null,
         cols, grids, grand: String(grand),
       };
@@ -200,10 +241,13 @@ class Component extends DCLogic {
       tagBg: g.dark ? '#141210' : 'transparent', tagColor: g.dark ? '#fff' : '#141210',
       cells: (o.cols||[]).map(c => { const q = g.qtys[c]; const zero = !q; return { qty: zero ? '·' : String(q), color: zero ? '#c9c1b7' : '#141210', weight: zero ? 400 : 700 }; }),
     }));
+    const methods = o.methods || [];
     return {
       goa:o.goa, goaTail:o.goaTail, customer:o.customer, account:o.account, orderNumber:o.orderNumber,
       methodLabel:m.label, methodColor:m.color, printDate:o.printDate, qty:o.qty,
-      placement:o.placement, inkColors:o.inkColors, totalGarments:o.totalGarments, notes:o.notes,
+      placement:o.placement, inkColors:o.inkColors, totalGarments:o.totalGarments,
+      notes:o.notes||'None on file.', specs:o.specs||'None on file.',
+      methods, methodsEmpty: methods.length===0,
       cols:o.cols, grids, grand:o.grand,
       hasMockup:!!o.mockupUrl, noMockup:!o.mockupUrl,
       mockupNode: o.mockupUrl ? React.createElement('img',{src:o.mockupUrl,alt:'Production mockup',style:{width:190,height:190,flexShrink:0,borderRadius:8,border:'1.5px solid #141210',objectFit:'cover',background:'#efeae2'}}) : null,
