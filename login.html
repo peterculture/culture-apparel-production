@@ -43,31 +43,14 @@
             <div style="width:15px;height:15px;border-radius:50%;border:2px solid {{d.border}};background:{{d.bg}};transition:all .12s"></div>
           </sc-for>
         </div>
-        <div style="height:20px;text-align:center;font:600 11px/20px 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#E8A89F;margin-bottom:14px">{{err}}</div>
+        <div style="height:20px;text-align:center;font:600 11px/20px 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:{{statusColor}};margin-bottom:14px">{{statusText}}</div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
           <sc-for list="{{pad}}" as="p" hint-placeholder-count="12">
             <button onClick="{{ p.onPress }}" style="background:{{p.bg}};border:1px solid {{p.border}};color:{{p.color}};font:600 24px/1 'Oswald';border-radius:12px;padding:20px 0;cursor:pointer;transition:transform .08s" style-active="transform:scale(.94)"><sc-if value="{{p.isIcon}}" hint-placeholder-val="{{ false }}"><i class="ti {{p.icon}}"></i></sc-if><sc-if value="{{p.isText}}" hint-placeholder-val="{{ true }}">{{p.label}}</sc-if></button>
           </sc-for>
         </div>
       </div>
-      <div style="text-align:center;font:400 11px/1.5 'Archivo';color:#4d483f;margin-top:18px">Worker PIN <span style="color:#6C665C">1234</span> · Manager PIN <span style="color:#6C665C">6767</span></div>
-    </div>
-  </sc-if>
-
-  <sc-if value="{{screenName}}" hint-placeholder-val="{{ false }}">
-    <div style="width:100%;max-width:420px;animation:ca-fade .25s ease">
-      <div style="background:#0D0D0F;border:1px solid #1f1f23;border-radius:18px;padding:34px 30px;text-align:center;box-shadow:0 40px 90px -30px rgba(0,0,0,.8);position:relative;overflow:hidden">
-        <div style="position:absolute;top:0;left:0;right:0;height:4px;background:#C6372B"></div>
-        <div style="width:52px;height:52px;border-radius:14px;background:#1a1a1e;border:1px solid #2a2a2f;display:flex;align-items:center;justify-content:center;margin:0 auto 18px"><i class="ti ti-user" style="color:#C6372B;font-size:26px"></i></div>
-        <div style="font:600 21px/1.1 'Oswald';color:#ECEAE4;margin-bottom:8px">Who's this?</div>
-        <div style="font:400 12px/1.5 'Archivo';color:#8a8378;margin-bottom:22px">Pick your name so changes made this shift can be traced back to you.</div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:8px">
-          <sc-for list="{{names}}" as="n" hint-placeholder-count="12">
-            <button onClick="{{ n.onPick }}" style="font:600 13px/1 'Oswald';letter-spacing:.02em;color:#ECEAE4;background:#16161a;border:1px solid #2a2a2f;border-radius:10px;padding:13px 6px;cursor:pointer" style-hover="border-color:#C6372B;color:#C6372B">{{n.label}}</button>
-          </sc-for>
-        </div>
-        <div style="height:18px;font:600 11px/18px 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:#E8A89F;margin-top:8px">{{nameErr}}</div>
-      </div>
+      <div style="text-align:center;font:400 11px/1.5 'Archivo';color:#4d483f;margin-top:18px">Forgot your PIN? Ask a manager to look it up.</div>
     </div>
   </sc-if>
 
@@ -99,34 +82,49 @@
 
 <template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#C6372B"/><text x="50" y="60" font-family="Oswald,Arial" font-size="30" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="2">CA</text><text x="50" y="78" font-family="Arial" font-size="9" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="1">LOGIN</text></svg></template></x-dc>
 <script type="text/x-dc" data-dc-script data-props="{}">
-// The only names the app will accept for shift attribution. Keep this list in
-// sync with the copies in index.html / pre-production.html (each page's own
-// first-visit name gate) if it ever changes.
-// Single source of truth for both arrays is ca-api.js (window.CAApi), now
-// loaded on this page too just for these two lists -- login.html makes no
-// API calls otherwise. Literal fallbacks below only matter if ca-api.js
-// somehow fails to load.
+// The only names the app will accept for shift attribution. Kept only as a
+// sanity check on RESUME below (a stored name that's since been removed from
+// the roster shouldn't silently keep working) -- login itself no longer
+// walks this list; the PIN alone now tells the server who you are.
+// Single source of truth is ca-api.js (window.CAApi). Literal fallback below
+// only matters if ca-api.js somehow fails to load.
 const VALID_NAMES = (window.CAApi && window.CAApi.VALID_NAMES) || ['Anthony','Asher','Alex','Parker','Titus','Gian','Isaac','Bronson','Zach','Logan','Avery','Jeff'];
 
-// The Manager PIN is printed right on this screen (see the footer hint
-// below), so it was never actually a secret -- typing 6767 got anyone into
-// "Manager" before. Real manager status is scoped to this named roster
-// instead: the "manager" role only sticks if the name picked afterward is
-// one of these three, regardless of which PIN was entered.
-const MANAGER_NAMES = (window.CAApi && window.CAApi.MANAGER_NAMES) || ['Gian','Anthony','Parker'];
-
 class Component extends DCLogic {
-  constructor(props){ super(props); this.state={ screen:'pin', pin:'', role:null, name:'', err:'', nameErr:'', shake:false }; }
-  componentDidMount(){ this._kd=(e)=>this.onKey(e); window.addEventListener('keydown',this._kd); try{ const r=localStorage.getItem('caShopRole'), n=localStorage.getItem('caShopWorkerName'); if(r && n && VALID_NAMES.includes(n)){ const role=(r==='manager' && !MANAGER_NAMES.includes(n)) ? 'worker' : r; this.setState({role,name:n,screen:'done'}); } }catch(_){} }
+  constructor(props){ super(props); this.state={ screen:'pin', pin:'', role:null, name:'', err:'', submitting:false, shake:false }; }
+  // RESUME (2026-08-13): unchanged from before this page moved to real
+  // per-worker PINs -- still just trusts whatever role/name localStorage
+  // already has from a still-valid earlier login, same as every other board.
+  // VALID_NAMES.includes(n) guards against resuming as someone who's been
+  // removed from the roster since they last logged in.
+  componentDidMount(){ this._kd=(e)=>this.onKey(e); window.addEventListener('keydown',this._kd); try{ const r=localStorage.getItem('caShopRole'), n=localStorage.getItem('caShopWorkerName'); if(r && n && VALID_NAMES.includes(n)){ this.setState({role:r,name:n,screen:'done'}); } }catch(_){} }
   componentWillUnmount(){ window.removeEventListener('keydown',this._kd); }
-  onKey(e){ if(this.state.screen!=='pin') return; if(/^[0-9]$/.test(e.key)) this.press(e.key); else if(e.key==='Backspace') this.backspace(); }
-  press(d){ if(this.state.pin.length>=4) return; const pin=this.state.pin+d; this.setState({pin,err:''}); if(pin.length===4) setTimeout(()=>this.submit(pin),140); }
-  backspace(){ this.setState(st=>({pin:st.pin.slice(0,-1),err:''})); }
-  submit(pin){ let role=null; if(pin==='1234') role='worker'; else if(pin==='6767') role='manager'; if(role){ try{localStorage.setItem('caShopRole',role);}catch(_){} this.setState({role,pin:'',screen:'name'}); } else { this.setState({err:'Incorrect PIN — try again',pin:'',shake:true}); setTimeout(()=>this.setState({shake:false}),500); } }
-  // Manager only actually sticks for Gian/Anthony/Parker -- anyone else who
-  // typed 6767 gets quietly dropped back to worker once their name is known.
-  pickName(nm){ if(!VALID_NAMES.includes(nm)) return; const role=(this.state.role==='manager' && !MANAGER_NAMES.includes(nm)) ? 'worker' : this.state.role; try{localStorage.setItem('caShopWorkerName',nm); localStorage.setItem('caShopRole',role);}catch(_){} this.setState({role,name:nm,nameErr:'',screen:'done'}); }
-  logout(){ try{localStorage.removeItem('caShopRole');localStorage.removeItem('caShopWorkerName');}catch(_){} this.setState({screen:'pin',pin:'',role:null,name:'',err:'',nameErr:''}); }
+  onKey(e){ if(this.state.screen!=='pin' || this.state.submitting) return; if(/^[0-9]$/.test(e.key)) this.press(e.key); else if(e.key==='Backspace') this.backspace(); }
+  press(d){ if(this.state.pin.length>=4 || this.state.submitting) return; const pin=this.state.pin+d; this.setState({pin,err:''}); if(pin.length===4) setTimeout(()=>this.submit(pin),140); }
+  backspace(){ if(this.state.submitting) return; this.setState(st=>({pin:st.pin.slice(0,-1),err:''})); }
+  // Verifies the PIN SERVER-SIDE (POST /api/worker-login -- see
+  // functions/api/_worker-auth.js) instead of comparing against a shared
+  // hardcoded value here. One PIN now identifies both who's typing and their
+  // role in a single round trip -- there's no separate "pick your name"
+  // step anymore because the PIN itself already answers that.
+  async submit(pin){
+    if(this.state.submitting) return;
+    this.setState({submitting:true, err:''});
+    try{
+      const api=window.CAApi; if(!api || !api.workerLogin) throw new Error('CAApi not loaded');
+      const res=await api.workerLogin(pin);
+      if(!res || !res.name || !res.role) throw new Error('bad_response');
+      try{ localStorage.setItem('caShopRole',res.role); localStorage.setItem('caShopWorkerName',res.name); }catch(_){}
+      this.setState({submitting:false, role:res.role, name:res.name, pin:'', screen:'done'});
+    }catch(e){
+      const msg = (e && e.status===401) ? 'Incorrect PIN — try again'
+        : (e && e.status===500) ? "PIN login isn't set up yet — ask a manager"
+        : 'Could not verify PIN — check connection and try again';
+      this.setState({submitting:false, err:msg, pin:'', shake:true});
+      setTimeout(()=>this.setState({shake:false}),500);
+    }
+  }
+  logout(){ try{localStorage.removeItem('caShopRole');localStorage.removeItem('caShopWorkerName');}catch(_){} this.setState({screen:'pin',pin:'',role:null,name:'',err:''}); }
 
   renderVals(){
     const st=this.state;
@@ -146,11 +144,15 @@ class Component extends DCLogic {
       { label:'Stats', sub:'Prep-time buffer · team status · board totals', href:'stats.html', color:'#7FA644', icon:'ti-chart-bar' },
     ];
     const nm=st.name.trim();
-    const names=VALID_NAMES.map(n=>({ label:n, onPick:()=>this.pickName(n) }));
+    // Status line above the keypad: an error (red) wins if there is one,
+    // otherwise "Verifying…" (neutral) while the round trip to
+    // /api/worker-login is in flight, otherwise blank.
+    const statusText = st.err || (st.submitting ? 'Verifying…' : '');
+    const statusColor = st.err ? '#E8A89F' : '#6C665C';
     return {
-      screenPin:st.screen==='pin', screenName:st.screen==='name', screenDone:st.screen==='done',
-      dots, pad, err:st.err, shakeAnim: st.shake?'ca-shake .45s':'none',
-      name:st.name, names, nameErr:st.nameErr,
+      screenPin:st.screen==='pin', screenDone:st.screen==='done',
+      dots, pad, statusText, statusColor, shakeAnim: st.shake?'ca-shake .45s':'none',
+      name:st.name,
       nameInit:(nm[0]||'?').toUpperCase(),
       roleLabel:isMgr?'Manager':'Worker', roleIcon:isMgr?'ti-shield-check':'ti-user-check',
       roleColor:isMgr?'#C6372B':'#7FA644', roleBg:isMgr?'#2A100D':'#18230D', roleBorder:isMgr?'#7A241C':'#3D5418',
