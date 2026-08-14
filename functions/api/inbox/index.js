@@ -19,6 +19,12 @@ const FIELDS = [
   "GOA_Order_Number__c",
   "Customer_Order_Name__c",
   "Print_Date__c",
+  // Added 2026-08-14, mirrors /api/orders and /api/production-orders -- lets
+  // the post-creation "Create Production Run" panel prefill Scheduled
+  // Start/End right after a manager creates the first method for a
+  // brand-new inbox order. See those files' comments for what these are.
+  "Duration__c",
+  "Print_End_Date_Time__c",
   "Account.Name",
   "Customer_Facing_Delivery_Date__c",
   "OpportunityId", // <-- used server-side to look up the Design__c mockup image
