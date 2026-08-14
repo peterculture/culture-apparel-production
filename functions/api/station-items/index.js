@@ -10,7 +10,7 @@
  * Cloudflare Access in front of /api/*.
  */
 import { runQuery, jsonError } from "../_sf.js";
-import { STATION_CONFIG } from "../_station.js";
+import { STATION_CONFIG, normalizeSubStatus } from "../_station.js";
 import { fetchMockupsByOpportunity } from "../_mockup.js";
 
 export async function onRequestGet({ env, request }) {
@@ -34,6 +34,18 @@ export async function onRequestGet({ env, request }) {
     if (!ok) {
       console.error("station-items query failed", status);
       return jsonError("query_failed", status);
+    }
+
+    // Map any pre-rename sub-status value onto its current equivalent before
+    // the board sees it, so a stale row still lands on a real stage instead of
+    // rendering as an unreachable card. No-op for values already current --
+    // see normalizeSubStatus/LEGACY_SUBSTATUS in _station.js.
+    if (cfg.subStatusField) {
+      records.forEach((r) => {
+        const cur = r[cfg.subStatusField];
+        const next = normalizeSubStatus(cfg.subStatusField, cur);
+        if (next !== cur) r[cfg.subStatusField] = next;
+      });
     }
 
     const oppIds = records
