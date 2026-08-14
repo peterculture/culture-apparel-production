@@ -648,7 +648,9 @@ class Component extends DCLogic {
     // own id so the order-level lookups added for multi-method support (timers,
     // packaging, shipments, etc.) work the same in demo mode as live mode.
     this._demoOrders = seedOrders.map(o=>Object.assign({orderId:o.id, status:({rfp:'Ready for Print',ip:'In Production',pp:'Post-Production',done:'Completed'})[o.stage]}, o));
-    let storedName=''; try{ storedName=localStorage.getItem('caShopWorkerName')||''; }catch(_){}
+    // Accepts an identity established on ANY board, including station.html /
+    // shipping.html which write their own key -- see anyWorkerName() in ca-api.js.
+    let storedName=''; try{ storedName=(window.CAApi&&window.CAApi.anyWorkerName)?window.CAApi.anyWorkerName():(localStorage.getItem('caShopWorkerName')||''); }catch(_){}
     this.state = {
       now: new Date(),
       nameOk: VALID_NAMES.includes(storedName),
@@ -869,7 +871,10 @@ class Component extends DCLogic {
   // 'manager' role from a prior login could combine with re-picking
   // Gian/Anthony/Parker's name here to grant manager rights with no PIN
   // re-entry at all, defeating confirmManager()'s live re-check.
-  switchUser(){ try{localStorage.removeItem('caShopWorkerName'); localStorage.removeItem('caShopRole');}catch(_){} this.setState({nameOk:false, gatePin:'', gateErr:''}); }
+  // Clears BOTH name keys (shared + station.html/shipping.html's) plus the
+  // role, so switching away can't be undone by the other key still holding
+  // the previous person -- see clearIdentity() in ca-api.js.
+  switchUser(){ const a=window.CAApi; if(a&&a.clearIdentity) a.clearIdentity(); else { try{localStorage.removeItem('caShopWorkerName');}catch(_){} } try{localStorage.removeItem('caShopRole');}catch(_){} this.setState({nameOk:false, gatePin:'', gateErr:''}); }
   onGatePress(d){ if(this.state.gatePin.length>=4 || this.state.gateSubmitting) return; const pin=this.state.gatePin+d; this.setState({gatePin:pin, gateErr:''}); if(pin.length===4) setTimeout(()=>this.submitGatePin(pin),140); }
   onGateBackspace(){ if(this.state.gateSubmitting) return; this.setState(st=>({gatePin:st.gatePin.slice(0,-1), gateErr:''})); }
   // Verifies the switch-account PIN SERVER-SIDE via the same
@@ -884,7 +889,9 @@ class Component extends DCLogic {
       const api=this._api||window.CAApi; if(!api || !api.workerLogin) throw new Error('CAApi not loaded');
       const res=await api.workerLogin(pin);
       if(!res || !res.name || !res.role) throw new Error('bad_response');
-      try{ localStorage.setItem('caShopWorkerName',res.name); localStorage.setItem('caShopRole',res.role); }catch(_){}
+      // Writes both name keys + role so the Station and Shipping boards accept
+      // this same verification without prompting again.
+      { const a=window.CAApi; if(a&&a.setIdentity) a.setIdentity(res.name,res.role); else { try{ localStorage.setItem('caShopWorkerName',res.name); localStorage.setItem('caShopRole',res.role); }catch(_){} } }
       this.setState({gateSubmitting:false, gatePin:'', gateErr:'', nameOk:true});
     }catch(e){
       const msg = (e && e.status===401) ? 'Incorrect PIN — try again'
@@ -1775,7 +1782,7 @@ class Component extends DCLogic {
       });
     }
 
-    let wn='Dana K.'; try{ wn=localStorage.getItem('caShopWorkerName')||wn; }catch(_){}
+    let wn='Dana K.'; try{ wn=((window.CAApi&&window.CAApi.anyWorkerName)?window.CAApi.anyWorkerName():localStorage.getItem('caShopWorkerName'))||wn; }catch(_){}
     // Env switcher is admin-only (Anthony) as of 2026-08-13 -- Gian/Parker
     // hold 'manager', not 'admin', so they no longer see this button at all
     // (see ca-api.js's isAdmin()). The switch itself was already gated
