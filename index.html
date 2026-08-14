@@ -437,8 +437,27 @@
         </div>
 
         <div>
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px"><span style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378">Shipments</span><button onClick="{{ open.onZk }}" title="Open the Zenkraft Shipment Wizard in Salesforce" style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#E0B870;background:transparent;border:1px solid #5E4214;border-radius:7px;padding:6px 9px;cursor:pointer"><i class="ti ti-printer"></i>Print Label</button><button onClick="{{ open.onAddShip }}" style="margin-left:8px;display:inline-flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#9C978C;background:transparent;border:1px solid #2a2a2f;border-radius:7px;padding:6px 9px;cursor:pointer" style-hover="border-color:#5E9B9A;color:#5E9B9A"><i class="ti ti-truck-delivery"></i>New</button></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px"><span style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378">Shipments</span><button onClick="{{ open.onZk }}" title="Open the Zenkraft Shipment Wizard in Salesforce" style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#E0B870;background:transparent;border:1px solid #5E4214;border-radius:7px;padding:6px 9px;cursor:pointer"><i class="ti ti-printer"></i>Print Label</button><button onClick="{{ open.onAddShip }}" style="margin-left:8px;display:inline-flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#9C978C;background:transparent;border:1px solid #2a2a2f;border-radius:7px;padding:6px 9px;cursor:pointer" style-hover="border-color:#5E9B9A;color:#5E9B9A"><i class="{{open.addShipIcon}}"></i>{{open.addShipLabel}}</button></div>
           <sc-if value="{{open.hasZkErr}}" hint-placeholder-val="{{ false }}"><div style="font:400 10px/1 'Archivo';color:#C6372B;margin:-5px 0 8px">{{open.zkErrMsg}}</div></sc-if>
+          <sc-if value="{{open.zkPolling}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:7px;font:400 10px/1 'Archivo';color:#E0B870;margin:-5px 0 8px"><i class="ti ti-loader-2" style="font-size:12px"></i>Waiting for Zenkraft to create the shipment…</div></sc-if>
+          <sc-if value="{{open.shipFormOpen}}" hint-placeholder-val="{{ false }}">
+            <div style="background:#121215;border:1px solid #232327;border-radius:10px;padding:12px;margin-bottom:8px">
+              <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+                <select value="{{open.shipForm.carrier}}" onChange="{{ open.shipForm.onCarrier }}" style="flex:1;min-width:130px;background:#16161a;border:1px solid #2a2a2f;border-radius:8px;padding:9px 11px;font-size:13px;color:#ECEAE4;outline:none"><sc-for list="{{open.shipForm.carrierOptions}}" as="co" hint-placeholder-count="6"><option value="{{co.value}}">{{co.label}}</option></sc-for></select>
+                <input value="{{open.shipForm.serviceType}}" onInput="{{ open.shipForm.onServiceType }}" placeholder="Service (e.g. Ground)" style="flex:1;min-width:130px;background:#16161a;border:1px solid #2a2a2f;border-radius:8px;padding:9px 11px;font-size:13px;color:#ECEAE4;outline:none">
+              </div>
+              <sc-if value="{{open.shipForm.isOther}}" hint-placeholder-val="{{ false }}"><input value="{{open.shipForm.carrierOther}}" onInput="{{ open.shipForm.onCarrierOther }}" placeholder="Carrier name" style="width:100%;box-sizing:border-box;background:#16161a;border:1px solid #2a2a2f;border-radius:8px;padding:9px 11px;font-size:13px;color:#ECEAE4;outline:none;margin-bottom:8px"></sc-if>
+              <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+                <input value="{{open.shipForm.tracking}}" onInput="{{ open.shipForm.onTracking }}" placeholder="Tracking number" style="flex:2;min-width:150px;background:#16161a;border:1px solid #2a2a2f;border-radius:8px;padding:9px 11px;font-size:13px;color:#ECEAE4;outline:none">
+                <input value="{{open.shipForm.weight}}" onInput="{{ open.shipForm.onWeight }}" type="number" min="0" step="0.1" placeholder="lbs" style="width:84px;background:#16161a;border:1px solid #2a2a2f;border-radius:8px;padding:9px 11px;font-size:13px;color:#ECEAE4;outline:none">
+              </div>
+              <sc-if value="{{open.shipForm.hasErr}}" hint-placeholder-val="{{ false }}"><div style="font:400 10px/1 'Archivo';color:#C6372B;margin-bottom:8px">{{open.shipForm.err}}</div></sc-if>
+              <div style="display:flex;gap:8px">
+                <button onClick="{{ open.shipForm.onSubmit }}" disabled="{{open.shipForm.submitting}}" style="display:inline-flex;align-items:center;gap:5px;font:600 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#5E9B9A;background:transparent;border:1px solid #3D5418;border-radius:8px;padding:9px 13px;cursor:pointer" style-hover="background:#18230D"><i class="ti ti-check"></i>{{open.shipForm.submitLabel}}</button>
+                <button onClick="{{ open.shipForm.onCancel }}" style="display:inline-flex;align-items:center;gap:5px;font:600 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#8a8378;background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:9px 13px;cursor:pointer">Cancel</button>
+              </div>
+            </div>
+          </sc-if>
           <div style="display:flex;flex-direction:column;gap:6px">
             <sc-for list="{{open.shipments}}" as="s" hint-placeholder-count="1">
               <div style="display:flex;align-items:center;gap:10px;background:#121215;border:1px solid #232327;border-radius:8px;padding:10px 13px"><i class="ti ti-truck" style="color:#7FA644;font-size:15px"></i><div style="min-width:0"><div style="font:500 12px/1 'Archivo';color:#ECEAE4">{{s.carrier}}</div><div style="font:400 10px/1 'Archivo';color:#6C665C;margin-top:3px">{{s.tracking}}</div></div><button onClick="{{ s.onRemove }}" title="Remove shipment" style="margin-left:auto;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:transparent;border:1px solid #2a2a2f;color:#8a8378;cursor:pointer;flex-shrink:0"><i class="ti ti-trash" style="font-size:13px"></i></button></div>
@@ -589,6 +608,27 @@
 // to load, so the name gate doesn't silently show zero names.
 const VALID_NAMES = (window.CAApi && window.CAApi.VALID_NAMES) || ['Anthony','Asher','Alex','Parker','Titus','Gian','Isaac','Bronson','Zach','Logan','Avery','Jeff'];
 
+// ── Zenkraft "Print Label" -> poll for the shipment the wizard creates ──
+// Neither this board nor shipping.html ever creates a zkmulti__MCShipment__c
+// when the wizard link is clicked -- openZk() only opens a URL. The record is
+// born inside Zenkraft's own Visualforce wizard, over in Salesforce, and
+// Zenkraft has no callback into this app. shipping.html has polled for that
+// record since it shipped; this board never did, so a manager who printed a
+// label from a production card saw "No shipments created yet" until the
+// drawer was closed and reopened. These mirror shipping.html's constants
+// exactly (same cadence, same give-up window) so the two boards behave
+// identically -- deliberately NOT tuned separately.
+const POLL_MS = 6000;
+const POLL_MAX_TRIES = 40; // ~4 minutes, then give up quietly
+
+// Carrier options for the manual "Log Shipment" form below. This list is
+// presentation only -- zkmulti__Carrier__c and zkmulti__Service_Type_Name__c
+// are plain Text(100)/Text(200) in Salesforce (confirmed against Staging
+// 2026-08-14), NOT restricted picklists, so a value outside this list is
+// still accepted by the org. The list exists to stop typos on a tablet, not
+// to enforce anything, and "Other" lets a worker type a free-form carrier.
+const CARRIER_OPTIONS = ['UPS','FedEx','USPS','DHL','Local Courier','Other'];
+
 class Component extends DCLogic {
   constructor(props){
     super(props);
@@ -665,6 +705,23 @@ class Component extends DCLogic {
       // not built/cached here, since it depends on which org is currently
       // connected (functions/api/orders/[id]/zk-wizard-url.js).
       zkErr:{},
+      // orderId -> shipment count captured the moment "Print Label" was
+      // clicked, so the poll below can tell "a NEW shipment appeared" apart
+      // from "shipments this order already had." Same shape/purpose as
+      // shipping.html's state of the same name.
+      shipBaseline:{},
+      // orderId -> true while the post-wizard poll is running, purely so the
+      // drawer can say "Waiting for Zenkraft…" instead of looking idle for
+      // up to four minutes.
+      zkPolling:{},
+      // ── Manual "Log Shipment" form (replaces the old one-tap New button) ──
+      // That button used to POST a hardcoded FedEx Ground / "PENDING"
+      // zkmulti__MCShipment__c straight to Salesforce on a single tap -- a
+      // real, junk record in the org with no way to correct it except
+      // deleting it. Now it opens this form instead. Scoped to one order at
+      // a time (shipFormOrderId) exactly like methodEditId/runCreateMethodId
+      // above, since only one drawer is ever open on this board.
+      shipFormOrderId:null, shipForm:null, shipFormSubmitting:false, shipFormErr:'',
       // Multi-org Salesforce switcher -- global toggle (every tablet, not
       // per-browser) between dev2/Staging/Production, PIN-gated. See
       // loadSfEnv()/openSfEnvModal()/submitSfEnv() and
@@ -693,7 +750,7 @@ class Component extends DCLogic {
     };
   }
   componentDidMount(){ this._t = setInterval(()=>this.setState({ now:new Date() }), 1000); this.load(); this.loadSfEnv(); this.loadPrep(); this._ar = setInterval(()=>{ if(this.state.connection==='live' && !this.state.openId && !this.state.dragId) this.load(); }, 15000); this._pr = setInterval(()=>this.loadPrep(), 30000); }
-  componentWillUnmount(){ clearInterval(this._t); clearInterval(this._ar); clearInterval(this._pr); }
+  componentWillUnmount(){ clearInterval(this._t); clearInterval(this._ar); clearInterval(this._pr); this.clearPoll(); }
   // Independent fetch/failure path from load() -- a hiccup fetching the
   // Pre-Production queue shouldn't flip this board's own "Live · Salesforce"
   // badge to Demo, and vice versa. Leaves whatever prep value was last
@@ -897,6 +954,10 @@ class Component extends DCLogic {
   // drawer stays in sync if the sibling method's drawer is opened next.
   updateOrderFieldLocally(orderId,fields){ this.setState(st=>({ orders: st.orders.map(o=>o.orderId===orderId?Object.assign({},o,fields):o) })); }
   openCard(cardId){
+    // A poll or a half-typed Log Shipment form belongs to the card that was
+    // open a moment ago, not this one -- drop both before switching.
+    this.stopPolling();
+    this.closeShipForm();
     this.setState({openId:cardId});
     const card=(this.state.orders||[]).find(c=>c.id===cardId);
     if(!card || !this._api || this.state.connection!=='live') return;
@@ -1301,25 +1362,157 @@ class Component extends DCLogic {
   openZk(orderId,num){
     this.setState(st=>{ const z=Object.assign({},st.zkErr); delete z[orderId]; return {zkErr:z}; });
     if(!this._api || this.state.connection!=='live'){ this.setState(st=>{ const z=Object.assign({},st.zkErr); z[orderId]='Not connected to Salesforce (demo mode)'; return {zkErr:z}; }); return; }
+    // Snapshot BEFORE opening the tab, so a shipment created in the wizard
+    // reads as "new" against the count this order had a moment ago.
+    //
+    // openCard() loads state.ship asynchronously and SKIPS the assignment
+    // entirely if that GET failed, so "no entry" is genuinely different from
+    // "entry, zero shipments." Treating the former as 0 would make the very
+    // first poll see this order's PRE-EXISTING shipments as new and falsely
+    // mark the label printed. null means "unknown" -- startPolling seeds it
+    // from the first poll response instead of guessing.
+    const known = Object.prototype.hasOwnProperty.call(this.state.ship||{}, orderId);
+    const baseline = known ? (this.state.ship[orderId]||[]).length : null;
     this._api.getZkWizardUrl(orderId,num).then(d=>{
-      if(d && d.url) window.open(d.url,'_blank','noopener');
+      if(d && d.url){
+        window.open(d.url,'_blank','noopener');
+        this.setState(st=>({
+          shipBaseline:Object.assign({},st.shipBaseline,{[orderId]:baseline}),
+        }));
+        this.startPolling(orderId);
+        // Set the "waiting" flag AFTER startPolling: this runtime's setState
+        // is synchronous, and startPolling's first act is clearPoll(), so a
+        // flag set beforehand would be wiped in the same tick and the status
+        // line would never appear.
+        this.setState(st=>({ zkPolling:Object.assign({},st.zkPolling,{[orderId]:true}) }));
+      }
       else this.setState(st=>{ const z=Object.assign({},st.zkErr); z[orderId]='Could not open the Zenkraft wizard'; return {zkErr:z}; });
     }).catch(()=>{ this.setState(st=>{ const z=Object.assign({},st.zkErr); z[orderId]='Could not open the Zenkraft wizard'; return {zkErr:z}; }); });
+  }
+  // Re-reads this order's shipments and pushes them into state.ship, using
+  // the SAME shape openCard() builds so the drawer list renders identically
+  // whether a shipment arrived via the initial load or via this poll.
+  refreshShipments(orderId){
+    if(!this._api || this.state.connection!=='live') return Promise.resolve([]);
+    return this._api.getShipments(orderId).then(list=>{
+      const rows=(list||[]).map(x=>({id:x.Id,carrier:x.zkmulti__Carrier__c||'Shipment',tracking:x.zkmulti__Tracking_Number__c||''}));
+      this.setState(st=>{ const s=Object.assign({},st.ship); s[orderId]=rows; return {ship:s}; });
+      return rows;
+    }).catch(()=>[]);
+  }
+  // Only one order polls at a time (whichever drawer is open) -- identical
+  // assumption to shipping.html's copy: one manager, one open order.
+  startPolling(orderId){
+    this.clearPoll();
+    let tries=0;
+    this._pollTimer = setInterval(()=>{
+      tries++;
+      if(tries>POLL_MAX_TRIES){ this.stopPolling(); return; }
+      this.refreshShipments(orderId).then(list=>{
+        const baseline = this.state.shipBaseline[orderId];
+        // Unknown baseline (openCard's shipments fetch hadn't landed, or
+        // failed) -- adopt this first reading as the floor and wait for the
+        // NEXT poll to decide, rather than treating pre-existing shipments
+        // as if the wizard had just made them.
+        if(baseline==null){
+          this.setState(st=>({ shipBaseline:Object.assign({},st.shipBaseline,{[orderId]:list.length}) }));
+          return;
+        }
+        if(list.length>baseline){
+          this.stopPolling();
+          // Matches shipping.html: a label that came back from Zenkraft IS a
+          // printed label. Writes the same Order field, through the same
+          // allow-listed PATCH endpoint, as that board's auto-mark and its
+          // manual "Mark Shipped" toggle -- no new field, no new endpoint.
+          this.pushOrder(orderId,{Shipping_Label_Printed__c:true});
+          this.updateOrderFieldLocally(orderId,{labelPrinted:true});
+        }
+      });
+    }, POLL_MS);
+  }
+  // Timer only, no state -- matches shipping.html's clearPoll exactly. Kept
+  // side-effect-free so it's safe to call from componentWillUnmount and from
+  // startPolling's own first line.
+  clearPoll(){ if(this._pollTimer){ clearInterval(this._pollTimer); this._pollTimer=null; } }
+  // Timer + the "waiting for Zenkraft" flag. Use this everywhere polling
+  // should visibly end; use clearPoll() alone only when a new poll is about
+  // to start or the component is going away.
+  stopPolling(){
+    this.clearPoll();
+    if(this.state && this.state.zkPolling && Object.keys(this.state.zkPolling).length) this.setState({zkPolling:{}});
   }
   // Adds the local draft row optimistically (no id yet -- the POST hasn't
   // round-tripped), then patches the real Salesforce Id back onto that SAME
   // object reference once the POST resolves, so it becomes deletable
   // (removeShipment) without waiting for the drawer to be closed/reopened.
-  addShip(orderId){
-    const draft = {carrier:'FedEx Ground',tracking:'Draft · rate shopping'};
-    this.setState(st=>{ const s=Object.assign({},st.ship); s[orderId]=(s[orderId]||[]).concat([draft]); return {ship:s}; });
-    if(this._api && this.state.connection==='live') {
-      this._api.postShipment(orderId,{carrier:'FedEx Ground',serviceType:'Ground',tracking:'PENDING'}).then(res=>{
-        const id = res && res.id;
-        if(!id) return;
-        this.setState(st=>{ const s=Object.assign({},st.ship); s[orderId]=(s[orderId]||[]).map(x=>x===draft?Object.assign({},x,{id}):x); return {ship:s}; });
-      }).catch(()=>{});
+  // View-model for the Log Shipment form (mirrors itemCreateView/runCreate
+  // above -- all binding logic here, none in the template).
+  shipFormView(orderId){
+    const st=this.state;
+    if(st.shipFormOrderId!==orderId || !st.shipForm) return { open:false, carrierOptions:[], isOther:false, carrier:'', carrierOther:'', serviceType:'', tracking:'', weight:'', err:'', hasErr:false, submitting:false, submitLabel:'Log Shipment', onCarrier:null, onCarrierOther:null, onServiceType:null, onTracking:null, onWeight:null, onSubmit:null, onCancel:null };
+    const f=st.shipForm;
+    return {
+      open:true,
+      carrierOptions: CARRIER_OPTIONS.map(c=>({value:c,label:c})),
+      isOther: f.carrier==='Other',
+      carrier:f.carrier||'', carrierOther:f.carrierOther||'', serviceType:f.serviceType||'', tracking:f.tracking||'', weight:f.weight||'',
+      err: st.shipFormErr||'', hasErr: !!st.shipFormErr,
+      submitting: !!st.shipFormSubmitting,
+      submitLabel: st.shipFormSubmitting ? 'Saving…' : 'Log Shipment',
+      onCarrier:(e)=>this.setShipForm('carrier',e.target.value),
+      onCarrierOther:(e)=>this.setShipForm('carrierOther',e.target.value),
+      onServiceType:(e)=>this.setShipForm('serviceType',e.target.value),
+      onTracking:(e)=>this.setShipForm('tracking',e.target.value),
+      onWeight:(e)=>this.setShipForm('weight',e.target.value),
+      onSubmit:()=>this.submitShipForm(orderId),
+      onCancel:()=>this.closeShipForm(),
+    };
+  }
+  // ── Manual "Log Shipment" form ──
+  // This is the fallback path for a shipment that did NOT come from the
+  // Zenkraft wizard (a walk-in courier, a label bought outside Salesforce, a
+  // tracking number phoned in). It posts to the same POST /api/shipments the
+  // old one-tap button used -- same endpoint, same object, same fields -- but
+  // with values a human actually entered instead of a hardcoded
+  // "FedEx Ground / PENDING" placeholder.
+  openShipForm(orderId){
+    this.setState({ shipFormOrderId:orderId, shipFormErr:'', shipForm:{ carrier:'UPS', carrierOther:'', serviceType:'', tracking:'', weight:'' } });
+  }
+  closeShipForm(){ this.setState({ shipFormOrderId:null, shipForm:null, shipFormErr:'', shipFormSubmitting:false }); }
+  setShipForm(k,v){ this.setState(st=>({ shipForm:Object.assign({}, st.shipForm||{}, {[k]:v}) })); }
+  submitShipForm(orderId){
+    const f = this.state.shipForm || {};
+    // "Other" swaps the select for a free-text box -- see the markup. Trim
+    // both so a stray space doesn't become the carrier name.
+    const carrier = String((f.carrier==='Other' ? f.carrierOther : f.carrier) || '').trim();
+    const tracking = String(f.tracking||'').trim();
+    const serviceType = String(f.serviceType||'').trim();
+    const weightRaw = String(f.weight||'').trim();
+    if(!carrier){ this.setState({shipFormErr:'Pick or enter a carrier.'}); return; }
+    if(!tracking){ this.setState({shipFormErr:'Enter a tracking number.'}); return; }
+    let weight = null;
+    if(weightRaw){
+      const n = Number(weightRaw);
+      if(!isFinite(n) || n<=0){ this.setState({shipFormErr:'Weight must be a positive number (lbs), or leave it blank.'}); return; }
+      weight = n;
     }
+    if(!this._api || this.state.connection!=='live'){
+      // Demo mode: show the row locally so the form is still explorable,
+      // exactly like addPkg's demo behaviour. Nothing is written anywhere.
+      this.setState(st=>{ const s=Object.assign({},st.ship); s[orderId]=(s[orderId]||[]).concat([{carrier,tracking}]); return {ship:s}; });
+      this.closeShipForm();
+      return;
+    }
+    this.setState({shipFormSubmitting:true, shipFormErr:''});
+    this._api.postShipment(orderId,{carrier, serviceType, tracking, weight})
+      .then(()=>{
+        // Re-read rather than optimistically splicing: the row now has a real
+        // Salesforce Id (so its delete button works immediately) and any
+        // org-side defaulting is reflected. Cheap -- one GET, drawer is open.
+        this.closeShipForm();
+        return this.refreshShipments(orderId);
+      })
+      .catch(()=>{ this.setState({shipFormSubmitting:false, shipFormErr:'Could not log this shipment — try again.'}); });
   }
   // Removes ONE shipment (zkmulti__MCShipment__c). The backend DELETE
   // endpoint (functions/api/shipments/[id].js) has existed since shipments
@@ -1328,14 +1521,18 @@ class Component extends DCLogic {
   // above: same "logged item in this drawer section" pattern, just a plain
   // confirm rather than the heavier method/run/item PIN gate.
   // Takes the shipment RECORD (not just its id) so removal can match by
-  // reference instead of by id -- a shipment just added via addShip() has no
+  // reference instead of by id -- a demo-mode row added via submitShipForm() has no
   // id yet (its POST hasn't round-tripped back with the real Salesforce Id),
   // and filtering by `x.id !== shipmentId` would match every id-less draft
   // at once, wiping out more than the one row that was actually clicked.
   removeShipment(shipment, orderId){
     if(!window.confirm('Remove this shipment? This can’t be undone.')) return;
     const shipmentId = shipment && shipment.id;
-    this.setState(st=>{ const s=Object.assign({},st.ship); s[orderId]=(s[orderId]||[]).filter(x=>x!==shipment); return {ship:s}; });
+    // Match by Id when there is one: refreshShipments()/the post-wizard poll
+    // replace every row OBJECT, so a refresh landing between render and this
+    // click would leave a reference-only filter matching nothing and the row
+    // visibly lingering. Fall back to reference matching for id-less demo rows.
+    this.setState(st=>{ const s=Object.assign({},st.ship); s[orderId]=(s[orderId]||[]).filter(x=> shipmentId ? x.id!==shipmentId : x!==shipment); return {ship:s}; });
     if(this._api && this.state.connection==='live' && shipmentId) {
       this._api.deleteShipment(shipmentId).catch(()=>{ window.alert('Could not remove this shipment — try again.'); });
     }
@@ -1560,7 +1757,16 @@ class Component extends DCLogic {
         // here), not the order's shared stage.
         statusSteps:(function(){ var SS=['Pre-Production','Ready for Print','In Production','Post-Production','Completed']; var curLabel=src.status||{rfp:'Ready for Print',ip:'In Production',pp:'Post-Production',done:'Completed'}[src.stage]; var ci=SS.indexOf(curLabel); return SS.map(function(label,i){ var done=i<ci, current=i===ci, isNext=(i===ci+1), clickable=isNext||done, allowed=isNext; return { label, onClick: clickable?(function(){ this.advanceStatus(src.id,label,src.orderId); }).bind(this):null, textColor: current?'#ECEAE4':(done?'#8a8378':(allowed?'#E0B870':'#4d483f')), border: current?'#C6372B':(allowed?'#5E4214':'#242428'), bg: current?'#2a1210':(done?'#18230D':(allowed?'#241a09':'#121215')) }; }.bind(this)); }).call(this),
         packaging:pkg.map((p,idx)=>Object.assign({},p,{onRemove:()=>this.removePkg(src.orderId,idx)})), pkgEmpty:pkg.length===0, onAddPkg:()=>this.addPkg(src.orderId), pkgType:st.pkgType, pkgQty:st.pkgQty, onPkgType:(e)=>this.setState({pkgType:e.target.value}), onPkgQty:(e)=>this.setState({pkgQty:e.target.value}), pkgTypeOptions:[{value:'Standard Culture Box',label:'Standard Culture Box'},{value:'Culture Hat Box',label:'Culture Hat Box'},{value:'Poly Bag',label:'Poly Bag'},{value:'Standard Brown Box',label:'Standard Brown Box'}],
-        shipments:shp.map(s=>Object.assign({},s,{onRemove:()=>this.removeShipment(s, src.orderId)})), shipEmpty:shp.length===0, onAddShip:()=>this.addShip(src.orderId),
+        shipments:shp.map(s=>Object.assign({},s,{onRemove:()=>this.removeShipment(s, src.orderId)})), shipEmpty:shp.length===0,
+        // "New" now toggles the Log Shipment form open/closed instead of
+        // firing a hardcoded POST on a single tap.
+        onAddShip:()=> (st.shipFormOrderId===src.orderId) ? this.closeShipForm() : this.openShipForm(src.orderId),
+        shipFormOpen: st.shipFormOrderId===src.orderId,
+        addShipLabel: (st.shipFormOrderId===src.orderId) ? 'Cancel' : 'New',
+        addShipIcon: (st.shipFormOrderId===src.orderId) ? 'ti ti-x' : 'ti ti-truck-delivery',
+        shipForm: this.shipFormView(src.orderId),
+        // Post-wizard poll status line -- see openZk()/startPolling().
+        zkPolling: !!(st.zkPolling && st.zkPolling[src.orderId]),
         misBorder:(src.mis>0)?'#7A241C':'#232327', misColor:(src.mis>0)?'#E8A89F':'#ECEAE4',
         onMisPlus:()=>this.setMis(src.orderId,(src.mis||0)+1), onMisMinus:()=>this.setMis(src.orderId,(src.mis||0)-1),
         misDetails:st.misDetails[src.orderId]||'', onMisDetails:(e)=>this.setMisDetails(src.orderId,e.target.value),
@@ -1625,7 +1831,9 @@ class Component extends DCLogic {
       sfEnvSubmitLabel: st.sfEnvSubmitting?'Switching…':'Switch Environment', onSubmitSfEnv:()=>this.submitSfEnv(),
       sfEnvErr:st.sfEnvErr, sfEnvMsg:st.sfEnvMsg, sfEnvHasErr:!!st.sfEnvErr, sfEnvHasMsg:!!st.sfEnvMsg,
       q:st.q, onSearch:(e)=>this.setState({q:e.target.value}), onRefresh:()=>this.load(),
-      drawerOpen:!!open, open, onClose:()=>this.setState({openId:null}),
+      // Closing the drawer stops the post-wizard poll and drops any half-typed
+      // Log Shipment form, so neither leaks into the next card opened.
+      drawerOpen:!!open, open, onClose:()=>{ this.stopPolling(); this.closeShipForm(); this.setState({openId:null}); },
       nameGateOpen:!st.nameOk, gateDots, gatePad, gateStatusText, gateStatusColor, gateShakeAnim: st.gateShake?'ca-shake .45s':'none', onSwitchUser:()=>this.switchUser(),
       reprintOpen:st.reprintOpen, onCloseReprintModal:()=>this.closeReprintModal(),
       reprintNum:st.reprintNum, reprintLoading:st.reprintLoading,
