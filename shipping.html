@@ -393,9 +393,19 @@ const POLL_MAX_TRIES = 40; // ~4 minutes, then give up quietly (Mark Shipped sti
 class Component extends DCLogic {
   constructor(props){
     super(props);
-    let storedName=''; try{ storedName=localStorage.getItem('caStationWorkerName')||''; }catch(_){}
+    // Accepts an identity established on ANY board -- see anyWorkerName() in
+    // ca-api.js. A PIN is still required when none exists, and to switch.
+    let storedName=''; try{ storedName=(window.CAApi&&window.CAApi.anyWorkerName)?window.CAApi.anyWorkerName():(localStorage.getItem('caStationWorkerName')||''); }catch(_){}
     this.state = {
-      now:new Date(), connection:'loading', tab:'all', q:'', modalId:null,
+      // Filter tab seeds from the URL so a refresh keeps the tab you were
+      // reading (Shipping/Pickup/Split Ship/...) instead of snapping to All.
+      // Validated against 'all' + the real STORED Shipping_Delivery__c values,
+      // so a URL carrying a display LABEL ('Pick-up', 'Local Dropoff') rather
+      // than its stored value ('Pickup', 'Delivery') falls back to All instead
+      // of rendering an empty board with no tab highlighted. See pickTab().
+      now:new Date(), connection:'loading',
+      tab: (window.CAApi&&window.CAApi.readParam) ? window.CAApi.readParam('tab', ['all'].concat((window.CAApi.DELIVERY_METHODS)||['Shipping','Delivery','Pickup','Split Ship','Order Fulfillment']), 'all') : 'all',
+      q:'', modalId:null,
       orders:[],
       // orderId -> array of shipment records (zkmulti__MCShipment__c), loaded
       // when a drawer opens and re-polled while "Ship Now" is in flight.
@@ -447,7 +457,8 @@ class Component extends DCLogic {
       this.setState({ orders:this._demoOrders, connection:'demo' });
     }
   }
-  switchUser(){ try{localStorage.removeItem('caStationWorkerName');}catch(_){} this.setState({nameOk:false, gatePin:'', gateErr:''}); }
+  // Clears BOTH name keys -- see station.html's matching comment.
+  switchUser(){ const a=window.CAApi; if(a&&a.clearIdentity) a.clearIdentity(); else { try{localStorage.removeItem('caStationWorkerName');}catch(_){} } this.setState({nameOk:false, gatePin:'', gateErr:''}); }
   onGatePress(d){ if(this.state.gatePin.length>=4 || this.state.gateSubmitting) return; const pin=this.state.gatePin+d; this.setState({gatePin:pin, gateErr:''}); if(pin.length===4) setTimeout(()=>this.submitGatePin(pin),140); }
   onGateBackspace(){ if(this.state.gateSubmitting) return; this.setState(st=>({gatePin:st.gatePin.slice(0,-1), gateErr:''})); }
   // Verifies the switch-account PIN SERVER-SIDE via the same
@@ -466,7 +477,9 @@ class Component extends DCLogic {
       const api=this._api||window.CAApi; if(!api || !api.workerLogin) throw new Error('CAApi not loaded');
       const res=await api.workerLogin(pin);
       if(!res || !res.name || !res.role) throw new Error('bad_response');
-      try{ localStorage.setItem('caStationWorkerName',res.name); localStorage.setItem(api.ROLE_KEY||'caShopRole',res.role); }catch(_){}
+      // Writes both name keys + role so this carries to every other board.
+      if(api.setIdentity) api.setIdentity(res.name, res.role);
+      else { try{ localStorage.setItem('caStationWorkerName',res.name); localStorage.setItem(api.ROLE_KEY||'caShopRole',res.role); }catch(_){} }
       this.setState({gateSubmitting:false, gatePin:'', gateErr:'', nameOk:true});
     }catch(e){
       const msg = (e && e.status===401) ? 'Incorrect PIN — try again'
@@ -476,7 +489,7 @@ class Component extends DCLogic {
       setTimeout(()=>this.setState({gateShake:false}),500);
     }
   }
-  pickTab(k){ this.setState({tab:k}); }
+  pickTab(k){ this.setState({tab:k}); const a=window.CAApi; if(a&&a.writeParams) a.writeParams({tab:k}); }
 
   // ── Salesforce environment switcher (identical pattern to the other boards) ──
   loadSfEnv(){
@@ -914,7 +927,7 @@ class Component extends DCLogic {
     });
 
     const clock=st.now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-    let wn=''; try{ wn=localStorage.getItem('caStationWorkerName')||''; }catch(_){}
+    let wn=''; try{ wn=(window.CAApi&&window.CAApi.anyWorkerName)?window.CAApi.anyWorkerName():(localStorage.getItem('caStationWorkerName')||''); }catch(_){}
     // Env switcher is admin-only (Anthony) as of 2026-08-13 -- see index.html's
     // matching comment. Reads the shared caShopRole key (set at login.html,
     // and now also by this page's own switch-account PIN pad -- see
