@@ -167,16 +167,32 @@ export const STATION_CONFIG = {
     orderBy: "Production_Method__r.Order__r.Print_Date__c NULLS LAST, Production_Method__r.Order__r.Name",
 
     // The steps a worker taps through. A blank Ink_Sub_Status__c is treated as
-    // the start (== "Not Started") -- several live rows have it empty.
-    subStatusFlow: ["Not Started", "Pantone Label Printed", "Mixing", "Mixed"],
+    // the start (== "Needs Label") -- several live rows have it empty.
+    //
+    // ── 2026-08-14: ink flow went from four stages to three ──
+    // Ink_Sub_Status__c's active values were changed in BOTH sandboxes
+    // (staging + dev2, verified in Setup) to:
+    //     Needs Label | Needs Mixing | Mixed
+    // Label AND API name match on all three, so unlike Order_Substatus__c
+    // ("In Production" stores as "Production") and Shipping_Delivery__c
+    // ("Local Dropoff" stores as "Delivery"), what a worker reads on the
+    // tablet is exactly what this file writes. No alias table needed here --
+    // do not add one.
+    //
+    // The old set was: Not Started | Pantone Label Printed | Mixing | Mixed.
+    // "Pantone Label Printed" and "Mixing" collapsed into the single
+    // "Needs Mixing" stage; "Mixing" was migrated via Salesforce's picklist
+    // Replace and then DEACTIVATED (not deleted), so it still exists as an
+    // inactive value. See LEGACY_SUBSTATUS below for why that matters on read.
+    subStatusFlow: ["Needs Label", "Needs Mixing", "Mixed"],
 
     // sub-status -> Status__c roll-up. No Salesforce flow maintains Status__c
-    // (confirmed 2026-07-07), so the write derives it. Matches the live data:
-    // "Pantone Label Printed" rows sit at "In Progress"; "Mixed" => "Ready".
+    // (confirmed 2026-07-07), so the write derives it. This mapping is the
+    // one specified with the 2026-08-14 rename: Needs Label => Not Started,
+    // Needs Mixing => In Progress, Mixed => Ready.
     statusMap: {
-      "Not Started": "Not Started",
-      "Pantone Label Printed": "In Progress",
-      "Mixing": "In Progress",
+      "Needs Label": "Not Started",
+      "Needs Mixing": "In Progress",
       "Mixed": "Ready",
     },
 
@@ -353,8 +369,42 @@ export function statusForSubStatus(subStatusField, value) {
   for (const key of Object.keys(STATION_CONFIG)) {
     const cfg = STATION_CONFIG[key];
     if (cfg.subStatusField !== subStatusField || !cfg.statusMap) continue;
-    const v = value || (cfg.subStatusFlow && cfg.subStatusFlow[0]);
+    const v = normalizeSubStatus(subStatusField, value) || (cfg.subStatusFlow && cfg.subStatusFlow[0]);
     return cfg.statusMap[v] || null;
   }
   return null;
+}
+
+/* ── legacy sub-status values, READ side only (2026-08-14) ──
+ * The ink rename above collapsed four values into three. Salesforce migrates
+ * records when a picklist value's API name changes, and "Mixing" rows were
+ * moved with a Replace job before that value was deactivated -- so in theory
+ * no Pre_Production_Item__c still holds an old value.
+ *
+ * "In theory" is doing real work in that sentence. A row could have been
+ * written between the Replace job queueing and the rename, restored from a
+ * backup, or created by something outside this app. If one is, the station
+ * board would match it against no stage at all and render a card sitting at
+ * a status the worker can't see or act on -- a silently stuck job.
+ *
+ * So: map the old values onto their new equivalents when READING. This is
+ * deliberately NOT symmetric. Writes still validate against subStatusFlow
+ * (see update-item-status), so the old values can never be written back --
+ * they're inactive on a restricted picklist and Salesforce would reject them
+ * anyway. This only stops a stale row from disappearing from the board.
+ *
+ * Safe to delete once you've confirmed no ink item holds an old value. */
+export const LEGACY_SUBSTATUS = {
+  Ink_Sub_Status__c: {
+    "Not Started": "Needs Label",
+    "Pantone Label Printed": "Needs Mixing",
+    "Mixing": "Needs Mixing",
+  },
+};
+
+/** Old sub-status value -> current one. Returns `value` unchanged if it isn't legacy. */
+export function normalizeSubStatus(subStatusField, value) {
+  const map = LEGACY_SUBSTATUS[subStatusField];
+  if (map && value && Object.prototype.hasOwnProperty.call(map, value)) return map[value];
+  return value;
 }
