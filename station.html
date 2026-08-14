@@ -299,16 +299,23 @@ class Component extends DCLogic {
     // stage lists + field names mirror functions/api/_station.js exactly (the
     // write endpoints reject any sub-status not in the station's subStatusFlow).
     this.STATIONS = {
-      ink:      { label:'Ink Station',    accent:'#2E9CCA', icon:'ti-droplet',   stages:['Not Started','Pantone Label Printed','Mixing','Mixed'], subField:'Ink_Sub_Status__c', identField:'Pantone_Color__c', inventory:'ink', empty:'All inks mixed — nothing waiting.', errorLabel:'Mixing Error — reset', cta:'Mix' },
+      // Ink went from four stages to three on 2026-08-14 (Salesforce
+      // Ink_Sub_Status__c active values, changed in staging + dev2): the old
+      // 'Pantone Label Printed' and 'Mixing' collapsed into one 'Needs Mixing'
+      // stage. These strings ARE the Salesforce API values -- label and API
+      // name match on this field, so no translation layer is needed here (or
+      // wanted: see functions/api/_station.js for the same note). The final
+      // stage is the done stage and never gets its own tab.
+      ink:      { label:'Ink Station',    accent:'#2E9CCA', icon:'ti-droplet',   stages:['Needs Label','Needs Mixing','Mixed'], subField:'Ink_Sub_Status__c', identField:'Pantone_Color__c', inventory:'ink', empty:'All inks mixed — nothing waiting.', errorLabel:'Ink Error — reset', cta:'Mix' },
       screen:   { label:'The Blue Lagoon', accent:'#1FB2A6', icon:'ti-grid-4x4',  stages:['Needs Emulsion','Ready for Exposure','Needs Tape','Ready for Print'], subField:'Screen_Sub_Status__c', identField:'Mesh_Count__c', identSuffix:' mesh', inventory:'screen', empty:'All screens ready — board clear.', errorLabel:'Screen Error — reclaim', cta:'Prep' },
       transfer: { label:'Transfer Station', accent:'#E0B23C', icon:'ti-flame',    stages:['Not Received','Transfers Received','Transfers Cut/Ready'], subField:'Transfers_Sub_Status__c', identField:'Transfer_Type__c', inventory:null, empty:'All transfers cut and ready.', errorLabel:'Transfer Error — reset', cta:'Cut' },
       garment:  { label:'Garment Station', accent:'#7FA644', icon:'ti-shirt',     source:'order', stages:['Not Received','Partial','Counted In','Staged'], inventory:null, empty:'All garments counted in and staged.', errorLabel:'Recount', cta:'Count' },
     };
     this._demoItems = {
       ink:[
-        { id:'ink-1', order:'GOA-4809', customer:'Cypress Trail 10K', ident:'PMS 186 · Red', qty:'2.4 gal', dueLabel:'Due tomorrow', urg:'soon', days:1, stage:'Mixing' },
-        { id:'ink-2', order:'GOA-4838', customer:'Northgate Prep', ident:'PMS 123 · Gold', qty:'1.1 gal', dueLabel:'Jul 24 · 4d', urg:'soon', days:4, stage:'Not Started' },
-        { id:'ink-3', order:'GOA-4842', customer:'Summit Cycling', ident:'White · Base', qty:'3.0 gal', dueLabel:'Jul 25 · 5d', urg:'ok', days:5, stage:'Not Started' },
+        { id:'ink-1', order:'GOA-4809', customer:'Cypress Trail 10K', ident:'PMS 186 · Red', qty:'2.4 gal', dueLabel:'Due tomorrow', urg:'soon', days:1, stage:'Needs Mixing' },
+        { id:'ink-2', order:'GOA-4838', customer:'Northgate Prep', ident:'PMS 123 · Gold', qty:'1.1 gal', dueLabel:'Jul 24 · 4d', urg:'soon', days:4, stage:'Needs Label' },
+        { id:'ink-3', order:'GOA-4842', customer:'Summit Cycling', ident:'White · Base', qty:'3.0 gal', dueLabel:'Jul 25 · 5d', urg:'ok', days:5, stage:'Needs Label' },
         { id:'ink-4', order:'GOA-4790', customer:'Lakeside VBS', ident:'PMS 286 · Royal', qty:'1.8 gal', dueLabel:'Ship today', urg:'today', days:0, stage:'Mixed' },
       ],
       screen:[
@@ -392,7 +399,7 @@ class Component extends DCLogic {
         items = recs.filter(r=>(r.Receiving_Status__c||'Not Received')!=='Staged').map(r=>{ const piv=api.pivotItems(r), due=api.dueInfo(r.Print_Date__c); return { id:r.Id, order:api.text(r.GOA_Order_Number__c)||r.OrderNumber||r.Id, customer:api.text(r.Customer_Order_Name__c)||api.text(r.Account&&r.Account.Name)||'—', ident:piv.garment, sizes:piv.sizes, qty:piv.qty+' pcs', dueLabel:due.label, urg:due.urg, days:due.days, stage:(r.Receiving_Status__c||'Not Received'), mockupUrl:r.DesignMockupUrl||null, notes:'' }; });
       } else {
         const recs=await api.getStationItems(station);
-        items = recs.map(r=>{ const o=(r.Production_Method__r&&r.Production_Method__r.Order__r)||{}; const due=api.dueInfo(o.Print_Date__c); const idv=r[cfg.identField]||''; return { id:r.Id, order:api.text(o.GOA_Order_Number__c)||'', customer:api.text(o.Customer_Order_Name__c)||api.text(o.Name)||'—', ident:(idv?api.text(idv)+(cfg.identSuffix||''):cfg.stages[0]), qty:'', dueLabel:due.label, urg:due.urg, days:due.days, stage:(r[cfg.subField]||cfg.stages[0]), mockupUrl:(o.DesignMockupUrl||null), notes:api.text(r.Notes__c)||'' }; });
+        items = recs.map(r=>{ const o=(r.Production_Method__r&&r.Production_Method__r.Order__r)||{}; const due=api.dueInfo(o.Print_Date__c); const idv=r[cfg.identField]||''; return { id:r.Id, order:api.text(o.GOA_Order_Number__c)||'', customer:api.text(o.Customer_Order_Name__c)||api.text(o.Name)||'—', ident:(idv?api.text(idv)+(cfg.identSuffix||''):'\u2014'), qty:'', dueLabel:due.label, urg:due.urg, days:due.days, stage:(r[cfg.subField]||cfg.stages[0]), mockupUrl:(o.DesignMockupUrl||null), notes:api.text(r.Notes__c)||'' }; });
       }
       this.setState(st=>({ items:Object.assign({},st.items,{[station]:items}), connection:'live' }));
       if(cfg.inventory){ try { const inv=await api.getInventory(cfg.inventory); this.setState(st=>({ inv:Object.assign({},st.inv,{[cfg.inventory]:inv}) })); } catch(_){} }
@@ -494,7 +501,7 @@ class Component extends DCLogic {
   }
   // Free status pick -- jumps straight to whatever status the worker tapped,
   // in any direction, no forced order. Every station's modal uses this now
-  // (not just garment): a worker can undo "Mixed" back to "Not Started", or
+  // (not just garment): a worker can undo "Mixed" back to "Needs Label", or
   // jump "Needs Emulsion" straight to "Ready for Print", without stepping
   // through every stage in between. Replaces the old advance()-only flow,
   // which only ever let a worker move one step forward.
