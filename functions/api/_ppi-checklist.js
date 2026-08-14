@@ -41,7 +41,7 @@
  * generic Status__c, so their "ready" test is just Status__c === 'Ready'.
  */
 import { runQuery, sfFetch, apiVersion } from "./_sf.js";
-import { STATION_CONFIG } from "./_station.js";
+import { STATION_CONFIG, normalizeSubStatus } from "./_station.js";
 import { rollupChecklistToOrder } from "./_pm-rollup.js";
 
 // Embroidery item types -- no tablet station, no sub-status pipeline, just
@@ -51,8 +51,21 @@ const EXTRA_TYPES = {
   Thread: { checklistField: "Thread_Color_Materials__c" },
 };
 
-function idxOf(flow, val) {
-  const i = flow.indexOf(val || flow[0]); // blank sub-status = the pipeline's start
+// Position of a sub-status within its pipeline. Takes the FIELD NAME too so a
+// pre-rename value (see LEGACY_SUBSTATUS in _station.js -- e.g. ink's retired
+// "Pantone Label Printed") maps onto its current equivalent before the lookup
+// instead of falling through to the -1 clamp below.
+//
+// The clamp still exists as a backstop, but it must not be relied on: it
+// reports EVERY unrecognised value as stage 0. Today that happens to be
+// harmless for ink (every legacy value is genuinely below "Mixed", the only
+// atOrAfter target) and it is what keeps screen's out-of-pipeline "Not Clean"
+// from throwing. It would stop being harmless the moment a rollup rule
+// targeted a non-terminal stage -- transfer already has two rules -- so
+// normalise first and let the clamp catch only true unknowns.
+function idxOf(flow, val, subStatusField) {
+  const v = subStatusField ? normalizeSubStatus(subStatusField, val) : val;
+  const i = flow.indexOf(v || flow[0]); // blank sub-status = the pipeline's start
   return i < 0 ? 0 : i;
 }
 
@@ -149,8 +162,8 @@ export async function rollupItemToMethod(env, itemId) {
 
       const methodPayload = {};
       for (const m of cfg.orderRollup) {
-        const target = idxOf(flow, m.atOrAfter);
-        methodPayload[m.field] = items.every((it) => idxOf(flow, it[cfg.subStatusField]) >= target);
+        const target = idxOf(flow, m.atOrAfter, cfg.subStatusField);
+        methodPayload[m.field] = items.every((it) => idxOf(flow, it[cfg.subStatusField], cfg.subStatusField) >= target);
       }
       return writeMethodPayload(env, methodId, methodPayload);
     }
