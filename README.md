@@ -73,6 +73,25 @@ deploy, open DevTools → Network → reload → check `/api/orders`:
 - **Timers** stored as seconds, shown adaptively (`SS`/`M:SS`/`H:MM:SS`).
 - **Specifications for Printing** left as the single field.
 
+## Scheduling: Print Date/Duration → Production Run prefill
+**Added 2026-08-14.** Salesforce's "Close and Create Order" quick action
+(Opportunity → `OrderScheduling` flow, now V31+) collects a Print Date &
+Time and a Duration (hours) on its scheduling screen. The flow's
+`UpdateOrder` step now writes `Duration__c` onto the Order in addition to
+`Print_Date__c` (which it already wrote); Order's pre-existing
+`Print_End_Date_Time__c` formula field (`Print_Date__c + Duration__c/24`,
+falling back to `Print_Date__c + 2h` if Duration__c is blank) then
+auto-computes the scheduled end time — no new Salesforce fields were needed,
+just the missing mapping.
+
+`/api/orders`, `/api/production-orders`, and `/api/inbox` all now select
+`Duration__c`/`Print_End_Date_Time__c` alongside `Print_Date__c`. Both
+dashboards' "Create Production Run" / "New Run" forms prefill Scheduled
+Start from `Print_Date__c` and Scheduled End from `Print_End_Date_Time__c`
+when present (still editable, still blank if the order never went through
+that flow) — a manager no longer has to retype what was already set when
+the order was created.
+
 ## Order tracking / stage placement
 The Production Dashboard reads your existing **`/api/production-orders`**
 endpoint (filters by `Order_Substatus__c`), not `/api/orders`. That's the one
