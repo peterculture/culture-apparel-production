@@ -781,6 +781,14 @@ class Component extends DCLogic {
             pct, progressLabel, mis:Number(r.TotalQtyMisprints__c)||0, mockupUrl:r.DesignMockupUrl||null,
             printSpecs:api.text(r.Specifications_for_Printing__c)||'', specialNotes:api.text(r.Special_Notes__c)||'',
             shipDelivery:r.Shipping_Delivery__c||'', labelPrinted:!!r.Shipping_Label_Printed__c,
+            // Carried onto the card so "New Run" can prefill Scheduled
+            // Start/End from what's already set on the order (see
+            // openRunCreate below) -- Print_Date__c is the order's Print
+            // Date & Time (set via the Close and Create Order flow's
+            // ComplexityandDate screen), Print_End_Date_Time__c is a
+            // pre-existing formula field (Print_Date__c + Duration__c/24)
+            // that already computes the end time once Duration__c is set.
+            printDate:r.Print_Date__c||null, printEndDateTime:r.Print_End_Date_Time__c||null,
             // This method's OWN timers -- each Production_Method__c now has
             // its own Print_Setup_Timer__c/Production_Timer__c in Salesforce,
             // so sibling methods on the same order time independently. The
@@ -1125,7 +1133,17 @@ class Component extends DCLogic {
   }
   // ── Inline "New Run" quick-create (this board has no separate Create
   // Production Run modal like pre-production.html does) ──
-  openRunCreate(methodId){ this.setState({ runCreateMethodId:methodId, runCreateForm:{ pressId:null, pressName:'', pressQ:'', startDate:'', startTime:'', endDate:'', endTime:'', qty:'' }, runCreatePressResults:[], runCreateErr:'' }); }
+  // printDate/printEndDateTime (added 2026-08-14) are the card's own
+  // Order.Print_Date__c / Order.Print_End_Date_Time__c, passed in by the
+  // "New Run" button below -- when present, they prefill Scheduled
+  // Start/End so a manager doesn't have to retype what was already set
+  // when the order was created (Close and Create Order's Print Date &
+  // Time + Duration). Either half is skipped if its source field is blank,
+  // same as before.
+  openRunCreate(methodId, printDate, printEndDateTime){
+    const start=this.splitDT(printDate), end=this.splitDT(printEndDateTime);
+    this.setState({ runCreateMethodId:methodId, runCreateForm:{ pressId:null, pressName:'', pressQ:'', startDate:start.date, startTime:start.time, endDate:end.date, endTime:end.time, qty:'' }, runCreatePressResults:[], runCreateErr:'' });
+  }
   closeRunCreate(){ this.setState({runCreateMethodId:null, runCreateForm:null, runCreatePressResults:[], runCreateErr:''}); }
   setRunCreateField(patch){ this.setState(st=>({runCreateForm:Object.assign({}, st.runCreateForm, patch)})); }
   runCreatePressSearch(q){ this.setRunCreateField({pressQ:q, pressId:null, pressName:''}); if(!this._api) return; clearTimeout(this._rcpt); this._rcpt=setTimeout(()=>{ this._api.searchPresses(q).then(r=>this.setState({runCreatePressResults:r})).catch(()=>{}); },250); }
@@ -1524,7 +1542,7 @@ class Component extends DCLogic {
         // means a worker never sees a dead-end button in the first place.
         canManage:!!(window.CAApi&&window.CAApi.canAccessManagement&&window.CAApi.canAccessManagement()),
         runsView, runsEmpty:runsView.length===0, runsLoading: st.runsLoadingFor===src.id,
-        runCreateOpen:!!rc, runCreate, onNewRun:()=> st.runCreateMethodId===src.id ? this.closeRunCreate() : this.openRunCreate(src.id),
+        runCreateOpen:!!rc, runCreate, onNewRun:()=> st.runCreateMethodId===src.id ? this.closeRunCreate() : this.openRunCreate(src.id, src.printDate, src.printEndDateTime),
         newRunLabel: rc?'Cancel':'New Run', newRunIcon: rc?'ti-x':'ti-plus',
         assignees, timers,
         hasMockup:!!d.mockupUrl, noMockup:!d.mockupUrl, mockupNode: d.mockupUrl?React.createElement('img',{src:d.mockupUrl,alt:'Production mockup',style:{width:96,height:96,flexShrink:0,borderRadius:11,border:'1px solid #232327',objectFit:'cover',background:'#121215'}}):null, onZk:()=>this.openZk(src.orderId,src.num), zkErrMsg:(st.zkErr&&st.zkErr[src.orderId])||'', hasZkErr:!!(st.zkErr&&st.zkErr[src.orderId]),
