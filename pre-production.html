@@ -734,7 +734,9 @@ class Component extends DCLogic {
     this._demoOrders[2].Design_Received__c=true; this._demoOrders[2].Screens_Completed__c=true; this._demoOrders[2].Mix_Inks__c=true; // GOA-4838
     this._demoOrders[3].Digitize_File__c=true; // GOA-4845
     this._demoOrders[5].Transfers_Received__c=true; // GOA-4847
-    let storedName=''; try{ storedName=localStorage.getItem('caShopWorkerName')||''; }catch(_){}
+    // Accepts an identity established on ANY board, including station.html /
+    // shipping.html which write their own key -- see anyWorkerName() in ca-api.js.
+    let storedName=''; try{ storedName=(window.CAApi&&window.CAApi.anyWorkerName)?window.CAApi.anyWorkerName():(localStorage.getItem('caShopWorkerName')||''); }catch(_){}
     this.state = {
       now:new Date(), nameOk: VALID_NAMES.includes(storedName),
       // Switch-account PIN pad (2026-08-13) -- see index.html's matching
@@ -887,7 +889,16 @@ class Component extends DCLogic {
   // 'manager' role from a prior login could combine with re-picking
   // Gian/Anthony/Parker's name here to grant manager rights with no PIN
   // re-entry at all, defeating confirmManager()'s live re-check.
-  switchUser(){ try{localStorage.removeItem('caShopWorkerName'); localStorage.removeItem('caShopRole');}catch(_){} this.setState({nameOk:false, gatePin:'', gateErr:''}); }
+  // Clears BOTH name keys (shared + station.html/shipping.html's) plus the
+  // role, so switching away can't be undone by the other key still holding
+  // the previous person -- see clearIdentity() in ca-api.js.
+  // Also drops back to the BOARD view and clears ?view=mgr. Without this the
+  // gate merely covered the Management view: the next person to enter their
+  // PIN landed inside Management with canOpenMgr() never re-evaluated, so a
+  // worker could inherit a manager's open Management session. Now switching
+  // account always returns to the board and Management must be re-opened,
+  // which re-runs the live role check.
+  switchUser(){ const a=window.CAApi; if(a&&a.clearIdentity) a.clearIdentity(); else { try{localStorage.removeItem('caShopWorkerName');}catch(_){} } try{localStorage.removeItem('caShopRole');}catch(_){} if(a&&a.writeParams) a.writeParams({view:null, addMethodForOrder:null}); this.setState({nameOk:false, gatePin:'', gateErr:'', view:'board', mgrId:null, createdPanel:null, runModalOpen:false}); }
   onGatePress(d){ if(this.state.gatePin.length>=4 || this.state.gateSubmitting) return; const pin=this.state.gatePin+d; this.setState({gatePin:pin, gateErr:''}); if(pin.length===4) setTimeout(()=>this.submitGatePin(pin),140); }
   onGateBackspace(){ if(this.state.gateSubmitting) return; this.setState(st=>({gatePin:st.gatePin.slice(0,-1), gateErr:''})); }
   // Verifies the switch-account PIN SERVER-SIDE via the same
@@ -900,7 +911,9 @@ class Component extends DCLogic {
       const api=this._api||window.CAApi; if(!api || !api.workerLogin) throw new Error('CAApi not loaded');
       const res=await api.workerLogin(pin);
       if(!res || !res.name || !res.role) throw new Error('bad_response');
-      try{ localStorage.setItem('caShopWorkerName',res.name); localStorage.setItem('caShopRole',res.role); }catch(_){}
+      // Writes both name keys + role so the Station and Shipping boards accept
+      // this same verification without prompting again.
+      { const a=window.CAApi; if(a&&a.setIdentity) a.setIdentity(res.name,res.role); else { try{ localStorage.setItem('caShopWorkerName',res.name); localStorage.setItem('caShopRole',res.role); }catch(_){} } }
       this.setState({gateSubmitting:false, gatePin:'', gateErr:'', nameOk:true});
     }catch(e){
       const msg = (e && e.status===401) ? 'Incorrect PIN — try again'
@@ -989,11 +1002,20 @@ class Component extends DCLogic {
     window.alert('Only managers can open Pre-Production Management.');
     return false;
   }
-  openMgr(){ if(!this.canOpenMgr()) return; this.setState({view:'mgr', mgrId:null, mgrErr:'', mgrMsg:'', mgrQ:''}); this.loadInbox(); }
+  // ?view=mgr was previously only ever set by the sidebar deep link, so
+  // opening Management from inside the page left the URL on the board view
+  // and a refresh dropped the manager back to the board. Writing it here
+  // makes the two entry points behave identically. canOpenMgr()'s live
+  // role re-check still runs on load (see the deep-link handler), so a
+  // worker landing on this URL is still bounced -- persisting the param
+  // does not grant access to it.
+  openMgr(){ if(!this.canOpenMgr()){ const b=window.CAApi; if(b&&b.writeParams) b.writeParams({view:null}); return; } this.setState({view:'mgr', mgrId:null, mgrErr:'', mgrMsg:'', mgrQ:''}); const a=window.CAApi; if(a&&a.writeParams) a.writeParams({view:'mgr'}); this.loadInbox(); }
   // Also the general "leave Management" exit -- clears the created-method
   // panel and Create Production Run modal too, so returning here always
   // lands cleanly back on the board regardless of where the manager was.
-  closeMgr(){ this.setState({view:'board', mgrId:null, createdPanel:null, runModalOpen:false}); }
+  // Drops ?view=mgr (and the one-shot addMethodForOrder deep-link param, so
+  // a refresh after backing out doesn't re-open the form for that order).
+  closeMgr(){ this.setState({view:'board', mgrId:null, createdPanel:null, runModalOpen:false}); const a=window.CAApi; if(a&&a.writeParams) a.writeParams({view:null, addMethodForOrder:null}); }
   async loadInbox(){ if(!this._api) this._api=window.CAApi; if(!this._api || this.state.connection!=='live'){ this.setState({inbox:[], inboxLoaded:true}); return; } try{ const recs=await this._api.getInbox(); this.setState({inbox:recs, inboxLoaded:true}); }catch(_){ this.setState({inbox:[], inboxLoaded:true}); } }
   pickInbox(id){
     const rec=(this.state.inbox||[]).find(r=>r.Id===id)||{};
@@ -1023,6 +1045,10 @@ class Component extends DCLogic {
     // mgrOrder lookup (line ~955), which both already do this correctly.
     const src=(this.state.orders||[]).find(o=>o.orderId===orderId);
     const form=Object.assign(this.defaultForm(),{ specs:(src&&src.printSpecs)||'', notes:(src&&src.specialNotes)||'' });
+    // Persist the Management view for this entry point too, so refreshing
+    // after arriving via index.html's "Add another method" keeps the form up
+    // rather than dropping back to the board.
+    { const b=window.CAApi; if(b&&b.writeParams) b.writeParams({view:'mgr'}); }
     this.setState({view:'mgr', mgrId:orderId, mgrSource:'order', form, vendorResults:[], planResults:[], mgrErr:'', mgrMsg:'', openId:null});
   }
   // FIXED 2026-07-22: these only ever pushed to Salesforce and updated the
@@ -1738,7 +1764,7 @@ class Component extends DCLogic {
         itemCreate: this.itemCreateView(src.orderId, src.id) });
     }
 
-    let wn='Priya R.'; try{ wn=localStorage.getItem('caShopWorkerName')||wn; }catch(_){}
+    let wn='Priya R.'; try{ wn=((window.CAApi&&window.CAApi.anyWorkerName)?window.CAApi.anyWorkerName():localStorage.getItem('caShopWorkerName'))||wn; }catch(_){}
     // Env switcher is admin-only (Anthony) as of 2026-08-13 -- see index.html's
     // matching comment.
     const isAdmin = !!(window.CAApi && window.CAApi.isAdmin && window.CAApi.isAdmin());
