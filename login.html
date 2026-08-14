@@ -97,7 +97,7 @@ class Component extends DCLogic {
   // already has from a still-valid earlier login, same as every other board.
   // VALID_NAMES.includes(n) guards against resuming as someone who's been
   // removed from the roster since they last logged in.
-  componentDidMount(){ this._kd=(e)=>this.onKey(e); window.addEventListener('keydown',this._kd); try{ const r=localStorage.getItem('caShopRole'), n=localStorage.getItem('caShopWorkerName'); if(r && n && VALID_NAMES.includes(n)){ this.setState({role:r,name:n,screen:'done'}); } }catch(_){} }
+  componentDidMount(){ this._kd=(e)=>this.onKey(e); window.addEventListener('keydown',this._kd); try{ const r=localStorage.getItem('caShopRole'), n=((window.CAApi&&window.CAApi.anyWorkerName)?window.CAApi.anyWorkerName():localStorage.getItem('caShopWorkerName')); if(r && n && VALID_NAMES.includes(n)){ this.setState({role:r,name:n,screen:'done'}); } }catch(_){} }
   componentWillUnmount(){ window.removeEventListener('keydown',this._kd); }
   onKey(e){ if(this.state.screen!=='pin' || this.state.submitting) return; if(/^[0-9]$/.test(e.key)) this.press(e.key); else if(e.key==='Backspace') this.backspace(); }
   press(d){ if(this.state.pin.length>=4 || this.state.submitting) return; const pin=this.state.pin+d; this.setState({pin,err:''}); if(pin.length===4) setTimeout(()=>this.submit(pin),140); }
@@ -114,7 +114,12 @@ class Component extends DCLogic {
       const api=window.CAApi; if(!api || !api.workerLogin) throw new Error('CAApi not loaded');
       const res=await api.workerLogin(pin);
       if(!res || !res.name || !res.role) throw new Error('bad_response');
-      try{ localStorage.setItem('caShopRole',res.role); localStorage.setItem('caShopWorkerName',res.name); }catch(_){}
+      // Writes BOTH worker-name keys plus the role (see setIdentity() in
+      // ca-api.js): station.html and shipping.html read their own key, so
+      // logging in here used to leave those two boards still asking for the
+      // PIN that had just been entered. Falls back to the original direct
+      // writes if ca-api.js hasn't loaded, so login never hard-depends on it.
+      { const a=window.CAApi; if(a&&a.setIdentity) a.setIdentity(res.name,res.role); else { try{ localStorage.setItem('caShopRole',res.role); localStorage.setItem('caShopWorkerName',res.name); }catch(_){} } }
       this.setState({submitting:false, role:res.role, name:res.name, pin:'', screen:'done'});
     }catch(e){
       const msg = (e && e.status===401) ? 'Incorrect PIN — try again'
@@ -124,7 +129,11 @@ class Component extends DCLogic {
       setTimeout(()=>this.setState({shake:false}),500);
     }
   }
-  logout(){ try{localStorage.removeItem('caShopRole');localStorage.removeItem('caShopWorkerName');}catch(_){} this.setState({screen:'pin',pin:'',role:null,name:'',err:''}); }
+  // Must go through CAApi.logout(), which clears the role AND BOTH worker-name
+  // keys. Clearing only this page's two keys left 'caStationWorkerName' behind,
+  // and since anyWorkerName() now accepts either key, station.html and
+  // shipping.html would have admitted the just-logged-out worker with no PIN.
+  logout(){ const a=window.CAApi; if(a&&a.logout) a.logout(); else { try{localStorage.removeItem('caShopRole');localStorage.removeItem('caShopWorkerName');localStorage.removeItem('caStationWorkerName');}catch(_){} } this.setState({screen:'pin',pin:'',role:null,name:'',err:''}); }
 
   renderVals(){
     const st=this.state;
