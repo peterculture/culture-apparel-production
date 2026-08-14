@@ -30,6 +30,88 @@
   function workerName(){ try { return localStorage.getItem(NAME_KEY) || ''; } catch (_) { return ''; } }
   function setRole(r){ try { localStorage.setItem(ROLE_KEY, r); } catch (_) {} }
   function setWorkerName(n){ try { localStorage.setItem(NAME_KEY, (n || '').slice(0, 80)); } catch (_) {} }
+
+  /* ── one identity across all five boards (2026-08-14) ──
+     station.html and shipping.html have always stored the signed-in worker
+     under their OWN key, STATION_NAME_KEY, while login.html/index.html/
+     pre-production.html used NAME_KEY. Same person, same tablet, same PIN --
+     two unrelated localStorage entries. The visible symptom was that signing
+     in anywhere in one group and then opening a board from the other group
+     re-prompted for a PIN that had just been entered, most obviously when
+     tapping "Station Board" in the sidebar right after logging in.
+
+     anyWorkerName() is the read side: whichever key is populated wins, with
+     NAME_KEY preferred since login.html writes it. setIdentity() is the
+     write side: every successful PIN verification now writes BOTH name keys
+     plus the shared role, so the next board -- in either group -- already
+     knows who is here.
+
+     This deliberately does NOT weaken any gate. A PIN is still required to
+     ESTABLISH an identity (login.html, or any board's switch-account pad)
+     and still required to CHANGE one. All that changed is that an identity
+     already verified by one of those gates now counts on every board instead
+     of only on the half of the app that happened to write that key. Switch
+     Account still clears identity and re-prompts; logout() still clears both
+     keys (it already knew about both -- see below). */
+  var STATION_NAME_KEY = 'caStationWorkerName';
+  function anyWorkerName(){
+    try { return localStorage.getItem(NAME_KEY) || localStorage.getItem(STATION_NAME_KEY) || ''; } catch (_) { return ''; }
+  }
+  function setIdentity(n, r){
+    var nm = (n || '').slice(0, 80);
+    try {
+      localStorage.setItem(NAME_KEY, nm);
+      localStorage.setItem(STATION_NAME_KEY, nm);
+      if (r) localStorage.setItem(ROLE_KEY, r);
+    } catch (_) {}
+  }
+  /* Clears the signed-in worker from BOTH name keys AND the role -- what
+     "Switch Account" wants on every board. Two reasons the role has to go:
+     (1) clearing only one name key left the other populated and
+     anyWorkerName() would instantly re-admit the person just switched away
+     from; (2) leaving ROLE_KEY set meant a tablet with NO signed-in worker
+     still satisfied the role-only isAdmin()/canAccessManagement() checks, so
+     the env switcher and Pre-Production Management stayed reachable behind
+     the gate. Role is re-established by the next setIdentity(). */
+  function clearIdentity(){
+    try { localStorage.removeItem(NAME_KEY); localStorage.removeItem(STATION_NAME_KEY); localStorage.removeItem(ROLE_KEY); } catch (_) {}
+  }
+
+  /* ── refresh returns you to the view you were on (2026-08-14) ──
+     Every board keeps its "which view am I looking at" state (station.html's
+     selected station and tab, shipping.html's filter tab, pre-production's
+     board-vs-Management) in component state only. A refresh rebuilt that
+     state from its hardcoded default, so reloading the Ink station landed on
+     Ink only by coincidence -- reloading the Transfer station also landed on
+     Ink, and reloading the Management view dropped back to the board. From
+     the floor that reads as "refresh sends me to a random dashboard."
+
+     These two helpers move that state into the query string. replaceState is
+     used rather than pushState on purpose: switching stations is not a
+     navigation, and pushing history would turn the tablet's Back button into
+     a station-by-station undo of the whole shift.
+
+     readParam validates against an allow-list and falls back to the same
+     default the page used before, so a hand-edited or stale URL can never
+     put a board into a state it has no rendering path for. */
+  function readParam(key, allowed, fallback){
+    try {
+      var v = new URLSearchParams(window.location.search).get(key);
+      if (v && (!allowed || allowed.indexOf(v) !== -1)) return v;
+    } catch (_) {}
+    return fallback;
+  }
+  function writeParams(patch){
+    try {
+      var url = new URL(window.location.href);
+      Object.keys(patch).forEach(function (k) {
+        var v = patch[k];
+        if (v == null || v === '') url.searchParams.delete(k);
+        else url.searchParams.set(k, v);
+      });
+      window.history.replaceState(null, '', url.pathname + (url.search || '') + url.hash);
+    } catch (_) {}
+  }
   // Clears both this shared identity (used by index.html/pre-production.html)
   // AND station.html/shipping.html's separate 'caStationWorkerName' key --
   // those two pages never adopted ROLE_KEY/NAME_KEY (see their own header
@@ -614,7 +696,7 @@
   ];
 
   window.CAApi = {
-    VALID_NAMES: VALID_NAMES, ROLE_KEY: ROLE_KEY, NAME_KEY: NAME_KEY, role: role, workerName: workerName, setRole: setRole, setWorkerName: setWorkerName, logout: logout, isManager: isManager, isAdmin: isAdmin, canAccessManagement: canAccessManagement, confirmManager: confirmManager, MANAGER_NAMES: MANAGER_NAMES, workerLogin: workerLogin,
+    VALID_NAMES: VALID_NAMES, ROLE_KEY: ROLE_KEY, NAME_KEY: NAME_KEY, STATION_NAME_KEY: STATION_NAME_KEY, role: role, workerName: workerName, anyWorkerName: anyWorkerName, setRole: setRole, setWorkerName: setWorkerName, setIdentity: setIdentity, clearIdentity: clearIdentity, readParam: readParam, writeParams: writeParams, logout: logout, isManager: isManager, isAdmin: isAdmin, canAccessManagement: canAccessManagement, confirmManager: confirmManager, MANAGER_NAMES: MANAGER_NAMES, workerLogin: workerLogin,
     SUBSTATUS_VALUE: SUBSTATUS_VALUE, SUBSTATUS_LABEL: SUBSTATUS_LABEL, STAGE_KEY: STAGE_KEY, STAGE_SUBSTATUS: STAGE_SUBSTATUS, stageOf: stageOf, stageOfMethod: stageOfMethod,
     DELIVERY_LABEL: DELIVERY_LABEL, DELIVERY_METHODS: DELIVERY_METHODS, formatAddress: formatAddress,
     NAV_BOARDS: NAV_BOARDS, buildNavBoards: buildNavBoards,
