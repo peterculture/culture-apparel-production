@@ -858,6 +858,11 @@ class Component extends DCLogic {
             isReprint: !!r.Misprint__c,
             qty:piv.qty, garment:piv.garment, sizes:piv.sizes, dueLabel:due.label, urg:due.urg,
             worker:null, workerName:wn||null, recv:(api.RECV_FROM_SF[r.Receiving_Status__c]||'none'), printDateISO:r.Print_Date__c||null,
+            // Carried onto the card so the "Create Production Run" modal can
+            // prefill Scheduled Start/End -- see referenceForOrder() and
+            // defaultRunForm() below. Print_End_Date_Time__c is a
+            // pre-existing formula field (Print_Date__c + Duration__c/24).
+            printEndDateTimeISO:r.Print_End_Date_Time__c||null,
             mockupUrl:r.DesignMockupUrl||null, printSpecs:api.text(r.Specifications_for_Printing__c)||'', specialNotes:api.text(r.Special_Notes__c)||'',
             methods:(api.methodsList?api.methodsList(r):[]),
             Design_Received__c: !!pm.Design_Received__c, Screens_Completed__c: !!pm.Screens_Completed__c, Mix_Inks__c: !!pm.Mix_Inks__c,
@@ -1386,19 +1391,30 @@ class Component extends DCLogic {
     const boardCard=(this.state.orders||[]).find(o=>o.orderId===oid);
     if(boardCard){
       const sizeCells=String(boardCard.sizes||'').split('·').map(t=>t.trim()).filter(Boolean).map(tok=>{ const mm=tok.match(/^([A-Za-z0-9]+?)(\d+)$/); return mm?{label:mm[1],qty:mm[2]}:{label:tok,qty:''}; });
-      return { customer:boardCard.customer||'', num:boardCard.num||'', qty:boardCard.qty||'', garment:boardCard.garment||'', sizeCells, printSpecs:boardCard.printSpecs||'', specialNotes:boardCard.specialNotes||'' };
+      return { customer:boardCard.customer||'', num:boardCard.num||'', qty:boardCard.qty||'', garment:boardCard.garment||'', sizeCells, printSpecs:boardCard.printSpecs||'', specialNotes:boardCard.specialNotes||'', printDateISO:boardCard.printDateISO||null, printEndDateTimeISO:boardCard.printEndDateTimeISO||null };
     }
     const inboxRec=(this.state.inbox||[]).find(r=>r.Id===oid);
     if(inboxRec && api && api.pivotItems){
       const piv=api.pivotItems(inboxRec), t=(v)=>(api.text?api.text(v):(v||''));
-      return { customer:t(inboxRec.Customer_Order_Name__c)||t(inboxRec.Account&&inboxRec.Account.Name)||'—', num:t(inboxRec.GOA_Order_Number__c)||inboxRec.OrderNumber||inboxRec.Id, qty:piv.qty, garment:piv.garment, sizeCells:piv.sizeCells, printSpecs:t(inboxRec.Specifications_for_Printing__c), specialNotes:t(inboxRec.Special_Notes__c) };
+      return { customer:t(inboxRec.Customer_Order_Name__c)||t(inboxRec.Account&&inboxRec.Account.Name)||'—', num:t(inboxRec.GOA_Order_Number__c)||inboxRec.OrderNumber||inboxRec.Id, qty:piv.qty, garment:piv.garment, sizeCells:piv.sizeCells, printSpecs:t(inboxRec.Specifications_for_Printing__c), specialNotes:t(inboxRec.Special_Notes__c), printDateISO:inboxRec.Print_Date__c||null, printEndDateTimeISO:inboxRec.Print_End_Date_Time__c||null };
     }
-    return { customer:'', num:'', qty:'', garment:'', sizeCells:[], printSpecs:'', specialNotes:'' };
+    return { customer:'', num:'', qty:'', garment:'', sizeCells:[], printSpecs:'', specialNotes:'', printDateISO:null, printEndDateTimeISO:null };
   }
 
   /* ── Create Production Run modal ── */
-  defaultRunForm(){ return { pressId:null, pressName:'', pressQ:'', startDate:'', startTime:'', endDate:'', endTime:'', qty:'' }; }
-  openRunModal(){ this.setState({ runModalOpen:true, runForm:this.defaultRunForm(), runPressResults:[], runErr:'', runMsg:'' }); }
+  // printDate/printEndDateTime (added 2026-08-14) prefill Scheduled
+  // Start/End from Order.Print_Date__c / Order.Print_End_Date_Time__c when
+  // present -- see openRunModal()/openRunModalForCard() below, both of
+  // which pull these off referenceForOrder(). Either half is left blank if
+  // its source field isn't set, same as before.
+  defaultRunForm(printDate, printEndDateTime){
+    const start=this.splitDT(printDate), end=this.splitDT(printEndDateTime);
+    return { pressId:null, pressName:'', pressQ:'', startDate:start.date, startTime:start.time, endDate:end.date, endTime:end.time, qty:'' };
+  }
+  openRunModal(){
+    const ref=this.referenceForOrder((this.state.createdPanel||{}).orderId);
+    this.setState({ runModalOpen:true, runForm:this.defaultRunForm(ref.printDateISO, ref.printEndDateTimeISO), runPressResults:[], runErr:'', runMsg:'' });
+  }
   closeRunModal(){ this.setState({ runModalOpen:false }); }
   setRunField(patch){ this.setState(st=>({ runForm:Object.assign({}, st.runForm||this.defaultRunForm(), patch) })); }
   runPressSearch(q){ this.setRunField({pressQ:q, pressId:null, pressName:''}); if(!this._api) return; clearTimeout(this._rpt); this._rpt=setTimeout(()=>{ this._api.searchPresses(q).then(r=>this.setState({runPressResults:r})).catch(()=>{}); },250); }
@@ -1459,9 +1475,10 @@ class Component extends DCLogic {
   // notes) and submitRun() both work identically regardless of entry point --
   // they only ever read pmId/orderId/methodLabel off createdPanel.
   openRunModalForCard(pmId, orderId, methodLabel){
+    const ref=this.referenceForOrder(orderId);
     this.setState({
       createdPanel:{ pmId, orderId, methodLabel },
-      runModalOpen:true, runForm:this.defaultRunForm(), runPressResults:[], runErr:'', runMsg:'',
+      runModalOpen:true, runForm:this.defaultRunForm(ref.printDateISO, ref.printEndDateTimeISO), runPressResults:[], runErr:'', runMsg:'',
     });
   }
   mgrVals(){
