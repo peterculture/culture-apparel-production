@@ -329,9 +329,30 @@ class Component extends DCLogic {
       ink:[ {name:'White Base',qty:8,reorderAt:3}, {name:'Black',qty:5,reorderAt:3}, {name:'PMS 186 Red',qty:2,reorderAt:1}, {name:'PMS 286 Royal',qty:1,reorderAt:1} ],
       screen:[ {mesh:'110',qty:14,reorderAt:3}, {mesh:'156',qty:9,reorderAt:15}, {mesh:'180',qty:6,reorderAt:5}, {mesh:'230',qty:28,reorderAt:8} ],
     };
-    let storedName=''; try{ storedName=localStorage.getItem('caStationWorkerName')||''; }catch(_){}
+    // Accepts an identity established on ANY board (login.html, the
+    // Production Dashboard, Pre-Production, Shipping) -- not just one
+    // previously verified on this page. See anyWorkerName() in ca-api.js.
+    // A PIN is still required whenever no identity exists yet, and still
+    // required to switch to a different person.
+    let storedName=''; try{ storedName=(window.CAApi&&window.CAApi.anyWorkerName)?window.CAApi.anyWorkerName():(localStorage.getItem('caStationWorkerName')||''); }catch(_){}
+    // ── seed the view from the URL so a refresh returns to the station the
+    // tablet was actually on, not always Ink (see syncUrl()/pickStation()).
+    // The tab allow-list has to be built from the SEEDED station's own config,
+    // not a fixed list: tabs are per-station (the final stage is never a tab,
+    // and only ink/screen have an Inventory tab). Validating against a shared
+    // list would let ?station=transfer&tab=Mixing through, which renders an
+    // empty board that reads as "queue is clear," and ?tab=inventory on a
+    // station with no inventory would render an empty "Screens in Stock"
+    // panel. Anything not valid here falls back to 'master'.
+    const _apiP = (window.CAApi&&window.CAApi.readParam) ? window.CAApi : null;
+    const _stn = _apiP ? _apiP.readParam('station', Object.keys(this.STATIONS), 'ink') : 'ink';
+    const _cfg = this.STATIONS[_stn];
+    const _validTabs = ['master'].concat(_cfg.stages.slice(0,-1)).concat(_cfg.inventory?['inventory']:[]);
     this.state = {
-      now:new Date(), connection:'loading', station:'ink', tab:'master', modalId:null,
+      now:new Date(), connection:'loading',
+      station: _stn,
+      tab: _apiP ? _apiP.readParam('tab', _validTabs, 'master') : 'master',
+      modalId:null,
       // Order name / order number search -- filters the current station's
       // items by `order` (GOA_Order_Number__c) or `customer` (order name).
       // Mirrors the search box on index.html / pre-production.html so all
@@ -384,8 +405,15 @@ class Component extends DCLogic {
       }));
     }
   }
-  pickStation(k){ this.setState({station:k, tab:'master', modalId:null}); this.loadStation(k); }
-  switchUser(){ try{localStorage.removeItem('caStationWorkerName');}catch(_){} this.setState({nameOk:false, gatePin:'', gateErr:''}); }
+  pickStation(k){ this.setState({station:k, tab:'master', modalId:null}); this.syncUrl(k,'master'); this.loadStation(k); }
+  // Mirrors the current view into the query string via replaceState -- not
+  // pushState, since switching stations isn't a navigation and shouldn't
+  // turn the tablet's Back button into a station-by-station undo.
+  syncUrl(station, tab){ const a=window.CAApi; if(a&&a.writeParams) a.writeParams({station:station||this.state.station, tab:tab||this.state.tab}); }
+  // Must clear BOTH name keys now -- clearing only this page's key would
+  // leave the shared one populated and anyWorkerName() would instantly
+  // re-admit the person being switched away from.
+  switchUser(){ const a=window.CAApi; if(a&&a.clearIdentity) a.clearIdentity(); else { try{localStorage.removeItem('caStationWorkerName');}catch(_){} } this.setState({nameOk:false, gatePin:'', gateErr:''}); }
   onGatePress(d){ if(this.state.gatePin.length>=4 || this.state.gateSubmitting) return; const pin=this.state.gatePin+d; this.setState({gatePin:pin, gateErr:''}); if(pin.length===4) setTimeout(()=>this.submitGatePin(pin),140); }
   onGateBackspace(){ if(this.state.gateSubmitting) return; this.setState(st=>({gatePin:st.gatePin.slice(0,-1), gateErr:''})); }
   // Verifies the switch-account PIN SERVER-SIDE via the same
@@ -404,7 +432,10 @@ class Component extends DCLogic {
       const api=window.CAApi; if(!api || !api.workerLogin) throw new Error('CAApi not loaded');
       const res=await api.workerLogin(pin);
       if(!res || !res.name || !res.role) throw new Error('bad_response');
-      try{ localStorage.setItem('caStationWorkerName',res.name); localStorage.setItem(api.ROLE_KEY||'caShopRole',res.role); }catch(_){}
+      // Writes BOTH name keys + role, so this verification carries to every
+      // other board instead of only to this page.
+      if(api.setIdentity) api.setIdentity(res.name, res.role);
+      else { try{ localStorage.setItem('caStationWorkerName',res.name); localStorage.setItem(api.ROLE_KEY||'caShopRole',res.role); }catch(_){} }
       this.setState({gateSubmitting:false, gatePin:'', gateErr:'', nameOk:true});
     }catch(e){
       const msg = (e && e.status===401) ? 'Incorrect PIN — try again'
@@ -493,7 +524,7 @@ class Component extends DCLogic {
     const nonDone=cfg.stages.filter(s=>s!==doneStage);
     const tabDefs=[{key:'master',label:'All'}].concat(nonDone.map(s=>({key:s,label:s})));
     if(cfg.inventory) tabDefs.push({key:'inventory',label:'Inventory'});
-    const tabs=tabDefs.map(t=>{ const on=st.tab===t.key; let count=''; if(t.key==='master') count=String(items.filter(o=>o.stage!==doneStage).length); else if(t.key==='inventory') count=String((st.inv[cfg.inventory]||[]).length); else count=String(items.filter(o=>o.stage===t.key).length); return { key:t.key, label:t.label, count, onPick:()=>this.setState({tab:t.key}), bg:on?'#1a1a1e':'#121215', border:on?accent:'#232327', textColor:on?'#ECEAE4':'#8a8378', countColor:on?'#08080A':'#9C978C', countBg:on?accent:'#242428' }; });
+    const tabs=tabDefs.map(t=>{ const on=st.tab===t.key; let count=''; if(t.key==='master') count=String(items.filter(o=>o.stage!==doneStage).length); else if(t.key==='inventory') count=String((st.inv[cfg.inventory]||[]).length); else count=String(items.filter(o=>o.stage===t.key).length); return { key:t.key, label:t.label, count, onPick:()=>{ this.setState({tab:t.key}); this.syncUrl(null,t.key); }, bg:on?'#1a1a1e':'#121215', border:on?accent:'#232327', textColor:on?'#ECEAE4':'#8a8378', countColor:on?'#08080A':'#9C978C', countBg:on?accent:'#242428' }; });
 
     const stageColor=(stage)=> stage===doneStage ? '#7FA644' : accent;
     // Only the garment station's items ARE Orders (id === the real Order Id) --
@@ -548,7 +579,7 @@ class Component extends DCLogic {
     }
 
     const clock=st.now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-    let wn=''; try{ wn=localStorage.getItem('caStationWorkerName')||''; }catch(_){}
+    let wn=''; try{ wn=(window.CAApi&&window.CAApi.anyWorkerName)?window.CAApi.anyWorkerName():(localStorage.getItem('caStationWorkerName')||''); }catch(_){}
     // Env switcher is admin-only (Anthony) as of 2026-08-13 -- see index.html's
     // matching comment. Reads the shared caShopRole key (set at login.html,
     // and now also by this page's own switch-account PIN pad -- see
