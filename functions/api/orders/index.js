@@ -67,6 +67,14 @@ const ORDER_FIELDS = [
   "Order__r.OrderNumber",
   "Order__r.Customer_Order_Name__c",
   "Order__r.Print_Date__c",
+  // Added 2026-08-14, mirrors production-orders/index.js -- lets the
+  // "Create Production Run" modal (pre-production.html) prefill Scheduled
+  // Start/End from what's already on the Order. Duration__c is the raw
+  // hours the OrderScheduling flow now writes (UpdateOrder, V31+);
+  // Print_End_Date_Time__c is the pre-existing formula field that already
+  // computes Print_Date__c + Duration__c/24 (or +2h if Duration__c is blank).
+  "Order__r.Duration__c",
+  "Order__r.Print_End_Date_Time__c",
   "Order__r.Account.Name",
   "Order__r.Printer__r.Name",
   "Order__r.Status",
@@ -119,6 +127,8 @@ export async function onRequestGet({ env }) {
           OrderNumber: o.OrderNumber,
           Customer_Order_Name__c: o.Customer_Order_Name__c,
           Print_Date__c: o.Print_Date__c,
+          Duration__c: o.Duration__c,
+          Print_End_Date_Time__c: o.Print_End_Date_Time__c,
           Account: o.Account,
           Printer__r: o.Printer__r,
           Status: o.Status,
