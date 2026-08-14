@@ -37,11 +37,28 @@ const SUBSTATUS_FIELDS = new Set([
   "Transfers_Sub_Status__c",
 ]);
 
-// Restricted picklists — exact active values, confirmed 2026-07-02.
+// Restricted picklists — exact ACTIVE values.
+//
+// These fields really are "Restrict picklist to the values defined in the value
+// set" in Salesforce (verified in Setup 2026-08-14), so anything not in these
+// sets is rejected by the org with INVALID_OR_NULL_FOR_RESTRICTED_PICKLIST.
+// Keeping these sets honest is what turns that into a clean 400 from us
+// instead of a 500 from Salesforce.
+//
+// Ink_Sub_Status__c re-verified against staging AND dev2 on 2026-08-14 after
+// the three-stage rename (Needs Label / Needs Mixing / Mixed -- label and API
+// name match). The old "Not Started" / "Pantone Label Printed" / "Mixing"
+// values are gone or deactivated; do not add them back here, or a write will
+// pass this check and then fail at the org. Read-side tolerance for those old
+// values lives in _station.js's LEGACY_SUBSTATUS instead.
 const PICKLISTS = {
   Status__c:               new Set(["Not Started", "In Progress", "Ready"]),
+  // NOTE: "Not Clean" is NOT an active value in staging or dev2 (checked
+  // 2026-08-14) -- staging has only the four below. Left in place because
+  // removing it changes screen-station behaviour, which is a separate call
+  // from the ink work; flagged rather than silently altered.
   Screen_Sub_Status__c:    new Set(["Not Clean", "Needs Emulsion", "Ready for Exposure", "Needs Tape", "Ready for Print"]),
-  Ink_Sub_Status__c:       new Set(["Not Started", "Pantone Label Printed", "Mixing", "Mixed"]),
+  Ink_Sub_Status__c:       new Set(["Needs Label", "Needs Mixing", "Mixed"]),
   Transfers_Sub_Status__c: new Set(["Not Received", "Transfers Received", "Transfers Cut/Ready"]),
   Mesh_Count__c:           new Set(["110", "125", "156", "180", "196", "230", "305"]),
   Transfer_Type__c:        new Set(["Screen Transfer", "Digital Transfer", "Sublimation", "Vinyl"]),
