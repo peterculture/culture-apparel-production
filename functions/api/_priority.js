@@ -69,6 +69,72 @@ export const PREREQ_BY_TYPE = {
   "Promotional Items": [],
 };
 
+/**
+ * PRESS GROUPS -- the five calendars the shop actually thinks in.
+ *
+ * Salesforce holds one Account (Type = 'Press') per physical machine: Press 1,
+ * Press 2, Embroidery Machine, Hat Press, Shirt Press. That is not how the shop
+ * talks about them:
+ *
+ *   Press 1      -- screen print, its own calendar. Kept SEPARATE from Press 2
+ *                   even though both are screen print, because two operators
+ *                   can run them at the same time and each needs its own board.
+ *   Press 2      -- likewise.
+ *   Embroidery   -- the embroidery machine.
+ *   Heat Press   -- Hat Press and Shirt Press COMBINED. Two machines, one
+ *                   calendar, because they are scheduled as one station.
+ *   Master       -- everything, including any press that matches none of the
+ *                   above.
+ *
+ * Matching is on the press NAME rather than the Id, because the Ids differ
+ * between dev2, staging and production and hardcoding them would silently break
+ * on promotion. The alternates in each pattern cover the vocabulary in the
+ * Google Calendar the shop already schedules in (10 Head Press / 6 Head Press /
+ * Embroidery / Heat Press) so the same code works if the Account names are ever
+ * renamed to match it.
+ *
+ * ORDER MATTERS. `press1`/`press2` are tested before `heat`, and `heat`'s
+ * pattern deliberately spells out hat|shirt|heat rather than anything looser --
+ * "Hat Press" and "Heat Press" are one letter apart and a sloppy pattern would
+ * swallow "Press 1" too.
+ *
+ * methodTypes is the other direction: which Production_Method__c.Type__c values
+ * belong on this calendar. It drives both the unscheduled queue's filter and --
+ * more importantly -- which presses the auto-placer is allowed to suggest. A
+ * screen print job must never be offered the embroidery machine.
+ */
+export const PRESS_GROUPS = [
+  { key: "press1", label: "Press 1", pattern: /(^|\b)(press\s*0*1\b|10\s*head)/i, methodTypes: ["Screen Print"] },
+  { key: "press2", label: "Press 2", pattern: /(^|\b)(press\s*0*2\b|6\s*head)/i, methodTypes: ["Screen Print"] },
+  { key: "embroidery", label: "Embroidery", pattern: /embroider/i, methodTypes: ["Embroidery"] },
+  { key: "heat", label: "Heat Press", pattern: /(heat|hat|shirt)\s*press|transfer/i, methodTypes: ["Heat Press"] },
+];
+
+/** Group key for a press name, or null when nothing matches (Master only). */
+export function pressGroupOf(name) {
+  const n = String(name || "").trim();
+  if (!n) return null;
+  for (const g of PRESS_GROUPS) if (g.pattern.test(n)) return g.key;
+  return null;
+}
+
+/**
+ * Can this press take this order? True when the order has at least one method
+ * whose Type__c belongs to the press's group. An ungrouped press accepts
+ * anything -- it is a machine we do not have a rule for, so refusing to
+ * schedule on it would be worse than allowing it.
+ */
+export function pressAcceptsOrder(groupKey, methods) {
+  if (!groupKey) return true;
+  const g = PRESS_GROUPS.filter((x) => x.key === groupKey)[0];
+  if (!g) return true;
+  const types = (methods || [])
+    .filter((m) => m && m.Status__c !== "Cancelled")
+    .map((m) => String((m && m.Type__c) || "").trim());
+  if (!types.length) return true; // nothing to go on -- don't block scheduling
+  return types.some((t) => g.methodTypes.indexOf(t) > -1);
+}
+
 const MS_PER_DAY = 86400000;
 
 /** Whole days from today (UTC midnight) to a Salesforce Date or DateTime. */
