@@ -36,6 +36,15 @@
     @keyframes ca-slide{from{transform:translateX(30px);opacity:0}to{transform:translateX(0);opacity:1}}
     @keyframes ca-slide-left{from{transform:translateX(-30px);opacity:0}to{transform:translateX(0);opacity:1}}
     @keyframes ca-glow{0%,100%{box-shadow:0 0 6px 2px var(--glow-c)}50%{box-shadow:0 0 16px 5px var(--glow-c)}}
+    /* The ONLY rule on this board that index.html doesn't have, and it earns its
+       place: six day columns plus an hour gutter need ~1040px, and beside a
+       fixed 330px queue that pushed SATURDAY off the right edge on a 1280 or
+       1440 laptop -- silently, behind a scroll, on a board for a shop that works
+       Saturdays. The queue gives ground first, then stacks above the calendar.
+       Inline styles can't express a breakpoint, which is why this is a class. */
+    .cal-body{display:grid;grid-template-columns:330px minmax(0,1fr);gap:14px;align-items:start}
+    @media (max-width:1560px){ .cal-body{grid-template-columns:250px minmax(0,1fr)} }
+    @media (max-width:1400px){ .cal-body{grid-template-columns:minmax(0,1fr)} }
   </style>
 </helmet>
 
@@ -121,7 +130,7 @@
   </div>
 
   <!-- ── body ─────────────────────────────────────────────────────────── -->
-  <div style="flex:1;display:grid;grid-template-columns:330px minmax(0,1fr);gap:14px;padding:6px 26px 40px;align-items:start">
+  <div class="cal-body" style="flex:1;padding:6px 26px 40px">
 
     <!-- queue -->
     <div style="display:flex;flex-direction:column;gap:12px;min-width:0;background:#0D0D0F;border:1px solid #1b1b1e;border-radius:14px;padding:12px">
@@ -175,6 +184,16 @@
         <span style="margin-left:auto;font:400 10px/1 'Archivo';color:#6C665C">{{gridHint}}</span>
       </div>
 
+      <!-- press-group calendars: Press 1 / Press 2 / Embroidery / Heat Press / Master -->
+      <div style="display:flex;flex-wrap:wrap;gap:7px;padding:0 2px">
+        <sc-for list="{{calendars}}" as="c" hint-placeholder-count="5">
+          <button onClick="{{ c.onPick }}" style="display:inline-flex;align-items:center;gap:7px;font:600 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:{{c.textColor}};background:{{c.bg}};border:1px solid {{c.border}};border-radius:8px;padding:9px 12px;cursor:pointer" style-hover="border-color:#3a3a40">
+            <i class="ti {{c.icon}}" style="color:{{c.dotColor}}"></i>{{c.label}}
+            <span style="font:700 10px/1 'Oswald';color:{{c.countColor}}">{{c.count}}</span>
+          </button>
+        </sc-for>
+      </div>
+
       <div style="display:flex;flex-wrap:wrap;align-items:center;gap:11px;padding:0 4px">
         <span style="font:400 9px/1 'Archivo';color:#4d483f">Bar colour = prep status</span>
         <sc-for list="{{prepLegend}}" as="s" hint-placeholder-count="3">
@@ -184,35 +203,53 @@
       </div>
 
       <div style="overflow-x:auto">
-        <div style="display:grid;gap:3px;min-width:880px;margin-bottom:3px;grid-template-columns:{{gridCols}}">
+        <div style="display:grid;gap:4px;min-width:{{gridMinW}};grid-template-columns:{{gridCols}}">
           <div></div>
-          <sc-for list="{{headers}}" as="h" hint-placeholder-count="9">
-            <div style="font:500 9px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#4d483f;padding:5px 0;text-align:{{h.align}}">{{h.label}}</div>
+          <sc-for list="{{headers}}" as="h" hint-placeholder-count="6">
+            <div style="background:{{h.bg}};border:1px solid {{h.border}};border-radius:9px;padding:8px 10px;text-align:center">
+              <div style="font:600 11px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:{{h.color}}">{{h.label}}</div>
+              <div style="font:400 9px/1 'Archivo';color:#4d483f;margin-top:4px">{{h.sub}}</div>
+            </div>
           </sc-for>
-        </div>
-        <sc-for list="{{lanes}}" as="ln" hint-placeholder-count="4">
-          <div style="display:grid;gap:3px;min-width:880px;margin-bottom:3px;grid-template-columns:{{gridCols}};min-height:{{ln.minH}}">
-            <div style="background:#101013;border:1px solid #202024;border-radius:9px;padding:10px 12px;display:flex;align-items:center;font:600 11px/1.2 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#9C978C">{{ln.name}}</div>
-            <div style="position:relative;background:#0A0A0C;border:1px solid #16161a;border-radius:9px;grid-column:2 / span {{colCount}}">
-              <sc-for list="{{ln.slots}}" as="s" hint-placeholder-count="9">
-                <div style="position:absolute;top:0;bottom:0;left:{{s.left}};width:{{s.width}};border-right:1px solid rgba(255,255,255,.028);background:{{s.overBg}}"
+
+          <!-- hour gutter -->
+          <div>
+            <sc-for list="{{hourLabels}}" as="hr" hint-placeholder-count="9">
+              <div style="height:{{rowH}};display:flex;align-items:flex-start;justify-content:flex-end;padding-right:9px;font:500 9px/1 'Oswald';letter-spacing:.07em;color:#4d483f">{{hr.label}}</div>
+            </sc-for>
+          </div>
+
+          <!-- one positioned track per day -->
+          <sc-for list="{{cols}}" as="c" hint-placeholder-count="6">
+            <div style="position:relative;height:{{trackH}};background:#0A0A0C;background-image:{{hourLines}};border:1px solid #16161a;border-radius:9px;overflow:hidden">
+              <sc-for list="{{c.slots}}" as="s" hint-placeholder-count="9">
+                <div title="{{s.title}}" style="position:absolute;left:0;right:0;top:{{s.top}};height:{{s.height}};background:{{s.overBg}}"
                      onDragOver="{{ s.onDragOver }}" onDragLeave="{{ s.onDragLeave }}" onDrop="{{ s.onDrop }}"></div>
               </sc-for>
-              <sc-for list="{{ln.blocks}}" as="b" hint-placeholder-count="2">
-                <div draggable="{{b.canDrag}}" onDragStart="{{ b.onDragStart }}" onClick="{{ b.onOpen }}"
-                     style="position:absolute;left:{{b.left}};width:{{b.width}};top:{{b.top}};height:{{b.height}};background:#141417;border:1px {{b.borderStyle}} #232327;border-left:3px solid {{b.color}};border-radius:8px;padding:6px 8px;overflow:hidden;cursor:{{b.cursor}};opacity:{{b.opacity}}"
+              <sc-for list="{{c.blocks}}" as="b" hint-placeholder-count="2">
+                <div draggable="{{b.canDrag}}" onDragStart="{{ b.onDragStart }}" onClick="{{ b.onOpen }}" title="{{b.title}}"
+                     style="position:absolute;left:{{b.left}};width:{{b.width}};top:{{b.top}};height:{{b.height}};background:#141417;border:1px {{b.borderStyle}} #232327;border-left:3px solid {{b.color}};border-radius:7px;padding:5px 7px;overflow:hidden;cursor:{{b.cursor}};opacity:{{b.opacity}}"
                      style-hover="border-color:#3a3a40">
-                  <div style="display:flex;align-items:baseline;gap:6px">
-                    <span style="font:600 11px/1 'Oswald';letter-spacing:.05em;color:#ECEAE4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{b.num}}</span>
-                    <span style="margin-left:auto;flex-shrink:0;font:700 12px/1 'Oswald';color:{{b.scoreColor}}">{{b.score}}</span>
+                  <div style="display:flex;align-items:baseline;gap:5px">
+                    <span style="font:600 10px/1 'Oswald';letter-spacing:.04em;color:#ECEAE4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{b.num}}</span>
+                    <sc-if value="{{b.showScore}}" hint-placeholder-val="{{ true }}"><span style="margin-left:auto;flex-shrink:0;font:700 11px/1 'Oswald';color:{{b.scoreColor}}">{{b.score}}</span></sc-if>
                   </div>
-                  <div style="font:400 10px/1.3 'Archivo';color:#9C978C;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{b.customer}}</div>
-                  <div style="font:400 9px/1.3 'Archivo';color:#4d483f;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{b.time}}</div>
+                  <div title="{{b.press}}" style="display:flex;align-items:center;gap:4px;margin-top:3px">
+                    <i class="ti ti-printer" style="font-size:10px;color:{{b.pressColor}};flex-shrink:0"></i>
+                    <sc-if value="{{b.showPress}}" hint-placeholder-val="{{ true }}"><span style="font:600 9px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:{{b.pressColor}};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{b.press}}</span></sc-if>
+                  </div>
+                  <sc-if value="{{b.roomy}}" hint-placeholder-val="{{ true }}">
+                    <div style="font:400 10px/1.3 'Archivo';color:#9C978C;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{b.customer}}</div>
+                    <div style="font:400 9px/1.3 'Archivo';color:#4d483f;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{b.time}}</div>
+                  </sc-if>
                 </div>
               </sc-for>
+              <sc-if value="{{c.empty}}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:400 10px/1 'Archivo';color:#232327;pointer-events:none">nothing scheduled</div>
+              </sc-if>
             </div>
-          </div>
-        </sc-for>
+          </sc-for>
+        </div>
       </div>
 
       <div style="font:400 10px/1.4 'Archivo';color:#4d483f;padding:2px 4px 0">{{gridFooter}}</div>
@@ -483,7 +520,18 @@ class Component extends DCLogic {
     // badge -- same contract as every other board, so a tablet that cannot see
     // Salesforce shows something explorable rather than an empty grid.
     this._demo = {
-      presses:[{Id:'p1',Name:'Press 1'},{Id:'p2',Name:'Press 2'},{Id:'p3',Name:'Embroidery Machine'},{Id:'p4',Name:'Hat Press'}],
+      presses:[{Id:'p1',Name:'Press 1',group:'press1'},{Id:'p2',Name:'Press 2',group:'press2'},
+               {Id:'p3',Name:'Embroidery Machine',group:'embroidery'},
+               {Id:'p4',Name:'Hat Press',group:'heat'},{Id:'p5',Name:'Shirt Press',group:'heat'}],
+      // Mirrors what calendar/index.js sends. Demo only -- the real grouping
+      // rules live in _priority.js and are resolved server-side.
+      pressGroups:[
+        {key:'press1', label:'Press 1', methodTypes:['Screen Print'], pressIds:['p1']},
+        {key:'press2', label:'Press 2', methodTypes:['Screen Print'], pressIds:['p2']},
+        {key:'embroidery', label:'Embroidery', methodTypes:['Embroidery'], pressIds:['p3']},
+        {key:'heat', label:'Heat Press', methodTypes:['Heat Press'], pressIds:['p4','p5']},
+      ],
+      pressesUngrouped:0,
       records:[
         this._demoOrder('20962','Phil Waldrep Ministries','WOJ Fall Tees',0,8.8,0,'Screen Print','p1','07:00',2),
         this._demoOrder('19869','Piney River Resort','River Tees',0,8.8,0,'Screen Print','p1','10:30',1.5),
@@ -498,7 +546,7 @@ class Component extends DCLogic {
       // Opens on the WHOLE current working week, not a single day. A shop
       // manager's first question is "what does this week look like" -- Day view
       // is the drill-down, not the landing page.
-      conn:'loading', data:null, view:'week', anchor:0, q:'',
+      conn:'loading', data:null, view:'week', anchor:0, q:'', group:'all',
       openId:null, dragging:null, overKey:null, navOpen:false,
       runEdits:{}, runBusy:null, runErr:'', runMsg:'',
       sfEnvOpen:false, sfEnvPin:'', sfEnvMsg:'', sfEnvErr:'', sfEnvPick:null, sfEnvSubmitting:false, env:null,
@@ -629,6 +677,50 @@ class Component extends DCLogic {
    * Both writes are attempted; a failure on either is surfaced rather than
    * swallowed, because a half-applied drag is worse than a rejected one.
    */
+  /**
+   * Which press does a drop land on, now that the grid's rows are hours rather
+   * than presses? The old grid answered this by which lane you dropped into.
+   *
+   *  - On a single-press calendar (Press 1, Press 2, Embroidery): that press.
+   *  - On Heat Press, which covers Hat Press AND Shirt Press: whichever of them
+   *    is free at that hour, else the first. Two machines, one calendar -- the
+   *    manager picked the station, not the machine.
+   *  - On Master, there is no press in the click. Fall back to the order's own
+   *    suggested press, then to any press whose group accepts this order's
+   *    method type. Only if nothing fits do we ask -- and we say which tab to
+   *    use rather than just refusing.
+   */
+  pressForDrop(order, when){
+    const st=this.state, presses=this.presses();
+    const groups=(st.data&&st.data.pressGroups)||this._demo.pressGroups||[];
+    const busyAt=(pressId)=>{
+      const t0=when.getTime(), t1=t0+this.durationOf(order)*3600000;
+      return (this.visible()||[]).some(o=>(o.ProductionRuns||[]).some(r=>
+        r.Press__c===pressId && r.Scheduled_Start__c &&
+        Date.parse(r.Scheduled_Start__c) < t1 &&
+        Date.parse(r.Scheduled_End__c||r.Scheduled_Start__c) > t0));
+    };
+    if(st.group && st.group!=='all'){
+      const g=groups.filter(x=>x.key===st.group)[0];
+      const ids=(g&&g.pressIds)||[];
+      if(!ids.length){ alert('No press is mapped to this calendar yet.'); return null; }
+      return ids.filter(id=>!busyAt(id))[0] || ids[0];
+    }
+    const sug=order.suggestion;
+    if(sug && sug.pressId) return sug.pressId;
+    const types=(order.ProductionMethods||[]).map(m=>String((m&&m.Type__c)||'').trim());
+    for(const g of groups){
+      if(!types.some(ty=>(g.methodTypes||[]).indexOf(ty)>-1)) continue;
+      const ids=g.pressIds||[];
+      const free=ids.filter(id=>!busyAt(id))[0] || ids[0];
+      if(free) return free;
+    }
+    const any=presses[0];
+    if(any) return any.Id;
+    alert('There is no press to schedule this on. Open the calendar for the station you want and drop it there.');
+    return null;
+  }
+
   async commitDrop(order, pressId, startDate){
     const api=this._api;
     if(this.state.conn!=='live'){ alert('Not connected to Salesforce (demo mode).'); return; }
@@ -878,8 +970,69 @@ class Component extends DCLogic {
     const hhmm = iso => { const d=new Date(iso); return d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}).replace(':00',''); };
     const pressName = id => t((presses.filter(x=>x.Id===id)[0]||{}).Name) || 'Unassigned';
 
+    /* ── the five calendars ───────────────────────────────────────────────
+       Rows are HOURS OF THE DAY now, not presses. The press moved inside the
+       run block, where it belongs: a manager asks "what is running at 9am"
+       far more often than "what is Press 2 doing all week", and the old
+       press-lane grid could not answer the first question at all.
+
+       Which press each calendar covers is decided SERVER-SIDE (_priority.js's
+       PRESS_GROUPS, resolved in calendar/index.js and shipped as press.group).
+       The browser deliberately has no copy of the matching rules -- two copies
+       would drift the first time a press is renamed. */
+    const serverGroups = (st.data && st.data.pressGroups) || (this._demo.pressGroups || []);
+    const ungrouped = (st.data && st.data.pressesUngrouped) || 0;
+    const groupOfPress = {};
+    presses.forEach(pr=>{ if(pr.group) groupOfPress[pr.Id]=pr.group; });
+
+    const runGroup = r => groupOfPress[r.Press__c] || null;
+    const activeGroup = st.group || 'all';
+    const groupDef = serverGroups.filter(g=>g.key===activeGroup)[0] || null;
+
+    /** Does this order belong on the active calendar? Scheduled work is judged
+     *  by the press its run is on; unscheduled work has no press yet, so it is
+     *  judged by method type -- which is why a Screen Print job with no run
+     *  shows in BOTH the Press 1 and Press 2 queues. Either could take it. */
+    const orderInGroup = o => {
+      if(activeGroup==='all') return true;
+      const runs=(o.ProductionRuns||[]).filter(r=>r.Press__c);
+      if(runs.length) return runs.some(r=>runGroup(r)===activeGroup);
+      if(!groupDef) return true;
+      const types=(o.ProductionMethods||[]).map(m=>String((m&&m.Type__c)||'').trim());
+      if(!types.length) return true;
+      return types.some(t=>(groupDef.methodTypes||[]).indexOf(t)>-1);
+    };
+    const scoped = rows.filter(orderInGroup);
+
+    /* Tab counts are of ORDERS on that calendar in this window, which is the
+       number a manager is actually asking for ("how much is on Press 1"). */
+    const countFor = key => {
+      const save=activeGroup;
+      return rows.filter(o=>{
+        if(key==='all') return true;
+        const g=serverGroups.filter(x=>x.key===key)[0];
+        const runs=(o.ProductionRuns||[]).filter(r=>r.Press__c);
+        if(runs.length) return runs.some(r=>runGroup(r)===key);
+        if(!g) return false;
+        const types=(o.ProductionMethods||[]).map(m=>String((m&&m.Type__c)||'').trim());
+        return types.length ? types.some(t=>(g.methodTypes||[]).indexOf(t)>-1) : false;
+      }).length + (save&&0);
+    };
+    const GROUP_ICON = {all:'ti-layout-grid', press1:'ti-printer', press2:'ti-printer',
+                        embroidery:'ti-needle-thread', heat:'ti-flame'};
+    const calendars = [{key:'all', label:'Master'}].concat(serverGroups.map(g=>({key:g.key,label:g.label}))).map(c=>{
+      const on = activeGroup===c.key;
+      return {
+        label:c.label, count:countFor(c.key), icon:GROUP_ICON[c.key]||'ti-printer',
+        bg: on?'#241110':'transparent', border: on?'#7A241C':'#2a2a2f',
+        textColor: on?'#E8A89F':MUT, dotColor: on?'#E8A89F':FAINT,
+        countColor: on?INK:DIM,
+        onPick:()=>{ if(activeGroup!==c.key) this.setState({group:c.key}); },
+      };
+    });
+
     /* queue */
-    const queue = rows.filter(o=>o.needsScheduling).map(o=>{
+    const queue = scoped.filter(o=>o.needsScheduling).map(o=>{
       const p=o.priority||{score:1}, sug=o.suggestion;
       return {
         customer:t(o.Account&&o.Account.Name)||'—',
@@ -896,20 +1049,49 @@ class Component extends DCLogic {
       };
     });
 
-    /* grid */
-    const cols = st.view==='day' ? HOURS : span;
-    // Hour ticks sit AT the line they name (a block starting at 7:00 is drawn
-    // from the left edge of the 7a column); day names sit centred over theirs.
-    const headers = st.view==='day'
-      ? Array.from({length:HOURS},(_,i)=>({align:'left', label:((SHOP_START+i)%12||12)+(SHOP_START+i<12?'am':'pm')}))
-      : Array.from({length:span},(_,i)=>{ const d=new Date(start); d.setDate(d.getDate()+i);
-          return {align:'center', label:d.toLocaleDateString([], {weekday:'short', day:'numeric'})}; });
+    /* ── time grid: hours down, days across ─────────────────────────────── */
+    const ROW_H = 62;                       // px per hour
+    const trackH = HOURS*ROW_H;
+    const dayCount = st.view==='day' ? 1 : span;
+    const dayOfCol = i => { const d=new Date(start); d.setDate(d.getDate()+i); return d; };
+    const today = new Date(); today.setHours(0,0,0,0);
 
-    const lanes = presses.map(pr=>{
-      const slots = Array.from({length:cols},(_,i)=>{
-        const key=pr.Id+':'+i;
+    const hourLabels = Array.from({length:HOURS},(_,i)=>{
+      const h=SHOP_START+i;
+      return {label:((h%12)||12)+(h<12?' AM':' PM')};
+    });
+    const headers = Array.from({length:dayCount},(_,i)=>{
+      const d=dayOfCol(i);
+      const isToday = d.getTime()===today.getTime();
+      return {
+        label: d.toLocaleDateString([], {weekday:'short'}),
+        sub: d.toLocaleDateString([], {month:'short', day:'numeric'}),
+        bg: isToday?'#241110':'#101013',
+        border: isToday?'#7A241C':'#202024',
+        color: isToday?'#E8A89F':MUT,
+      };
+    });
+
+    /** Every run on the active calendar, flattened with its order. */
+    const placed=[];
+    scoped.forEach(o=>{
+      (o.ProductionRuns||[]).forEach(r=>{
+        if(!r.Scheduled_Start__c || !r.Press__c) return;
+        if(activeGroup!=='all' && runGroup(r)!==activeGroup) return;
+        placed.push({o,r});
+      });
+    });
+
+    const cols = Array.from({length:dayCount},(_,i)=>{
+      const d=dayOfCol(i);
+      const dayKey=d.toDateString();
+
+      const slots = Array.from({length:HOURS},(_,hIdx)=>{
+        const key=i+':'+hIdx;
+        const hour=SHOP_START+hIdx;
         return {
-          left:(i/cols*100)+'%', width:(100/cols)+'%',
+          top:(hIdx*ROW_H)+'px', height:ROW_H+'px',
+          title:'Drop here to schedule for '+((hour%12)||12)+(hour<12?' AM':' PM'),
           overBg: st.overKey===key ? 'rgba(198,55,43,.16)' : 'transparent',
           onDragOver:(e)=>{ if(!canEdit) return; e.preventDefault(); if(st.overKey!==key) this.setState({overKey:key}); },
           onDragLeave:()=>{ if(st.overKey===key) this.setState({overKey:null}); },
@@ -917,83 +1099,92 @@ class Component extends DCLogic {
             if(!canEdit) return;
             e.preventDefault();
             const drag=st.dragging; if(!drag) return;
-            const order=rows.filter(o=>o.Id===drag.orderId)[0]; if(!order) return;
-            const d=new Date(start);
-            if(st.view==='day'){ d.setHours(SHOP_START+i,0,0,0); }
-            else { d.setDate(d.getDate()+i); d.setHours(SHOP_START,0,0,0); }
-            this.commitDrop(order, pr.Id, d);
+            const order=rows.filter(x=>x.Id===drag.orderId)[0]; if(!order) return;
+            const when=new Date(d); when.setHours(hour,0,0,0);
+            const pressId=this.pressForDrop(order, when);
+            if(!pressId) return;
+            this.commitDrop(order, pressId, when);
           },
         };
       });
 
-      const blocks=[];
-      rows.forEach(o=>{
-        (o.ProductionRuns||[]).forEach(r=>{
-          if(r.Press__c!==pr.Id || !r.Scheduled_Start__c) return;
-          const s=new Date(r.Scheduled_Start__c), e=new Date(r.Scheduled_End__c||r.Scheduled_Start__c);
-          let left,width;
-          if(st.view==='day'){
-            if(s.toDateString()!==start.toDateString()) return;
-            const h=s.getHours()+s.getMinutes()/60;
-            const dur=Math.max(.25,(e-s)/3600000);
-            left=Math.max(0,(h-SHOP_START)/HOURS*100);
-            width=Math.min(100-left,dur/HOURS*100);
-          }else{
-            const idx=Math.round((new Date(s.getFullYear(),s.getMonth(),s.getDate())-start)/86400000);
-            if(idx<0||idx>=span) return;
-            left=idx/span*100; width=100/span;
-          }
-          const p=o.priority||{score:1};
-          const proposal=r.Auto_Scheduling_Status__c==='Proposal';
-          blocks.push({
-            num:t(o.GOA_Order_Number__c)||o.OrderNumber||'—',
-            customer:t(o.Account&&o.Account.Name)||'—',
-            time:hhmm(r.Scheduled_Start__c)+'–'+hhmm(r.Scheduled_End__c||r.Scheduled_Start__c),
-            score:(p.score||1).toFixed(1), scoreColor:scoreColor(p.score||1),
-            color:prepColor(o.prep&&o.prep.key),
-            borderStyle: proposal ? 'dashed' : 'solid',
-            opacity: proposal ? '.86' : '1',
-            canDrag: canEdit?'true':'false',
-            cursor: canEdit?'grab':'pointer',
-            _l:left, _w:Math.max(4,width),
-            left:left.toFixed(2)+'%', width:Math.max(4,width).toFixed(2)+'%',
-            onDragStart:()=>{ if(canEdit) this.setState({dragging:{orderId:o.Id}}); },
-            onOpen:()=>this.openOrder(o.Id),
-          });
-        });
-      });
-      /* Stack anything that overlaps horizontally, and grow the lane to fit.
-         Without this a block simply renders ON TOP of its neighbour and the
-         one underneath is invisible -- which is not a cosmetic problem, it is
-         a press that reads as free when it is booked.
+      /* Blocks for this day, positioned by time. Anything overlapping shares
+         the width side by side -- same as any day-view calendar, and the only
+         way a double-booked hour reads as double-booked. */
+      const items = placed
+        .filter(({r})=>new Date(r.Scheduled_Start__c).toDateString()===dayKey)
+        .map(({o,r})=>{
+          const s0=new Date(r.Scheduled_Start__c);
+          const e0=new Date(r.Scheduled_End__c||r.Scheduled_Start__c);
+          const startH=Math.max(SHOP_START, s0.getHours()+s0.getMinutes()/60);
+          const endH=Math.min(SHOP_END, Math.max(startH+0.25, e0.getHours()+e0.getMinutes()/60 + (e0.toDateString()!==dayKey?24:0)));
+          return {o, r, startH, endH};
+        })
+        .sort((a,b)=>a.startH-b.startH || b.endH-a.endH);
 
-         Week view is where it always fires: every run on a given day shares
-         that day's single column, so a Monday with three jobs on Press 1 drew
-         as one job. Day view only stacks when a press is genuinely double
-         booked, and there it is doing exactly the job you want -- a manager
-         who drags a run onto an occupied hour SEES the collision instead of
-         burying it. First-fit by left edge, same as any Gantt. */
-      const ROW_H=58, ROW_GAP=4, PAD=5;
-      blocks.sort((a,b)=>a._l-b._l || b._w-a._w);
-      const rowEnds=[];
-      blocks.forEach(b=>{
-        let r=0;
-        while(r<rowEnds.length && rowEnds[r] > b._l+0.01) r++;
-        rowEnds[r]=b._l+b._w;
-        b.top=(PAD+r*(ROW_H+ROW_GAP))+'px';
-        b.height=ROW_H+'px';
+      const laneEnd=[];
+      items.forEach(it=>{
+        let l=0; while(l<laneEnd.length && laneEnd[l] > it.startH+0.001) l++;
+        laneEnd[l]=it.endH; it.lane=l;
       });
-      const stack=Math.max(1,rowEnds.length);
-      return {
-        name:t(pr.Name), slots, blocks,
-        minH:(PAD*2+stack*ROW_H+(stack-1)*ROW_GAP)+'px',
-      };
+      const laneCount=Math.max(1, laneEnd.length);
+
+      /* Overlapping runs are NEVER hidden behind a "+2 more" chip, however
+         narrow it gets. This is a board whose job is to stop a press being
+         double-booked; a run you cannot see is the same bug as a press that
+         reads free when it is busy. They get thinner instead, and the block
+         text drops detail as the lane narrows -- order number and score always
+         survive, then the press, then the customer and times. Full detail is a
+         hover away on every block, and the whole point of the four press tabs
+         is that you rarely read Master's overlap: on Press 1 the lane count is
+         almost always one and every block is full width. */
+      // Deliberately the MIN width, not the likely one. Columns are minmax(min,1fr)
+      // so they usually get more, and estimating high would clip text on the one
+      // layout where it is actually tight.
+      const colPx = st.view==='day' ? 340 : 158;
+      const lanePx = colPx/laneCount;
+
+      const blocks = items.map(it=>{
+        const {o,r}=it;
+        const p=o.priority||{score:1};
+        const proposal=r.Auto_Scheduling_Status__c==='Proposal';
+        const h=Math.max(30,(it.endH-it.startH)*ROW_H-3);
+        const w=100/laneCount;
+        const pname=t(r.Press||pressName(r.Press__c));
+        return {
+          num:t(o.GOA_Order_Number__c)||o.OrderNumber||'—',
+          customer:t(o.Account&&o.Account.Name)||'—',
+          press:pname, pressColor: proposal?DIM:PURPLE,
+          time:hhmm(r.Scheduled_Start__c)+'–'+hhmm(r.Scheduled_End__c||r.Scheduled_Start__c),
+          title:[t(o.Account&&o.Account.Name), pname, hhmm(r.Scheduled_Start__c)+'–'+hhmm(r.Scheduled_End__c||r.Scheduled_Start__c)].filter(Boolean).join(' · '),
+          score:(p.score||1).toFixed(1), scoreColor:scoreColor(p.score||1),
+          color:prepColor(o.prep&&o.prep.key),
+          borderStyle: proposal?'dashed':'solid',
+          opacity: proposal?'.86':'1',
+          // Three tiers by how much width this block actually got. The ORDER
+          // NUMBER survives every tier -- it is the thing a manager reads to
+          // find the job -- so at the narrowest tier the score steps aside and
+          // lets the number have the whole line rather than both being clipped.
+          roomy: h>=76 && lanePx>=104,     // + customer and times
+          showPress: lanePx>=60,           // press spelled out, not just its icon
+          showScore: lanePx>=60,
+          canDrag: canEdit?'true':'false',
+          cursor: canEdit?'grab':'pointer',
+          top:((it.startH-SHOP_START)*ROW_H+2)+'px', height:h+'px',
+          left:(it.lane*w)+'%', width:'calc('+w+'% - 4px)',
+          onDragStart:()=>{ if(canEdit) this.setState({dragging:{orderId:o.Id}}); },
+          onOpen:()=>this.openOrder(o.Id),
+        };
+      });
+
+      return {slots, blocks, empty:blocks.length===0};
     });
 
-    /* KPIs */
-    const unsched=rows.filter(o=>o.needsScheduling).length;
-    const risk=rows.filter(o=>o.prep&&o.prep.key!=='good').length;
-    const top=rows.slice().sort((a,b)=>((b.priority||{}).score||0)-((a.priority||{}).score||0))[0];
+    /* KPIs -- scoped to the active calendar, so switching to Press 2 answers
+       "how much is on Press 2" rather than repeating the whole shop's totals. */
+    const unsched=scoped.filter(o=>o.needsScheduling).length;
+    const risk=scoped.filter(o=>o.prep&&o.prep.key!=='good').length;
+    const top=scoped.slice().sort((a,b)=>((b.priority||{}).score||0)-((a.priority||{}).score||0))[0];
     const kpis=[
       {label:'Needs Scheduling', value:unsched, unit:unsched===1?'order':'orders', accent:unsched?AMBER:GREEN,
        valueColor:unsched?AMBER:INK, sub:unsched?'no production run yet':'everything is placed'},
@@ -1001,12 +1192,12 @@ class Component extends DCLogic {
        valueColor:risk?CRIT:INK, sub:risk?'behind on pre-production':'everything has runway'},
       {label:'Highest Priority', value:top?((top.priority||{}).score||1).toFixed(1):'—', unit:'of 10', accent:RED,
        valueColor:INK, sub:top?(t(top.Account&&top.Account.Name)||'—'):'nothing in this window'},
-      {label:'Orders In View', value:rows.length, unit:rows.length===1?'order':'orders', accent:PURPLE,
+      {label:'Orders In View', value:scoped.length, unit:scoped.length===1?'order':'orders', accent:PURPLE,
        valueColor:INK, sub:st.view==='day'?'printing this day':'printing this week'},
     ];
 
     /* drawer */
-    const open=rows.filter(o=>o.Id===st.openId)[0];
+    const open=rows.filter(o=>o.Id===st.openId)[0]; // NOT scoped: a drawer opened from one calendar stays open if the tab changes
     const TIME_OPTIONS=(api&&api.TIME_OPTIONS)||[];
     const pressOptions=presses.map(pr=>({id:pr.Id, name:t(pr.Name)}));
     // Seeds live on the instance so the handlers can read the same defaults the
@@ -1187,17 +1378,28 @@ class Component extends DCLogic {
       rangeLabel: st.view==='day'
         ? start.toLocaleDateString([], {weekday:'long', month:'short', day:'numeric'})
         : start.toLocaleDateString([], {month:'short', day:'numeric'})+' – '+(()=>{const e=new Date(start);e.setDate(e.getDate()+span-1);return e.toLocaleDateString([], {month:'short', day:'numeric'});})(),
-      shownLabel: rows.length+(rows.length===1?' order':' orders')+(st.q?' matching':' in window'),
+      shownLabel: scoped.length+(scoped.length===1?' order':' orders')+(st.q?' matching':' in window'),
       kpis,
       queue, queueCount:queue.length, queueEmpty: queue.length===0,
       queueHint: canEdit ? 'Highest priority first. Drag one onto a press to schedule it.' : 'Highest priority first. Managers and admins can drag these onto a press.',
       scoreLegend: PART_LABELS.map((l,i)=>({label:l, color:RAMP[i]})),
       prepLegend: [{label:'Ready / Great', color:GREEN},{label:'Mediocre', color:AMBER},{label:'Very bad', color:CRIT}],
-      gridTitle: st.view==='day' ? 'Presses · '+start.toLocaleDateString([], {weekday:'long'}) : 'Presses · Week',
-      gridHint: st.view==='day' ? 'Shop hours '+SHOP_START+':00 – '+SHOP_END+':00' : 'One column per day — switch to Day for times',
-      gridCols: '150px repeat('+cols+', minmax(52px,1fr))',
-      colCount: cols,
-      headers, lanes,
+      calendars,
+      gridTitle: (activeGroup==='all' ? 'Master Calendar' : ((groupDef&&groupDef.label)||'Calendar'))
+                 + ' · ' + (st.view==='day' ? start.toLocaleDateString([], {weekday:'long', month:'short', day:'numeric'}) : 'Week'),
+      gridHint: 'Shop hours '+SHOP_START+':00 – '+SHOP_END+':00'
+                + (ungrouped ? ' · '+ungrouped+' press'+(ungrouped===1?'':'es')+' not in any group — Master only' : ''),
+      // Six day columns plus the hour gutter have to clear the 330px queue
+      // beside them without pushing Saturday off the edge at a normal laptop
+      // width -- that was the first thing this layout got wrong.
+      gridCols: '58px repeat('+dayCount+', minmax('+(st.view==='day'?'340':'158')+'px,1fr))',
+      gridMinW: (58 + dayCount*(st.view==='day'?344:162) + 8)+'px',
+      rowH: ROW_H+'px',
+      trackH: trackH+'px',
+      // One line per hour, drawn as a background rather than 9 more elements
+      // per day column -- with 6 days that is 54 divs saved every render.
+      hourLines: 'repeating-linear-gradient(to bottom, transparent 0, transparent '+(ROW_H-1)+'px, #16161a '+(ROW_H-1)+'px, #16161a '+ROW_H+'px)',
+      hourLabels, headers, cols,
       gridFooter: st.conn==='demo'
         ? 'Demo data — not connected to Salesforce.'
         : 'Dashed blocks are suggestions from the priority model; dragging one confirms it and updates the order’s print date.',
