@@ -20,6 +20,22 @@ import { sfFetch, apiVersion, jsonError } from "../_sf.js";
 // silently match nothing, which is worse than no cascade at all.
 
 const ALLOWED_FIELDS = new Set([
+  // Print_Date__c (added 2026-08-17): the Calendar dashboard writes this when a
+  // manager drags a job to a new slot, so the order's official print date
+  // follows what was decided on the calendar rather than drifting from it.
+  //
+  // This one has more reach than anything else on this list. Print_Date__c
+  // drives card order on BOTH boards, prepBufferStats()'s Prep Time KPI, and
+  // the urgency term of the priority score itself -- so a drag genuinely
+  // re-prioritises the order it moved. That feedback is intended (a job pushed
+  // later IS less urgent) and is why a dragged run is stamped
+  // Auto_Scheduling_Status__c = 'Confirmed': the suggestion engine stops
+  // proposing a slot for it, so the board cannot appear to argue with the
+  // manager who just moved it.
+  //
+  // For an order with several runs, the calendar sends the EARLIEST run's
+  // start -- an order begins printing when its first run does.
+  "Print_Date__c",
   "Receiving_Status__c",
   // Screen Print
   // Films_Printed__c was renamed to Design_Received__c as of 2026-08-10 (API
