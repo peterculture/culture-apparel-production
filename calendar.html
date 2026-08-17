@@ -13,292 +13,337 @@
 <helmet>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css" rel="stylesheet">
   <style>
-    /* Palette validated against the app's card surface #141417 with
-       scripts/validate_palette.js: status tokens clear WCAG (6.51 / 6.70 /
-       4.62), and the score-breakdown slots clear CVD dE 14.9 / normal-vision
-       19.9 against the 8 / 15 gates. Press identity is carried by the lane
-       label, not colour -- four press hues cannot pass the categorical gates on
-       this surface, and colouring a labelled row re-encodes what the row says. */
-    :root{
-      --page:#0D0D0F; --surface:#141417; --raised:#1A1A1E; --border:#232327; --border-hi:#3A3A40;
-      --ink:#F2F0EC; --ink2:#A8A29A; --ink3:#6C665C;
-      --s1:#C6372B; --s2:#27A8A4; --s3:#A97426; --s4:#9878C0;
-      --good:#7FA644; --warn:#C9923A; --crit:#E24A3A;
-    }
+    /* Byte-for-byte the same base as index.html / station.html / shipping.html.
+       This board previously shipped its own :root token set and its own Tabler
+       v2 -- which is why every sidebar icon rendered as the same fallback glyph
+       and the greys were a shade off everywhere. Do not "tidy" this into
+       variables unless the other five boards move at the same time. */
     *{box-sizing:border-box}
-    body{margin:0;background:var(--page);color:var(--ink);font-family:Archivo,system-ui,sans-serif;font-size:13px;-webkit-font-smoothing:antialiased}
-    h1,h2,h3{font-family:Oswald,Archivo,sans-serif;margin:0;letter-spacing:.02em}
-    a{color:inherit;text-decoration:none}
-    .shell{display:flex;min-height:100vh}
-    .side{width:212px;flex:none;background:var(--surface);border-right:1px solid var(--border);padding:16px 12px;display:flex;flex-direction:column;gap:6px}
-    .brand{display:flex;align-items:center;gap:9px;padding:0 4px 14px}
-    .logo{width:30px;height:30px;border-radius:7px;background:var(--s1);display:grid;place-items:center;font-family:Oswald;font-weight:700;font-size:13px;color:#fff}
-    .main{flex:1;min-width:0;padding:16px 20px 60px}
-    .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-    .spacer{flex:1}
-    .pill{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;background:var(--surface);border:1px solid var(--border);font-size:11.5px;color:var(--ink2);white-space:nowrap}
-    .btn{background:var(--raised);border:1px solid var(--border);color:var(--ink2);font:inherit;font-size:12px;padding:6px 11px;border-radius:7px;cursor:pointer}
-    .btn:hover{border-color:var(--border-hi);color:var(--ink)}
-    .btn.on{background:rgba(255,255,255,.08);color:var(--ink);font-weight:600}
-    .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px}
-    input[type=search],select{background:var(--raised);border:1px solid var(--border);color:var(--ink);border-radius:7px;padding:6px 9px;font:inherit;font-size:12.5px;outline:none}
-    .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:14px 0}
-    .tile{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
-    .tile .l{font-size:11px;color:var(--ink3)}
-    .tile .v{font-family:Oswald;font-size:27px;font-weight:600;line-height:1.1;margin-top:3px}
-    .tile .m{font-size:11px;color:var(--ink3);margin-top:2px}
-    .cols{display:grid;grid-template-columns:288px 1fr;gap:14px;align-items:start}
-    /* ── time grid ─────────────────────────────────────────────────────── */
-    .gridwrap{overflow-x:auto}
-    .lanehead{display:grid;gap:2px;min-width:860px;margin-bottom:2px}
-    /* Day-name headers sit centred OVER their column; hour headers sit at the
-       tick they name, because a block starting at 7:00 is drawn from the left
-       edge of the 7a column and a centred "7a" put the label half a column to
-       its right -- close enough to read a 7am job as an 8am job. */
-    .hh{font-size:10.5px;color:var(--ink3);text-align:center;padding:4px 0}
-    .hh.tick{text-align:left;padding-left:1px}
-    .lane{display:grid;gap:2px;min-width:860px;margin-bottom:2px}
-    .lanename{background:var(--raised);border-radius:7px;padding:10px;font-size:12px;font-weight:600;color:var(--ink2);display:flex;align-items:center}
-    .track{position:relative;background:var(--raised);border-radius:7px;height:62px}
-    .slot{position:absolute;top:0;bottom:0;border-right:1px solid rgba(255,255,255,.03)}
-    .slot.over{background:rgba(198,55,43,.14)}
-    .blk{position:absolute;top:4px;bottom:4px;border-radius:6px;padding:5px 7px;overflow:hidden;cursor:grab;background:var(--surface);border-left:3px solid var(--ink3);font-size:11px}
-    .blk.prop{border-style:dashed;border:1px dashed var(--border-hi);border-left:3px dashed var(--ink3);opacity:.82}
-    .blk .t{font-weight:600;font-size:11px;display:flex;justify-content:space-between;gap:6px}
-    .blk .t b{font-family:Oswald;font-size:12.5px}
-    .blk .c{color:var(--ink3);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .blk.locked{cursor:default}
-    /* ── queue ─────────────────────────────────────────────────────────── */
-    .qrow{background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:9px 10px;margin-bottom:6px;cursor:grab}
-    .qrow.locked{cursor:default}
-    .qrow .n{font-weight:600;font-size:12.5px;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
-    .qrow .n b{font-family:Oswald;font-size:16px}
-    .qrow .s{font-size:11px;color:var(--ink3);margin-top:2px}
-    .chip{display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border-radius:5px;background:rgba(255,255,255,.05);border:1px solid var(--border);font-size:10px;color:var(--ink2)}
-    .status{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600}
-    .stack{display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--surface);gap:2px;margin-top:6px}
-    .stack i{display:block;height:100%}
-    .legend{display:flex;gap:13px;flex-wrap:wrap;font-size:11px;color:var(--ink2);margin-bottom:11px;align-items:center}
-    .sw{width:9px;height:9px;border-radius:2px;flex:none}
-    /* ── drawer + gate ─────────────────────────────────────────────────── */
-    .scrim{position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:40}
-    .drawer{position:fixed;top:0;right:0;bottom:0;width:min(430px,94vw);background:var(--surface);border-left:1px solid var(--border);z-index:41;padding:18px;overflow:auto}
-    .gate{position:fixed;inset:0;background:var(--page);z-index:60;display:grid;place-items:center}
-    .pad{display:grid;grid-template-columns:repeat(3,64px);gap:9px;margin-top:14px}
-    .pad button{height:52px;border-radius:9px;background:var(--raised);border:1px solid var(--border);color:var(--ink);font:inherit;font-size:19px;font-family:Oswald;cursor:pointer}
-    .dots{display:flex;gap:9px;justify-content:center;margin-top:12px}
-    .dot{width:11px;height:11px;border-radius:50%;border:1px solid var(--border-hi)}
-    .note{font-size:11.5px;color:var(--ink3);line-height:1.5}
-    .warnbox{background:rgba(201,146,58,.09);border:1px solid rgba(201,146,58,.3);border-radius:8px;padding:10px 12px;font-size:11.5px;color:var(--ink2);margin-bottom:12px}
+    body{margin:0;background:#08080A;font-family:'Archivo',system-ui,sans-serif;-webkit-font-smoothing:antialiased;color:#ECEAE4}
+    a{color:#E24A3A;text-decoration:none}
+    a:hover{color:#C6372B}
+    .ti{font-size:inherit;line-height:1;display:inline-block}
+    input,textarea{font-family:inherit}
+    input::placeholder,textarea::placeholder{color:#4d483f}
+    ::-webkit-scrollbar{width:9px;height:9px}
+    ::-webkit-scrollbar-thumb{background:#2a2a2e;border-radius:6px}
+    ::-webkit-scrollbar-track{background:transparent}
+    @keyframes ca-pulse{0%,100%{box-shadow:0 0 0 0 rgba(226,74,58,.5)}50%{box-shadow:0 0 0 5px rgba(226,74,58,0)}}
+    @keyframes ca-shake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(4px)}30%,50%,70%{transform:translateX(-7px)}40%,60%{transform:translateX(7px)}}
+    @keyframes ca-slide{from{transform:translateX(30px);opacity:0}to{transform:translateX(0);opacity:1}}
+    @keyframes ca-slide-left{from{transform:translateX(-30px);opacity:0}to{transform:translateX(0);opacity:1}}
+    @keyframes ca-glow{0%,100%{box-shadow:0 0 6px 2px var(--glow-c)}50%{box-shadow:0 0 16px 5px var(--glow-c)}}
   </style>
 </helmet>
 
-<div class="shell">
-  <!-- ── sidebar ──────────────────────────────────────────────────────── -->
-  <nav class="side">
-    <div class="brand">
-      <div class="logo">CA</div>
-      <div>
-        <div style="font-family:Oswald;font-weight:600;font-size:14px">Culture Apparel</div>
-        <div style="font-size:10px;color:var(--ink3);letter-spacing:.06em;text-transform:uppercase">Production</div>
+<div style="display:flex;flex-direction:column;min-height:100vh;background:radial-gradient(circle at 30% -10%,#101013,#08080A 55%)">
+
+  <!-- ── header ───────────────────────────────────────────────────────── -->
+  <header style="position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:16px;padding:14px 26px;background:rgba(6,6,7,.92);backdrop-filter:blur(10px);border-bottom:1px solid rgba(198,55,43,.4)">
+    <button onClick="{{ onOpenNav }}" title="All dashboards" style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:9px;background:#16161a;border:1px solid #2a2a2f;color:#9C978C;cursor:pointer;flex-shrink:0" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-menu-2" style="font-size:18px"></i></button>
+    <svg width="34" height="34" viewBox="0 0 48 48" aria-hidden="true" style="flex-shrink:0"><g fill="#C6372B"><rect x="12" y="9" width="24" height="3.1" rx="1.5"/><rect x="8" y="14" width="32" height="3.1" rx="1.5"/><rect x="5" y="19" width="38" height="3.1" rx="1.5"/><rect x="5" y="24" width="38" height="3.1" rx="1.5"/><rect x="6" y="29" width="36" height="3.1" rx="1.5"/><rect x="9" y="34" width="30" height="3.1" rx="1.5"/><rect x="13" y="39" width="22" height="3.1" rx="1.5"/></g></svg>
+    <div style="min-width:0">
+      <div style="font:700 16px/1 'Oswald';letter-spacing:.12em;color:#ECEAE4">CULTURE APPAREL</div>
+      <div style="font:500 9px/1 'Oswald';letter-spacing:.4em;text-transform:uppercase;color:#C6372B;margin-top:4px">Production Schedule</div>
+    </div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:flex-end">
+      <div style="font:600 13px/1 'Oswald';letter-spacing:.1em;color:#9C978C;white-space:nowrap">{{clock}} <span style="color:#4d483f">·</span> {{dateStr}}</div>
+      <sc-if value="{{readOnly}}" hint-placeholder-val="{{ false }}"><div title="Everyone can view the schedule; only managers and admins can change it" style="display:flex;align-items:center;gap:7px;font:600 10px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#E0B870;background:#241a09;border:1px solid #5E4214;border-radius:8px;padding:8px 11px;white-space:nowrap"><i class="ti ti-lock"></i>View only</div></sc-if>
+      <div style="display:flex;align-items:center;gap:7px;font:600 10px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#9C978C;white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:{{connColor}};box-shadow:0 0 7px {{connColor}}"></span>{{connLabel}}</div>
+      <sc-if value="{{isAdmin}}" hint-placeholder-val="{{ false }}"><button onClick="{{ onOpenSfEnv }}" title="Salesforce environment -- click to switch" style="display:flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#9C978C;background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:8px 11px;cursor:pointer;white-space:nowrap" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-cloud" style="font-size:12px"></i>{{sfEnvLabel}}</button></sc-if>
+      <div style="display:flex;align-items:center;gap:8px"><span style="width:28px;height:28px;border-radius:50%;background:#5E9B9A;color:#08080A;font:700 10px/28px 'Oswald';text-align:center">{{workerInit}}</span><span style="font:400 12px/1 'Archivo';color:#9C978C;white-space:nowrap">{{worker}}</span><button onClick="{{ onSwitchUser }}" title="Switch user" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px;background:transparent;border:1px solid #2a2a2f;color:#6C665C;cursor:pointer;flex-shrink:0" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-repeat" style="font-size:12px"></i></button></div>
+    </div>
+  </header>
+
+  <!-- ── all-boards nav drawer ────────────────────────────────────────── -->
+  <sc-if value="{{navOpen}}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ onCloseNav }}" style="position:fixed;inset:0;z-index:90;background:rgba(6,6,7,.66);backdrop-filter:blur(3px)"></div>
+    <aside style="position:fixed;top:0;left:0;bottom:0;z-index:91;width:min(300px,86vw);background:#0C0C0E;border-right:1px solid #232327;box-shadow:30px 0 70px -20px rgba(0,0,0,.8);display:flex;flex-direction:column;animation:ca-slide-left .2s ease">
+      <div style="display:flex;align-items:center;gap:12px;padding:20px 22px;border-bottom:1px solid #1b1b1e">
+        <svg width="28" height="28" viewBox="0 0 48 48" aria-hidden="true" style="flex-shrink:0"><g fill="#C6372B"><rect x="12" y="9" width="24" height="3.1" rx="1.5"/><rect x="8" y="14" width="32" height="3.1" rx="1.5"/><rect x="5" y="19" width="38" height="3.1" rx="1.5"/><rect x="5" y="24" width="38" height="3.1" rx="1.5"/><rect x="6" y="29" width="36" height="3.1" rx="1.5"/><rect x="9" y="34" width="30" height="3.1" rx="1.5"/><rect x="13" y="39" width="22" height="3.1" rx="1.5"/></g></svg>
+        <div style="font:700 13px/1 'Oswald';letter-spacing:.1em;color:#ECEAE4">CULTURE APPAREL</div>
+        <button onClick="{{ onCloseNav }}" style="margin-left:auto;flex-shrink:0;width:30px;height:30px;border-radius:8px;background:#16161a;border:1px solid #2a2a2f;color:#9C978C;cursor:pointer" style-hover="color:#ECEAE4;border-color:#3a3a40"><i class="ti ti-x"></i></button>
       </div>
-    </div>
-    <sc-for list="{{navBoards}}" as="b">
-      <a href="{{b.href}}" style="display:flex;align-items:center;gap:11px;background:{{b.bg}};border:1px solid {{b.border}};border-left:4px solid {{b.color}};border-radius:10px;padding:11px 12px;margin-bottom:5px">
-        <i class="{{b.icon}}" style="color:{{b.color}};font-size:17px"></i>
-        <span style="font-size:12.5px;font-weight:{{b.weight}}">{{b.label}}</span>
-      </a>
-    </sc-for>
-    <div class="spacer"></div>
-    <div style="font-size:11px;color:var(--ink3);padding:0 4px 6px">{{who}}</div>
-    <button class="btn" onClick="{{ onSwitchUser }}">Switch user</button>
-    <button class="btn" onClick="{{ onLogout }}" style="margin-top:5px">Log out</button>
-  </nav>
-
-  <!-- ── main ─────────────────────────────────────────────────────────── -->
-  <div class="main">
-    <div class="row">
-      <h1 style="font-size:19px;font-weight:600">Production Calendar</h1>
-      <span class="pill"><span style="width:7px;height:7px;border-radius:50%;background:{{connColor}}"></span>{{connLabel}}</span>
-      <div class="spacer"></div>
-      <sc-if value="{{isAdmin}}">
-        <button class="btn" onClick="{{ onOpenEnv }}"><i class="ti ti-cloud"></i> {{sfEnvLabel}}</button>
-      </sc-if>
-      <button class="btn" onClick="{{ onRefresh }}"><i class="ti ti-refresh"></i> Refresh</button>
-    </div>
-
-    <sc-if value="{{readOnly}}">
-      <div class="warnbox" style="margin-top:12px"><b style="color:var(--warn)">View only.</b> Scheduling is limited to managers and admins — you can see everything here, but dragging is disabled.</div>
-    </sc-if>
-
-    <div class="row" style="margin-top:12px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:10px">
-      <input type="search" placeholder="Customer, order #…" value="{{q}}" onInput="{{ onSearch }}">
-      <div style="display:inline-flex;border:1px solid var(--border);border-radius:7px;overflow:hidden">
-        <button class="btn {{dayCls}}" style="border:none;border-radius:0" onClick="{{ onViewDay }}">Day</button>
-        <button class="btn {{weekCls}}" style="border:none;border-radius:0;border-left:1px solid var(--border)" onClick="{{ onViewWeek }}">Week</button>
+      <div style="padding:14px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1">
+        <sc-for list="{{navBoards}}" as="b" hint-placeholder-count="7">
+          <a href="{{b.href}}" style="display:flex;align-items:center;gap:13px;background:{{b.bg}};border:1px solid {{b.border}};border-left:4px solid {{b.color}};border-radius:11px;padding:14px 15px;text-decoration:none" style-hover="border-color:#3a3a40">
+            <i class="ti {{b.icon}}" style="color:{{b.color}};font-size:19px;flex-shrink:0"></i>
+            <div style="min-width:0"><div style="font:600 13px/1 'Oswald';color:#ECEAE4">{{b.label}}</div><div style="font:400 10px/1.3 'Archivo';color:#6C665C;margin-top:3px">{{b.sub}}</div></div>
+            <sc-if value="{{b.isActive}}" hint-placeholder-val="{{ false }}"><i class="ti ti-circle-check" style="margin-left:auto;color:{{b.color}};font-size:16px;flex-shrink:0"></i></sc-if>
+          </a>
+        </sc-for>
       </div>
-      <button class="btn" onClick="{{ onPrev }}"><i class="ti ti-chevron-left"></i></button>
-      <button class="btn" onClick="{{ onToday }}">Today</button>
-      <button class="btn" onClick="{{ onNext }}"><i class="ti ti-chevron-right"></i></button>
-      <span style="font-family:Oswald;font-size:16px;font-weight:600">{{rangeLabel}}</span>
-    </div>
+      <div style="padding:14px;border-top:1px solid #1b1b1e;display:flex;flex-direction:column;gap:8px;flex-shrink:0">
+        <button onClick="{{ onSwitchUser }}" style="display:flex;align-items:center;gap:10px;background:#141417;border:1px solid #232327;border-radius:10px;padding:12px 14px;color:#ECEAE4;font:600 12px/1 'Oswald';letter-spacing:.03em;cursor:pointer;text-align:left" style-hover="border-color:#3a3a40"><i class="ti ti-repeat" style="color:#8a8378;font-size:15px;flex-shrink:0"></i>Switch Account</button>
+        <button onClick="{{ onLogout }}" style="display:flex;align-items:center;gap:10px;background:transparent;border:1px solid #232327;border-radius:10px;padding:12px 14px;color:#E8A89F;font:600 12px/1 'Oswald';letter-spacing:.03em;cursor:pointer;text-align:left" style-hover="border-color:#7A241C;background:#2A100D"><i class="ti ti-logout" style="font-size:15px;flex-shrink:0"></i>Log Out</button>
+      </div>
+    </aside>
+  </sc-if>
 
-    <div class="kpis">
-      <sc-for list="{{kpis}}" as="k">
-        <div class="tile"><div class="l">{{k.label}}</div><div class="v" style="color:{{k.color}}">{{k.value}}</div><div class="m">{{k.meta}}</div></div>
+  <!-- ── filter row ───────────────────────────────────────────────────── -->
+  <div style="display:flex;align-items:center;gap:12px;padding:16px 26px 4px;flex-wrap:wrap">
+    <div style="position:relative;flex:1;min-width:220px;max-width:360px">
+      <i class="ti ti-search" style="position:absolute;left:13px;top:50%;transform:translateY(-50%);color:#4d483f;font-size:15px"></i>
+      <input value="{{q}}" onInput="{{ onSearch }}" placeholder="Search order #, customer, job name…" style="width:100%;background:#121215;border:1px solid #242428;border-radius:9px;padding:11px 13px 11px 36px;font-size:13px;color:#ECEAE4;outline:none">
+    </div>
+    <div style="display:flex;gap:7px">
+      <sc-for list="{{viewTabs}}" as="v" hint-placeholder-count="2">
+        <button onClick="{{ v.onPick }}" style="display:inline-flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:{{v.textColor}};background:{{v.bg}};border:1px solid {{v.border}};border-radius:8px;padding:9px 12px;cursor:pointer"><i class="ti {{v.icon}}"></i>{{v.label}}</button>
       </sc-for>
     </div>
+    <div style="display:flex;gap:7px;align-items:center">
+      <button onClick="{{ onPrev }}" title="Previous" style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;color:#9C978C;background:transparent;border:1px solid #2a2a2f;border-radius:8px;cursor:pointer" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-chevron-left"></i></button>
+      <button onClick="{{ onToday }}" style="display:inline-flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#9C978C;background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:9px 12px;cursor:pointer" style-hover="border-color:#C6372B;color:#C6372B">Today</button>
+      <button onClick="{{ onNext }}" title="Next" style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;color:#9C978C;background:transparent;border:1px solid #2a2a2f;border-radius:8px;cursor:pointer" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-chevron-right"></i></button>
+      <span style="font:600 14px/1 'Oswald';letter-spacing:.06em;color:#ECEAE4;white-space:nowrap;margin-left:4px">{{rangeLabel}}</span>
+    </div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+      <span style="font:400 11px/1 'Archivo';color:#6C665C">{{shownLabel}}</span>
+      <button onClick="{{ onRefresh }}" style="display:inline-flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#9C978C;background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:9px 12px;cursor:pointer" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-refresh"></i>Refresh</button>
+    </div>
+  </div>
 
-    <div class="cols">
-      <!-- queue -->
-      <div class="card">
-        <h2 style="font-size:13.5px;font-weight:600">Needs scheduling</h2>
-        <div class="note" style="margin:3px 0 11px">{{queueHint}}</div>
-        <div class="legend">
-          <span><i class="sw" style="background:var(--s1)"></i>Urgency</span>
-          <span><i class="sw" style="background:var(--s3)"></i>AM</span>
-          <span><i class="sw" style="background:var(--s2)"></i>Prep</span>
-          <span><i class="sw" style="background:var(--s4)"></i>Firm</span>
+  <!-- ── KPI row ──────────────────────────────────────────────────────── -->
+  <div style="display:flex;gap:12px;padding:14px 26px;flex-wrap:wrap">
+    <sc-for list="{{kpis}}" as="k" hint-placeholder-count="4">
+      <div style="position:relative;flex:1;min-width:150px;display:flex;gap:11px;align-items:stretch;background:#0D0D0F;border:1px solid #1b1b1e;border-radius:12px;padding:14px 16px">
+        <div style="width:4px;border-radius:3px;background:{{k.accent}};flex-shrink:0"></div>
+        <div style="min-width:0">
+          <div style="font:500 10px/1 'Oswald';letter-spacing:.13em;text-transform:uppercase;color:#6C665C;margin-bottom:9px">{{k.label}}</div>
+          <div style="display:flex;align-items:baseline;gap:4px"><span style="font:600 27px/0.85 'Oswald';color:{{k.valueColor}}">{{k.value}}</span><span style="font:500 10px/1 'Archivo';color:#6C665C">{{k.unit}}</span></div>
+          <div style="font:400 9px/1.3 'Archivo';color:#4d483f;margin-top:8px">{{k.sub}}</div>
         </div>
-        <sc-for list="{{queue}}" as="o">
-          <div class="qrow {{o.lockCls}}" draggable="{{o.canDrag}}" onDragStart="{{ o.onDragStart }}" onClick="{{ o.onOpen }}">
-            <div class="n"><span>{{o.customer}}</span><b style="color:{{o.scoreColor}}">{{o.score}}</b></div>
-            <div class="s">{{o.sub}}</div>
-            <div class="s" style="margin-top:3px">
-              <span class="chip">{{o.method}}</span>
-              <span class="status" style="color:{{o.prepColor}};margin-left:6px"><i class="{{o.prepIcon}}"></i>{{o.prepLabel}}</span>
-            </div>
-            <div class="stack">
-              <sc-for list="{{o.bars}}" as="b"><i style="width:{{b.w}};background:{{b.c}}"></i></sc-for>
-            </div>
-            <div class="s" style="margin-top:5px">{{o.suggestion}}</div>
-          </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- ── body ─────────────────────────────────────────────────────────── -->
+  <div style="flex:1;display:grid;grid-template-columns:330px minmax(0,1fr);gap:14px;padding:6px 26px 40px;align-items:start">
+
+    <!-- queue -->
+    <div style="display:flex;flex-direction:column;gap:12px;min-width:0;background:#0D0D0F;border:1px solid #1b1b1e;border-radius:14px;padding:12px">
+      <div style="display:flex;align-items:center;gap:10px;background:#101013;border:1px solid #202024;border-left:4px solid #C6372B;border-radius:9px;padding:12px 14px">
+        <i class="ti ti-calendar-off" style="color:#C6372B;font-size:17px"></i>
+        <span style="font:600 12px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#ECEAE4">Needs Scheduling</span>
+        <span style="margin-left:auto;font:700 15px/1 'Oswald';color:#C6372B">{{queueCount}}</span>
+      </div>
+      <div style="font:400 10px/1.3 'Archivo';letter-spacing:.03em;color:#4d483f;padding:0 4px;margin-top:-4px">{{queueHint}}</div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:9px;padding:0 4px">
+        <sc-for list="{{scoreLegend}}" as="s" hint-placeholder-count="4">
+          <span style="display:inline-flex;align-items:center;gap:5px;font:400 9px/1 'Archivo';color:#6C665C"><i style="width:9px;height:9px;border-radius:2px;background:{{s.color}};display:inline-block"></i>{{s.label}}</span>
         </sc-for>
-        <sc-if value="{{queueEmpty}}">
-          <div class="note">Everything in this window has a run scheduled.</div>
-        </sc-if>
       </div>
 
-      <!-- grid -->
-      <div class="card">
-        <h2 style="font-size:13.5px;font-weight:600">{{gridTitle}}</h2>
-        <div class="note" style="margin:3px 0 11px">{{gridHint}}</div>
-        <div class="legend">
-          <span style="color:var(--ink3)">Bar colour = prep status:</span>
-          <span><i class="sw" style="background:var(--good)"></i>Ready / Great</span>
-          <span><i class="sw" style="background:var(--warn)"></i>Mediocre</span>
-          <span><i class="sw" style="background:var(--crit)"></i>Very bad</span>
-          <span style="margin-left:8px;color:var(--ink3)">Dashed = suggested, solid = confirmed</span>
-        </div>
-        <div class="gridwrap">
-          <div class="lanehead" style="grid-template-columns:{{gridCols}}">
-            <div></div>
-            <sc-for list="{{headers}}" as="h"><div class="hh {{h.cls}}">{{h.label}}</div></sc-for>
-          </div>
-          <sc-for list="{{lanes}}" as="ln">
-            <div class="lane" style="grid-template-columns:{{gridCols}};{{ln.style}}">
-              <div class="lanename">{{ln.name}}</div>
-              <div class="track" style="grid-column:2 / span {{colCount}}">
-                <sc-for list="{{ln.slots}}" as="s">
-                  <div class="slot {{s.overCls}}" style="left:{{s.left}};width:{{s.width}}"
-                       onDragOver="{{ s.onDragOver }}" onDragLeave="{{ s.onDragLeave }}" onDrop="{{ s.onDrop }}"></div>
-                </sc-for>
-                <sc-for list="{{ln.blocks}}" as="b">
-                  <div class="blk {{b.cls}}" draggable="{{b.canDrag}}"
-                       style="left:{{b.left}};width:{{b.width}};top:{{b.top}};height:{{b.height}};border-left-color:{{b.color}}"
-                       onDragStart="{{ b.onDragStart }}" onClick="{{ b.onOpen }}">
-                    <div class="t"><span>{{b.num}}</span><b style="color:{{b.scoreColor}}">{{b.score}}</b></div>
-                    <div class="c">{{b.customer}}</div>
-                    <div class="c">{{b.time}}</div>
-                  </div>
-                </sc-for>
-              </div>
+      <sc-for list="{{queue}}" as="o" hint-placeholder-count="2">
+        <div draggable="{{o.canDrag}}" onDragStart="{{ o.onDragStart }}" onClick="{{ o.onOpen }}" style="display:flex;background:#101013;border:1px solid #202024;border-radius:11px;overflow:hidden;cursor:{{o.cursor}}" style-hover="border-color:#3a3a40">
+          <div style="width:4px;background:{{o.prepColor}};flex-shrink:0"></div>
+          <div style="flex:1;min-width:0;padding:12px 13px">
+            <div style="display:flex;align-items:baseline;gap:8px">
+              <span style="font:600 14px/1.1 'Oswald';color:#ECEAE4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{o.customer}}</span>
+              <span style="margin-left:auto;flex-shrink:0;font:700 17px/1 'Oswald';color:{{o.scoreColor}}">{{o.score}}</span>
             </div>
+            <div style="font:400 11px/1.3 'Archivo';color:#6C665C;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{o.sub}}</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">
+              <span style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#9C978C;background:#16161a;border:1px solid #2a2a2f;border-radius:6px;padding:5px 7px">{{o.method}}</span>
+              <span style="display:inline-flex;align-items:center;gap:5px;font:700 9px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:{{o.prepColor}}"><i class="ti {{o.prepIcon}}"></i>{{o.prepLabel}}</span>
+            </div>
+            <div style="display:flex;height:6px;border-radius:3px;overflow:hidden;background:#08080A;gap:2px;margin-top:9px">
+              <sc-for list="{{o.bars}}" as="b" hint-placeholder-count="4"><i style="display:block;height:100%;width:{{b.w}};background:{{b.c}}"></i></sc-for>
+            </div>
+            <div style="font:400 10px/1.3 'Archivo';color:#4d483f;margin-top:7px">{{o.suggestion}}</div>
+          </div>
+        </div>
+      </sc-for>
+
+      <sc-if value="{{queueEmpty}}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:26px 12px;background:#101013;border:1px dashed #232327;border-radius:11px">
+          <i class="ti ti-circle-check" style="color:#7FA644;font-size:24px"></i>
+          <div style="font:400 11px/1.4 'Archivo';color:#6C665C;text-align:center">Everything in this window has a run scheduled.</div>
+        </div>
+      </sc-if>
+    </div>
+
+    <!-- time grid -->
+    <div style="display:flex;flex-direction:column;gap:12px;min-width:0;background:#0D0D0F;border:1px solid #1b1b1e;border-radius:14px;padding:12px">
+      <div style="display:flex;align-items:center;gap:10px;background:#101013;border:1px solid #202024;border-left:4px solid #9878C0;border-radius:9px;padding:12px 14px">
+        <i class="ti ti-calendar-time" style="color:#9878C0;font-size:17px"></i>
+        <span style="font:600 12px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#ECEAE4">{{gridTitle}}</span>
+        <span style="margin-left:auto;font:400 10px/1 'Archivo';color:#6C665C">{{gridHint}}</span>
+      </div>
+
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:11px;padding:0 4px">
+        <span style="font:400 9px/1 'Archivo';color:#4d483f">Bar colour = prep status</span>
+        <sc-for list="{{prepLegend}}" as="s" hint-placeholder-count="3">
+          <span style="display:inline-flex;align-items:center;gap:5px;font:400 9px/1 'Archivo';color:#6C665C"><i style="width:9px;height:9px;border-radius:2px;background:{{s.color}};display:inline-block"></i>{{s.label}}</span>
+        </sc-for>
+        <span style="font:400 9px/1 'Archivo';color:#4d483f;margin-left:4px">Dashed = suggested · solid = confirmed</span>
+      </div>
+
+      <div style="overflow-x:auto">
+        <div style="display:grid;gap:3px;min-width:880px;margin-bottom:3px;grid-template-columns:{{gridCols}}">
+          <div></div>
+          <sc-for list="{{headers}}" as="h" hint-placeholder-count="9">
+            <div style="font:500 9px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#4d483f;padding:5px 0;text-align:{{h.align}}">{{h.label}}</div>
           </sc-for>
         </div>
-        <div class="note" style="margin-top:10px">{{gridFooter}}</div>
+        <sc-for list="{{lanes}}" as="ln" hint-placeholder-count="4">
+          <div style="display:grid;gap:3px;min-width:880px;margin-bottom:3px;grid-template-columns:{{gridCols}};min-height:{{ln.minH}}">
+            <div style="background:#101013;border:1px solid #202024;border-radius:9px;padding:10px 12px;display:flex;align-items:center;font:600 11px/1.2 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#9C978C">{{ln.name}}</div>
+            <div style="position:relative;background:#0A0A0C;border:1px solid #16161a;border-radius:9px;grid-column:2 / span {{colCount}}">
+              <sc-for list="{{ln.slots}}" as="s" hint-placeholder-count="9">
+                <div style="position:absolute;top:0;bottom:0;left:{{s.left}};width:{{s.width}};border-right:1px solid rgba(255,255,255,.028);background:{{s.overBg}}"
+                     onDragOver="{{ s.onDragOver }}" onDragLeave="{{ s.onDragLeave }}" onDrop="{{ s.onDrop }}"></div>
+              </sc-for>
+              <sc-for list="{{ln.blocks}}" as="b" hint-placeholder-count="2">
+                <div draggable="{{b.canDrag}}" onDragStart="{{ b.onDragStart }}" onClick="{{ b.onOpen }}"
+                     style="position:absolute;left:{{b.left}};width:{{b.width}};top:{{b.top}};height:{{b.height}};background:#141417;border:1px {{b.borderStyle}} #232327;border-left:3px solid {{b.color}};border-radius:8px;padding:6px 8px;overflow:hidden;cursor:{{b.cursor}};opacity:{{b.opacity}}"
+                     style-hover="border-color:#3a3a40">
+                  <div style="display:flex;align-items:baseline;gap:6px">
+                    <span style="font:600 11px/1 'Oswald';letter-spacing:.05em;color:#ECEAE4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{b.num}}</span>
+                    <span style="margin-left:auto;flex-shrink:0;font:700 12px/1 'Oswald';color:{{b.scoreColor}}">{{b.score}}</span>
+                  </div>
+                  <div style="font:400 10px/1.3 'Archivo';color:#9C978C;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{b.customer}}</div>
+                  <div style="font:400 9px/1.3 'Archivo';color:#4d483f;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{b.time}}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
       </div>
+
+      <div style="font:400 10px/1.4 'Archivo';color:#4d483f;padding:2px 4px 0">{{gridFooter}}</div>
     </div>
   </div>
 </div>
 
-<!-- ── drawer ───────────────────────────────────────────────────────── -->
-<sc-if value="{{drawerOpen}}">
-  <div class="scrim" onClick="{{ onCloseDrawer }}"></div>
-  <div class="drawer">
-    <div class="row">
-      <h2 style="font-size:16px;font-weight:600">{{d.customer}}</h2>
-      <div class="spacer"></div>
-      <button class="btn" onClick="{{ onCloseDrawer }}"><i class="ti ti-x"></i></button>
-    </div>
-    <div class="note" style="margin-top:4px">{{d.sub}}</div>
-    <div style="display:flex;align-items:baseline;gap:10px;margin:16px 0 6px">
-      <span style="font-family:Oswald;font-size:42px;font-weight:700;color:{{d.scoreColor}}">{{d.score}}</span>
-      <span class="note">priority · {{d.daysLabel}}</span>
-    </div>
-    <div class="stack" style="height:9px">
-      <sc-for list="{{d.bars}}" as="b"><i style="width:{{b.w}};background:{{b.c}}"></i></sc-for>
-    </div>
-    <div class="note" style="margin-top:6px">{{d.breakdown}}</div>
-    <div style="margin-top:16px">
-      <span class="status" style="color:{{d.prepColor}}"><i class="{{d.prepIcon}}"></i>Prep: {{d.prepLabel}}</span>
-      <span class="chip" style="margin-left:8px">{{d.readyPct}} of checklist</span>
-    </div>
-    <h3 style="font-size:12.5px;margin-top:18px;color:var(--ink2)">Runs</h3>
-    <sc-for list="{{d.runs}}" as="r">
-      <div style="background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:9px 10px;margin-top:6px">
-        <div style="font-size:12px;font-weight:600">{{r.press}} · {{r.when}}</div>
-        <div class="note">{{r.status}}</div>
+<!-- ── order drawer ───────────────────────────────────────────────────── -->
+<sc-if value="{{drawerOpen}}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ onCloseDrawer }}" style="position:fixed;inset:0;z-index:60;background:rgba(6,6,7,.66);backdrop-filter:blur(3px)"></div>
+  <aside style="position:fixed;top:0;right:0;bottom:0;z-index:61;width:min(460px,100vw);background:#0C0C0E;border-left:1px solid #232327;box-shadow:-30px 0 70px -20px rgba(0,0,0,.8);display:flex;flex-direction:column;animation:ca-slide .22s ease">
+    <div style="display:flex;align-items:flex-start;gap:12px;padding:20px 22px;border-bottom:1px solid #1b1b1e;border-top:4px solid {{d.scoreColor}}">
+      <div style="min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font:600 10px/1 'Oswald';letter-spacing:.08em;color:#6C665C">{{d.num}}</span><span style="display:inline-flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#9C978C"><span style="width:7px;height:7px;border-radius:50%;background:{{d.prepColor}}"></span>{{d.method}}</span></div>
+        <div style="font:600 21px/1.05 'Oswald';color:#ECEAE4">{{d.customer}}</div>
+        <div style="font:400 12px/1 'Archivo';color:#6C665C;margin-top:5px">{{d.job}}</div>
       </div>
-    </sc-for>
-    <sc-if value="{{d.noRuns}}">
-      <div class="note">No runs yet. {{d.suggestion}}</div>
-    </sc-if>
-    <sc-if value="{{d.hasNotes}}">
-      <h3 style="font-size:12.5px;margin-top:18px;color:var(--ink2)">Priority notes</h3>
-      <div class="note" style="font-style:italic">{{d.notes}}</div>
-    </sc-if>
+      <button onClick="{{ onCloseDrawer }}" style="margin-left:auto;flex-shrink:0;width:34px;height:34px;border-radius:9px;background:#16161a;border:1px solid #2a2a2f;color:#9C978C;cursor:pointer;font-size:17px" style-hover="color:#ECEAE4;border-color:#3a3a40"><i class="ti ti-x"></i></button>
+    </div>
+
+    <div style="flex:1;overflow-y:auto;padding:20px 22px;display:flex;flex-direction:column;gap:24px">
+
+      <div>
+        <div style="display:flex;align-items:baseline;gap:10px">
+          <span style="font:700 42px/0.85 'Oswald';color:{{d.scoreColor}}">{{d.score}}</span>
+          <span style="font:400 11px/1.3 'Archivo';color:#6C665C">priority out of 10<br>{{d.daysLabel}}</span>
+        </div>
+        <div style="display:flex;height:9px;border-radius:5px;overflow:hidden;background:#08080A;gap:2px;margin-top:14px">
+          <sc-for list="{{d.bars}}" as="b" hint-placeholder-count="4"><i style="display:block;height:100%;width:{{b.w}};background:{{b.c}}"></i></sc-for>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:10px">
+          <sc-for list="{{d.parts}}" as="p" hint-placeholder-count="4">
+            <span style="display:inline-flex;align-items:center;gap:6px;font:400 10px/1 'Archivo';color:#9C978C"><i style="width:9px;height:9px;border-radius:2px;background:{{p.color}};display:inline-block"></i>{{p.label}} <b style="font:600 11px/1 'Oswald';color:#ECEAE4">{{p.value}}</b></span>
+          </sc-for>
+        </div>
+      </div>
+
+      <div>
+        <div style="font:500 10px/1 'Oswald';letter-spacing:.13em;text-transform:uppercase;color:#6C665C;margin-bottom:10px">Pre-Production</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="display:inline-flex;align-items:center;gap:6px;font:700 12px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:{{d.prepColor}}"><i class="ti {{d.prepIcon}}"></i>{{d.prepLabel}}</span>
+          <span style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#9C978C;background:#16161a;border:1px solid #2a2a2f;border-radius:6px;padding:6px 8px">{{d.readyPct}} of checklist</span>
+        </div>
+      </div>
+
+      <div>
+        <div style="font:500 10px/1 'Oswald';letter-spacing:.13em;text-transform:uppercase;color:#6C665C;margin-bottom:10px">Production Runs</div>
+        <sc-for list="{{d.runs}}" as="r" hint-placeholder-count="1">
+          <div style="background:#101013;border:1px solid #202024;border-left:3px solid {{r.color}};border-radius:10px;padding:12px 14px;margin-bottom:8px">
+            <div style="font:600 13px/1.1 'Oswald';color:#ECEAE4">{{r.press}} · {{r.when}}</div>
+            <div style="font:400 11px/1.3 'Archivo';color:#6C665C;margin-top:4px">{{r.status}}</div>
+          </div>
+        </sc-for>
+        <sc-if value="{{d.noRuns}}" hint-placeholder-val="{{ false }}">
+          <div style="background:#101013;border:1px dashed #232327;border-radius:10px;padding:14px;font:400 11px/1.4 'Archivo';color:#6C665C">Not scheduled yet. {{d.suggestion}}</div>
+        </sc-if>
+      </div>
+
+      <sc-if value="{{d.hasNotes}}" hint-placeholder-val="{{ false }}">
+        <div>
+          <div style="font:500 10px/1 'Oswald';letter-spacing:.13em;text-transform:uppercase;color:#6C665C;margin-bottom:10px">Account Manager Notes</div>
+          <div style="background:#101013;border:1px solid #202024;border-radius:10px;padding:14px;font:400 12px/1.5 'Archivo';color:#9C978C;font-style:italic">{{d.notes}}</div>
+        </div>
+      </sc-if>
+    </div>
+  </aside>
+</sc-if>
+
+<!-- ── Salesforce environment ─────────────────────────────────────────── -->
+<sc-if value="{{sfEnvOpen}}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;inset:0;z-index:96;background:rgba(6,6,7,.82);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:24px">
+    <div style="width:100%;max-width:440px;background:#0D0D0F;border:1px solid #1f1f23;border-radius:18px;box-shadow:0 40px 90px -30px rgba(0,0,0,.8);position:relative">
+      <div style="display:flex;align-items:center;gap:12px;padding:18px 22px;border-bottom:1px solid #1f1f23">
+        <div>
+          <div style="font:600 17px/1.1 'Oswald';color:#ECEAE4">Salesforce Environment</div>
+          <div style="font:400 11px/1.4 'Archivo';color:#6C665C;margin-top:4px">Switches which org every tablet talks to — applies to everyone immediately.</div>
+        </div>
+        <button onClick="{{ onCloseSfEnv }}" style="margin-left:auto;flex-shrink:0;width:32px;height:32px;border-radius:9px;background:#16161a;border:1px solid #2a2a2f;color:#9C978C;cursor:pointer;font-size:15px" style-hover="color:#ECEAE4;border-color:#3a3a40"><i class="ti ti-x"></i></button>
+      </div>
+      <div style="padding:20px 22px;display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <sc-for list="{{sfEnvOptions}}" as="e" hint-placeholder-count="3">
+            <button onClick="{{ e.onPick }}" style="display:flex;align-items:center;gap:10px;text-align:left;background:{{e.bg}};border:1px solid {{e.border}};border-radius:10px;padding:12px 14px;cursor:{{e.cursor}}">
+              <span style="width:9px;height:9px;border-radius:50%;background:{{e.dotColor}};flex-shrink:0"></span>
+              <div style="flex:1;min-width:0">
+                <div style="font:600 13px/1.1 'Oswald';color:{{e.textColor}}">{{e.label}}</div>
+                <div style="font:400 10px/1.3 'Archivo';color:#6C665C;margin-top:3px">{{e.statusLabel}}</div>
+              </div>
+              <sc-if value="{{e.isActive}}" hint-placeholder-val="{{ false }}"><span style="font:600 8px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#7FA644;background:#18230D;border:1px solid #3D5418;border-radius:6px;padding:4px 7px;flex-shrink:0">Active</span></sc-if>
+            </button>
+          </sc-for>
+        </div>
+
+        <div>
+          <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Switch PIN</div>
+          <input type="password" value="{{sfEnvPin}}" onInput="{{ onSfEnvPin }}" placeholder="Enter PIN to confirm switch" style="width:100%;background:#121215;border:1px solid #232327;border-radius:9px;padding:11px 13px;font-size:13px;color:#ECEAE4;outline:none">
+        </div>
+
+        <sc-if value="{{sfEnvHasMsg}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:7px;font:600 11px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:#BBD382;background:#18230D;border:1px solid #3D5418;border-radius:9px;padding:10px 13px"><i class="ti ti-check"></i>{{sfEnvMsg}}</div></sc-if>
+        <sc-if value="{{sfEnvHasErr}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:8px;font:600 11px/1.3 'Oswald';letter-spacing:.03em;text-transform:uppercase;color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:9px;padding:12px 14px"><i class="ti ti-alert-triangle"></i>{{sfEnvErr}}</div></sc-if>
+
+        <button onClick="{{ onSubmitSfEnv }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:8px;font:700 12px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#fff;background:#C6372B;border:none;border-radius:11px;padding:16px;cursor:pointer" style-hover="filter:brightness(1.1)"><i class="ti ti-repeat"></i>{{sfEnvSubmitLabel}}</button>
+      </div>
+    </div>
   </div>
 </sc-if>
 
-<!-- ── env switcher ─────────────────────────────────────────────────── -->
-<sc-if value="{{envOpen}}">
-  <div class="scrim" onClick="{{ onCloseEnv }}"></div>
-  <div class="drawer" style="width:min(400px,94vw)">
-    <h2 style="font-size:16px;font-weight:600">Salesforce environment</h2>
-    <div class="note" style="margin-top:4px">This changes the org for <b>every</b> user's next request, not just yours.</div>
-    <sc-for list="{{envList}}" as="e">
-      <div style="background:var(--raised);border:1px solid {{e.border}};border-radius:8px;padding:10px 12px;margin-top:8px;cursor:{{e.cursor}}" onClick="{{ e.onPick }}">
-        <div style="font-size:13px;font-weight:600">{{e.label}}</div>
-        <div class="note">{{e.state}}</div>
+<!-- ── identity gate ──────────────────────────────────────────────────── -->
+<sc-if value="{{nameGateOpen}}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;inset:0;z-index:90;background:rgba(6,6,7,.82);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:24px">
+    <div style="width:100%;max-width:380px;background:#0D0D0F;border:1px solid #1f1f23;border-radius:18px;padding:34px 30px;text-align:center;box-shadow:0 40px 90px -30px rgba(0,0,0,.8);position:relative;overflow:hidden">
+      <div style="position:absolute;top:0;left:0;right:0;height:4px;background:#C6372B"></div>
+      <div style="width:52px;height:52px;border-radius:14px;background:#1a1a1e;border:1px solid #2a2a2f;display:flex;align-items:center;justify-content:center;margin:0 auto 18px"><i class="ti ti-user" style="color:#C6372B;font-size:26px"></i></div>
+      <div style="font:600 21px/1.1 'Oswald';color:#ECEAE4;margin-bottom:8px">Who's this?</div>
+      <div style="font:400 12px/1.5 'Archivo';color:#8a8378;margin-bottom:20px">Enter your PIN so changes made this shift can be traced back to you.</div>
+      <div style="display:flex;justify-content:center;gap:12px;margin-bottom:8px;animation:{{gateShakeAnim}}">
+        <sc-for list="{{gateDots}}" as="d" hint-placeholder-count="4">
+          <div style="width:13px;height:13px;border-radius:50%;border:2px solid {{d.border}};background:{{d.bg}};transition:all .12s"></div>
+        </sc-for>
       </div>
-    </sc-for>
-    <input type="search" placeholder="Switch PIN" value="{{envPin}}" onInput="{{ onEnvPin }}" style="width:100%;margin-top:12px">
-    <button class="btn" style="width:100%;margin-top:8px" onClick="{{ onSubmitEnv }}">Switch environment</button>
-    <div class="note" style="margin-top:8px;color:{{envMsgColor}}">{{envMsg}}</div>
-  </div>
-</sc-if>
-
-<!-- ── identity gate ────────────────────────────────────────────────── -->
-<sc-if value="{{gateOpen}}">
-  <div class="gate">
-    <div style="text-align:center">
-      <div class="logo" style="width:44px;height:44px;font-size:17px;margin:0 auto 14px"></div>
-      <h2 style="font-size:19px;font-weight:600">Who's this?</h2>
-      <div class="note" style="margin-top:5px">Enter your PIN to open the calendar.</div>
-      <div class="dots">
-        <sc-for list="{{gateDots}}" as="d"><div class="dot" style="background:{{d.bg}}"></div></sc-for>
+      <div style="height:18px;text-align:center;font:600 10px/18px 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:{{gateStatusColor}};margin-bottom:12px">{{gateStatusText}}</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px">
+        <sc-for list="{{gatePad}}" as="p" hint-placeholder-count="12">
+          <button onClick="{{ p.onPress }}" style="background:{{p.bg}};border:1px solid {{p.border}};color:{{p.color}};font:600 20px/1 'Oswald';border-radius:10px;padding:16px 0;cursor:pointer"><sc-if value="{{p.isIcon}}" hint-placeholder-val="{{ false }}"><i class="ti {{p.icon}}"></i></sc-if><sc-if value="{{p.isText}}" hint-placeholder-val="{{ true }}">{{p.label}}</sc-if></button>
+        </sc-for>
       </div>
-      <div class="pad">
-        <sc-for list="{{gatePad}}" as="p"><button onClick="{{ p.onPress }}">{{p.label}}</button></sc-for>
-      </div>
-      <div class="note" style="margin-top:12px;color:var(--crit);min-height:16px">{{gateMsg}}</div>
     </div>
   </div>
 </sc-if>
+
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#C6372B"/><text x="50" y="60" font-family="Oswald,Arial" font-size="30" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="2">CA</text><text x="50" y="78" font-family="Arial" font-size="8" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="1">CALENDAR</text></svg></template>
 </x-dc>
 
 <script type="text/x-dc" data-dc-script data-props="{}">
@@ -307,39 +352,49 @@
  *
  * Reads /api/calendar, which returns every order printing in the window with a
  * computed 1-10 priority, a prep status, any runs already scheduled, and -- for
- * orders with no run yet -- a suggested press and time slot. See
- * functions/api/_priority.js for the model and functions/api/calendar/index.js
- * for the shape.
+ * anything unscheduled -- a suggested press and time slot. Managers drag a job
+ * onto a press; that writes the run AND Order.Print_Date__c, so the calendar and
+ * the rest of the app can never disagree about when something prints.
  *
- * TWO KINDS OF BLOCK, and the difference matters on the floor:
- *   Proposal  (dashed) the machine's suggestion. Nothing has been committed.
- *   Confirmed (solid)  a human placed it. The suggestion engine leaves it alone.
- * That distinction is Uros Popovic's Auto_Scheduling_Status__c, which already
- * modelled exactly the human-override semantics a drag-to-reschedule calendar
- * needs. Dragging promotes Proposal to Confirmed.
+ * CHROME. Every visual token here is lifted from index.html rather than invented:
+ * same header, same slide-out nav, same KPI tiles, same drawer, same env modal,
+ * same PIN gate, same Tabler v3 icon font. This board originally shipped its own
+ * :root palette and Tabler v2, which is why it looked like a different product
+ * and why every nav icon fell back to the same glyph. If index.html's chrome
+ * changes, change it here too -- there is no shared stylesheet to inherit from,
+ * only ca-api.js's NAV_BOARDS.
  *
- * A DRAG WRITES TWO RECORDS:
- *   1. Production_Run__c.Scheduled_Start__c / Scheduled_End__c -- where it runs.
- *   2. Order.Print_Date__c -- the order's official print date follows the
- *      calendar. For a multi-run order this is the EARLIEST run's start, since
- *      an order begins printing when its first run does.
- * Writing Print_Date__c re-prioritises the order it moved, because urgency is a
- * function of that date. That feedback is intended and is exactly why the run is
- * stamped Confirmed at the same time -- otherwise the board would immediately
- * propose moving back what the manager just moved.
- *
- * ACCESS: everyone can look, managers and admins can move. Gated with
- * canAccessManagement() for the drag affordance and confirmManager() on the
- * write, matching how destructive actions are already gated elsewhere.
+ * SANITISING. GOA_Order_Number__c, Customer_Order_Name__c and friends are
+ * Salesforce FORMULA fields, and in dev2 several of them return HYPERLINK()
+ * markup -- literally `<a href="/801ca...">20485-3</a>`. Every other board pipes
+ * those through CAApi.text(), which strips the tags. This one did not, so a real
+ * order rendered its own anchor tag as visible text. Anything that comes out of
+ * a formula field goes through t() below. No exceptions.
  */
-const SHOP_START = 7, SHOP_END = 16;            // 7am-4pm, from the real print-shop calendar
-const HOURS = SHOP_END - SHOP_START;
+const SHOP_START = 7, SHOP_END = 16, HOURS = SHOP_END - SHOP_START;
 const REFRESH_MS = 20000;
+
+/* App chrome tokens, copied from index.html so the two can be diffed by eye. */
+const INK = '#ECEAE4', MUT = '#9C978C', DIM = '#6C665C', FAINT = '#4d483f';
+const RED = '#C6372B', GREEN = '#7FA644', AMBER = '#E0B870', CRIT = '#E24A3A', PURPLE = '#9878C0';
+
+/* The four score contributions are parts of ONE total, always rendered in the
+   same order (the four inputs of Anthony's diagram, left to right), so this is
+   an ordinal ramp rather than a categorical palette -- position identifies the
+   slot, lightness carries the order. Validated with the dataviz skill's
+   validate_palette.js --ordinal against surface #0D0D0F: monotone lightness,
+   all adjacent dL >= 0.06, dark end 3.28:1 vs surface, single hue (the brand
+   red's own hue, 29deg). A categorical four-hue set cannot pass here: any
+   red/green pair at equal lightness collapses under deuteranopia, which is what
+   the previous palette did on all-pairs. */
+const RAMP = ['#F5A695', '#DA8674', '#BE6755', '#A24937'];
+const PART_LABELS = ['Urgency', 'AM rating', 'Prep', 'Firm'];
 
 class Component extends DCLogic {
   constructor(props){
     super(props);
-    this._api = window.CAApi || null;
+    this._api = window.CAApi;
+
     // Demo fixtures. Any failure to reach /api/calendar lands here and flips the
     // badge -- same contract as every other board, so a tablet that cannot see
     // Salesforce shows something explorable rather than an empty grid.
@@ -357,9 +412,10 @@ class Component extends DCLogic {
     };
     this.state = {
       conn:'loading', data:null, view:'day', anchor:0, q:'',
-      openId:null, dragging:null, overKey:null,
-      envOpen:false, envPin:'', envMsg:'', envColor:'var(--ink3)', env:null,
-      nameOk:false, gatePin:'', gateMsg:'', now:new Date(),
+      openId:null, dragging:null, overKey:null, navOpen:false,
+      sfEnvOpen:false, sfEnvPin:'', sfEnvMsg:'', sfEnvErr:'', sfEnvPick:null, sfEnvSubmitting:false, env:null,
+      nameOk:false, gatePin:'', gateErr:'', gateSubmitting:false, gateShake:false,
+      now:new Date(),
     };
   }
 
@@ -395,13 +451,20 @@ class Component extends DCLogic {
     return d.toISOString();
   }
 
+  /** Strip HTML that Salesforce formula fields hand back. See the header note. */
+  t(v){
+    const api=this._api;
+    if (api && api.text) return api.text(v);
+    return v==null ? '' : String(v).replace(/<[^>]*>/g,'').trim();
+  }
+
   /* ── lifecycle ─────────────────────────────────────────────────────── */
   componentDidMount(){
     const api = this._api;
     this.setState({ nameOk: !!(api && api.anyWorkerName && api.anyWorkerName()) });
     this.load();
     this.loadEnv();
-    this._t  = setInterval(()=>this.setState({now:new Date()}), 30000);
+    this._t  = setInterval(()=>this.setState({now:new Date()}), 1000);
     this._ar = setInterval(()=>{
       // Never refresh mid-drag or with a drawer open -- a re-render underneath a
       // drag cancels it, and under a drawer it silently swaps what you're reading.
@@ -452,9 +515,10 @@ class Component extends DCLogic {
   visible(){
     const d=this.state.data; if(!d||!d.records) return [];
     const q=(this.state.q||'').toLowerCase();
+    if(!q) return d.records;
     return d.records.filter(o=>{
-      if(!q) return true;
-      const hay=((o.Account&&o.Account.Name)||'')+' '+(o.GOA_Order_Number__c||'')+' '+(o.Customer_Order_Name__c||'');
+      const hay=[this.t(o.Account&&o.Account.Name), this.t(o.GOA_Order_Number__c),
+                 this.t(o.Customer_Order_Name__c), o.OrderNumber||''].join(' ');
       return hay.toLowerCase().indexOf(q)>-1;
     });
   }
@@ -527,76 +591,77 @@ class Component extends DCLogic {
   /* ── handlers ──────────────────────────────────────────────────────── */
   onSearch(e){ this.setState({q:e.target.value}); }
   onRefresh(){ this.load(); }
-  onViewDay(){ this.setState({view:'day'},()=>this.load()); }
-  onViewWeek(){ this.setState({view:'week'},()=>this.load()); }
+  onOpenNav(){ this.setState({navOpen:true}); }
+  onCloseNav(){ this.setState({navOpen:false}); }
   onPrev(){ this.setState({anchor:this.state.anchor-(this.state.view==='day'?1:7)},()=>this.load()); }
   onNext(){ this.setState({anchor:this.state.anchor+(this.state.view==='day'?1:7)},()=>this.load()); }
   onToday(){ this.setState({anchor:0},()=>this.load()); }
   onCloseDrawer(){ this.setState({openId:null}); }
-  onOpenEnv(){ this.setState({envOpen:true,envMsg:''}); this.loadEnv(); }
-  onCloseEnv(){ this.setState({envOpen:false}); }
-  onEnvPin(e){ this.setState({envPin:e.target.value}); }
-  async onSubmitEnv(){
-    const api=this._api; const pick=this.state.envPick;
-    if(!pick){ this.setState({envMsg:'Pick an environment first.',envColor:'var(--warn)'}); return; }
+  onOpenSfEnv(){ this.setState({sfEnvOpen:true,sfEnvMsg:'',sfEnvErr:''}); this.loadEnv(); }
+  onCloseSfEnv(){ this.setState({sfEnvOpen:false}); }
+  onSfEnvPin(e){ this.setState({sfEnvPin:e.target.value}); }
+  async onSubmitSfEnv(){
+    const api=this._api; const pick=this.state.sfEnvPick;
+    if(!pick){ this.setState({sfEnvErr:'Pick an environment first.',sfEnvMsg:''}); return; }
+    this.setState({sfEnvSubmitting:true, sfEnvErr:'', sfEnvMsg:''});
     try{
-      await api.setSfEnv(pick, this.state.envPin);
-      this.setState({envMsg:'Switched — every tablet now talks to '+pick+'.',envColor:'var(--good)',envPin:''});
+      await api.setSfEnv(pick, this.state.sfEnvPin);
+      this.setState({sfEnvSubmitting:false, sfEnvMsg:'Switched — every tablet now talks to '+pick+'.', sfEnvPin:''});
       this.loadEnv(); this.load();
     }catch(e){
       const s=e&&e.status;
-      this.setState({envColor:'var(--crit)', envMsg:
+      this.setState({sfEnvSubmitting:false, sfEnvErr:
         s===401?'Wrong PIN.':s===409?'That environment is not configured yet.':
         s===500?'Switch PIN is not configured on the server.':'Could not switch.'});
     }
   }
-  onSwitchUser(){ const api=this._api; if(api&&api.clearIdentity) api.clearIdentity(); this.setState({nameOk:false,gatePin:''}); }
+  onSwitchUser(){ const api=this._api; if(api&&api.clearIdentity) api.clearIdentity(); this.setState({nameOk:false,gatePin:'',gateErr:'',navOpen:false}); }
   onLogout(){ const api=this._api; if(api&&api.logout) api.logout(); window.location.href='login.html'; }
   async submitGate(pin){
     const api=this._api;
+    this.setState({gateSubmitting:true, gateErr:''});
     try{
       const res=await api.workerLogin(pin);
       api.setIdentity(res.name,res.role);
-      this.setState({nameOk:true,gatePin:'',gateMsg:''});
+      this.setState({nameOk:true,gatePin:'',gateErr:'',gateSubmitting:false});
     }catch(e){
       const s=e&&e.status;
-      this.setState({gatePin:'', gateMsg:s===401?'Incorrect PIN — try again':s===500?'PIN login isn\'t set up yet — ask a manager':'Could not sign in'});
+      this.setState({gateSubmitting:false, gatePin:'', gateShake:true,
+        gateErr:s===401?'Incorrect PIN — try again':s===500?'PIN login isn\'t set up yet — ask a manager':'Could not sign in'});
+      setTimeout(()=>this.setState({gateShake:false}), 500);
     }
   }
 
   /* ── render ────────────────────────────────────────────────────────── */
   renderVals(){
-    const api=this._api, st=this.state;
+    const api=this._api, st=this.state, t=(v)=>this.t(v);
     const canEdit=this.canEdit();
     const rows=this.visible();
     const presses=this.presses();
     const {start,span}=this.windowDays();
 
-    const scoreColor = s => s>=8?'var(--crit)':s>=6?'var(--warn)':'var(--ink)';
-    const prepColor  = k => k==='good'?'var(--good)':k==='warn'?'var(--warn)':'var(--crit)';
-    const prepIcon   = k => k==='good'?'ti ti-circle-check':'ti ti-alert-triangle';
+    const scoreColor = s => s>=8?CRIT : s>=6?AMBER : INK;
+    const prepColor  = k => k==='good'?GREEN : k==='warn'?AMBER : CRIT;
+    const prepIcon   = k => k==='good'?'ti-circle-check':'ti-alert-triangle';
     const pct = n => (Math.max(0,n)/10*100).toFixed(1)+'%';
-    const barsOf = p => {
-      const c=(p&&p.contributions)||{};
-      return [{w:pct(c.urgency||0),c:'var(--s1)'},{w:pct(c.amRating||0),c:'var(--s3)'},
-              {w:pct(c.prepRisk||0),c:'var(--s2)'},{w:pct(c.firm||0),c:'var(--s4)'}]
-             .filter(b=>parseFloat(b.w)>0.4);
-    };
+    const contribs = p => { const c=(p&&p.contributions)||{}; return [c.urgency||0, c.amRating||0, c.prepRisk||0, c.firm||0]; };
+    const barsOf = p => contribs(p).map((v,i)=>({w:pct(v), c:RAMP[i]})).filter(b=>parseFloat(b.w)>0.4);
     const hhmm = iso => { const d=new Date(iso); return d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}).replace(':00',''); };
+    const pressName = id => t((presses.filter(x=>x.Id===id)[0]||{}).Name) || 'Unassigned';
 
-    /* queue — unscheduled first, then everything else by score */
+    /* queue */
     const queue = rows.filter(o=>o.needsScheduling).map(o=>{
       const p=o.priority||{score:1}, sug=o.suggestion;
       return {
-        customer:(o.Account&&o.Account.Name)||'—',
-        sub:(o.Customer_Order_Name__c||'')+' · '+(o.GOA_Order_Number__c||''),
-        method:((o.ProductionMethods||[])[0]||{}).Type__c||'—',
+        customer:t(o.Account&&o.Account.Name)||'—',
+        sub:[t(o.Customer_Order_Name__c), t(o.GOA_Order_Number__c)].filter(Boolean).join(' · ')||'—',
+        method:t(((o.ProductionMethods||[])[0]||{}).Type__c)||'—',
         score:(p.score||1).toFixed(1), scoreColor:scoreColor(p.score||1),
-        prepLabel:(o.prep&&o.prep.label)||'—', prepColor:prepColor(o.prep&&o.prep.key),
+        prepLabel:t(o.prep&&o.prep.label)||'—', prepColor:prepColor(o.prep&&o.prep.key),
         prepIcon:prepIcon(o.prep&&o.prep.key), bars:barsOf(p),
-        suggestion: sug && sug.start ? ('Suggested: '+(sug.pressName||'a press')+' · '+hhmm(sug.start)) : 'No free slot found',
+        suggestion: sug && sug.start ? ('Suggested: '+t(sug.pressName||'a press')+' · '+hhmm(sug.start)) : 'No free slot found',
         canDrag: canEdit ? 'true' : 'false',
-        lockCls: canEdit ? '' : 'locked',
+        cursor: canEdit ? 'grab' : 'pointer',
         onDragStart:()=>{ if(canEdit) this.setState({dragging:{orderId:o.Id}}); },
         onOpen:()=>this.setState({openId:o.Id}),
       };
@@ -604,17 +669,19 @@ class Component extends DCLogic {
 
     /* grid */
     const cols = st.view==='day' ? HOURS : span;
+    // Hour ticks sit AT the line they name (a block starting at 7:00 is drawn
+    // from the left edge of the 7a column); day names sit centred over theirs.
     const headers = st.view==='day'
-      ? Array.from({length:HOURS},(_,i)=>({cls:'tick', label:((SHOP_START+i)%12||12)+(SHOP_START+i<12?'a':'p')}))
+      ? Array.from({length:HOURS},(_,i)=>({align:'left', label:((SHOP_START+i)%12||12)+(SHOP_START+i<12?'am':'pm')}))
       : Array.from({length:span},(_,i)=>{ const d=new Date(start); d.setDate(d.getDate()+i);
-          return {cls:'', label:d.toLocaleDateString([], {weekday:'short', day:'numeric'})}; });
+          return {align:'center', label:d.toLocaleDateString([], {weekday:'short', day:'numeric'})}; });
 
     const lanes = presses.map(pr=>{
       const slots = Array.from({length:cols},(_,i)=>{
         const key=pr.Id+':'+i;
         return {
           left:(i/cols*100)+'%', width:(100/cols)+'%',
-          overCls: st.overKey===key ? 'over' : '',
+          overBg: st.overKey===key ? 'rgba(198,55,43,.16)' : 'transparent',
           onDragOver:(e)=>{ if(!canEdit) return; e.preventDefault(); if(st.overKey!==key) this.setState({overKey:key}); },
           onDragLeave:()=>{ if(st.overKey===key) this.setState({overKey:null}); },
           onDrop:(e)=>{
@@ -637,8 +704,7 @@ class Component extends DCLogic {
           const s=new Date(r.Scheduled_Start__c), e=new Date(r.Scheduled_End__c||r.Scheduled_Start__c);
           let left,width;
           if(st.view==='day'){
-            const same=s.toDateString()===start.toDateString();
-            if(!same) return;
+            if(s.toDateString()!==start.toDateString()) return;
             const h=s.getHours()+s.getMinutes()/60;
             const dur=Math.max(.25,(e-s)/3600000);
             left=Math.max(0,(h-SHOP_START)/HOURS*100);
@@ -651,13 +717,15 @@ class Component extends DCLogic {
           const p=o.priority||{score:1};
           const proposal=r.Auto_Scheduling_Status__c==='Proposal';
           blocks.push({
-            num:o.GOA_Order_Number__c||'—',
-            customer:(o.Account&&o.Account.Name)||'—',
+            num:t(o.GOA_Order_Number__c)||o.OrderNumber||'—',
+            customer:t(o.Account&&o.Account.Name)||'—',
             time:hhmm(r.Scheduled_Start__c)+'–'+hhmm(r.Scheduled_End__c||r.Scheduled_Start__c),
             score:(p.score||1).toFixed(1), scoreColor:scoreColor(p.score||1),
             color:prepColor(o.prep&&o.prep.key),
-            cls:(proposal?'prop ':'')+(canEdit?'':'locked'),
+            borderStyle: proposal ? 'dashed' : 'solid',
+            opacity: proposal ? '.86' : '1',
             canDrag: canEdit?'true':'false',
+            cursor: canEdit?'grab':'pointer',
             _l:left, _w:Math.max(4,width),
             left:left.toFixed(2)+'%', width:Math.max(4,width).toFixed(2)+'%',
             onDragStart:()=>{ if(canEdit) this.setState({dragging:{orderId:o.Id}}); },
@@ -676,7 +744,7 @@ class Component extends DCLogic {
          booked, and there it is doing exactly the job you want -- a manager
          who drags a run onto an occupied hour SEES the collision instead of
          burying it. First-fit by left edge, same as any Gantt. */
-      const ROW_H=54, ROW_GAP=4, PAD=4;
+      const ROW_H=58, ROW_GAP=4, PAD=5;
       blocks.sort((a,b)=>a._l-b._l || b._w-a._w);
       const rowEnds=[];
       blocks.forEach(b=>{
@@ -688,8 +756,8 @@ class Component extends DCLogic {
       });
       const stack=Math.max(1,rowEnds.length);
       return {
-        name:pr.Name, slots, blocks,
-        style:'min-height:'+(PAD*2+stack*ROW_H+(stack-1)*ROW_GAP)+'px',
+        name:t(pr.Name), slots, blocks,
+        minH:(PAD*2+stack*ROW_H+(stack-1)*ROW_GAP)+'px',
       };
     });
 
@@ -698,95 +766,136 @@ class Component extends DCLogic {
     const risk=rows.filter(o=>o.prep&&o.prep.key!=='good').length;
     const top=rows.slice().sort((a,b)=>((b.priority||{}).score||0)-((a.priority||{}).score||0))[0];
     const kpis=[
-      {label:'Needs scheduling', value:unsched, color:unsched?'var(--warn)':'var(--ink)', meta:unsched?'no run yet':'all placed'},
-      {label:'Prep at risk', value:risk, color:risk?'var(--crit)':'var(--ink)', meta:risk?'behind on pre-production':'everything has runway'},
-      {label:'Highest priority', value:top?((top.priority||{}).score||1).toFixed(1):'—', color:'var(--ink)', meta:top?((top.Account&&top.Account.Name)||''):'—'},
-      {label:'Orders in view', value:rows.length, color:'var(--ink)', meta:st.view==='day'?'this day':'this week'},
+      {label:'Needs Scheduling', value:unsched, unit:unsched===1?'order':'orders', accent:unsched?AMBER:GREEN,
+       valueColor:unsched?AMBER:INK, sub:unsched?'no production run yet':'everything is placed'},
+      {label:'Prep At Risk', value:risk, unit:risk===1?'order':'orders', accent:risk?CRIT:GREEN,
+       valueColor:risk?CRIT:INK, sub:risk?'behind on pre-production':'everything has runway'},
+      {label:'Highest Priority', value:top?((top.priority||{}).score||1).toFixed(1):'—', unit:'of 10', accent:RED,
+       valueColor:INK, sub:top?(t(top.Account&&top.Account.Name)||'—'):'nothing in this window'},
+      {label:'Orders In View', value:rows.length, unit:rows.length===1?'order':'orders', accent:PURPLE,
+       valueColor:INK, sub:st.view==='day'?'printing this day':'printing this week'},
     ];
 
     /* drawer */
     const open=rows.filter(o=>o.Id===st.openId)[0];
     const d = open ? (()=>{
-      const p=open.priority||{score:1}, c=p.contributions||{};
+      const p=open.priority||{score:1};
       const runs=(open.ProductionRuns||[]).map(r=>({
-        press:(presses.filter(x=>x.Id===r.Press__c)[0]||{}).Name||'Unassigned',
+        press:pressName(r.Press__c),
         when:r.Scheduled_Start__c?(new Date(r.Scheduled_Start__c).toLocaleString([], {weekday:'short',hour:'numeric',minute:'2-digit'})):'unscheduled',
-        status:r.Auto_Scheduling_Status__c==='Proposal'?'Suggested — not yet confirmed':'Confirmed by a manager',
+        status:r.Auto_Scheduling_Status__c==='Proposal'?'Suggested — not yet confirmed by a manager':'Confirmed by a manager',
+        color:r.Auto_Scheduling_Status__c==='Proposal'?DIM:GREEN,
       }));
       return {
-        customer:(open.Account&&open.Account.Name)||'—',
-        sub:(open.Customer_Order_Name__c||'')+' · '+(open.GOA_Order_Number__c||''),
+        num:t(open.GOA_Order_Number__c)||open.OrderNumber||'—',
+        customer:t(open.Account&&open.Account.Name)||'—',
+        job:t(open.Customer_Order_Name__c)||'—',
+        method:t(((open.ProductionMethods||[])[0]||{}).Type__c)||'—',
         score:(p.score||1).toFixed(1), scoreColor:scoreColor(p.score||1),
-        daysLabel: p.days==null?'no print date': p.days<0?Math.abs(p.days)+'d overdue': p.days===0?'prints today': p.days===1?'prints tomorrow':'in '+p.days+' days',
+        daysLabel: p.days==null?'no print date set': p.days<0?Math.abs(p.days)+' days overdue': p.days===0?'prints today': p.days===1?'prints tomorrow':'prints in '+p.days+' days',
         bars:barsOf(p),
-        breakdown:'urgency '+(c.urgency||0).toFixed(1)+' · AM '+(c.amRating||0).toFixed(1)+' · prep '+(c.prepRisk||0).toFixed(1)+' · firm '+(c.firm||0).toFixed(1),
-        prepLabel:(open.prep&&open.prep.label)||'—', prepColor:prepColor(open.prep&&open.prep.key), prepIcon:prepIcon(open.prep&&open.prep.key),
+        parts:contribs(p).map((v,i)=>({label:PART_LABELS[i], value:v.toFixed(1), color:RAMP[i]})),
+        prepLabel:t(open.prep&&open.prep.label)||'—', prepColor:prepColor(open.prep&&open.prep.key), prepIcon:prepIcon(open.prep&&open.prep.key),
         readyPct:Math.round((p.ready||0)*100)+'%',
         runs, noRuns:runs.length===0,
-        suggestion: open.suggestion&&open.suggestion.start ? ('Suggested '+(open.suggestion.pressName||'')+' at '+hhmm(open.suggestion.start)+'.') : '',
-        hasNotes:!!open.Priority_Notes__c, notes:open.Priority_Notes__c||'',
+        suggestion: open.suggestion&&open.suggestion.start ? ('Suggested '+t(open.suggestion.pressName||'')+' at '+hhmm(open.suggestion.start)+'.') : '',
+        hasNotes:!!open.Priority_Notes__c, notes:t(open.Priority_Notes__c),
       };
     })() : {};
 
     /* env modal */
-    const envs=((st.env&&st.env.environments)||[]).map(e=>({
-      label:e.label,
-      state:e.active?'Currently active':e.configured?'Configured':'Not configured yet',
-      border:e.active?'var(--s1)':'var(--border)',
-      cursor:e.configured?'pointer':'not-allowed',
-      onPick:()=>{ if(e.configured) this.setState({envPick:e.key}); },
-    }));
+    const envActive=(st.env&&st.env.active)||'';
+    const sfEnvOptions=((st.env&&st.env.environments)||[]).map(e=>{
+      const picked = st.sfEnvPick===e.key;
+      return {
+        label:e.label, isActive:!!e.active,
+        statusLabel: e.active?'Currently active for everyone' : e.configured?'Configured — ready to switch to':'Not configured yet',
+        bg: picked?'#1a1a1e':'#101013',
+        border: picked?'#C6372B' : e.active?'#3D5418':'#202024',
+        dotColor: e.active?GREEN : e.configured?MUT:FAINT,
+        textColor: e.configured?INK:DIM,
+        cursor: e.configured?'pointer':'not-allowed',
+        onPick:()=>{ if(e.configured) this.setState({sfEnvPick:e.key, sfEnvErr:''}); },
+      };
+    });
 
     /* identity gate */
     const pin=st.gatePin||'';
-    const gatePad=['1','2','3','4','5','6','7','8','9','','0','⌫'].map(l=>({
-      label:l,
-      onPress:()=>{
-        if(!l) return;
-        if(l==='⌫'){ this.setState({gatePin:pin.slice(0,-1)}); return; }
-        const next=(pin+l).slice(0,4);
-        this.setState({gatePin:next});
-        if(next.length===4) setTimeout(()=>this.submitGate(next),140);
-      },
-    }));
+    const gatePad=['1','2','3','4','5','6','7','8','9','','0','⌫'].map(l=>{
+      const isBack=l==='⌫', isBlank=l==='';
+      return {
+        label:isBack?'':l, isIcon:isBack, isText:!isBack, icon:'ti-backspace',
+        bg:isBlank?'transparent':'#141417', border:isBlank?'transparent':'#232327', color:isBlank?'transparent':INK,
+        onPress:()=>{
+          if(isBlank || st.gateSubmitting) return;
+          if(isBack){ this.setState({gatePin:pin.slice(0,-1), gateErr:''}); return; }
+          if(pin.length>=4) return;
+          const next=pin+l;
+          this.setState({gatePin:next, gateErr:''});
+          if(next.length===4) setTimeout(()=>this.submitGate(next),140);
+        },
+      };
+    });
 
     const navBoards = (api&&api.buildNavBoards) ? api.buildNavBoards('calendar') : [];
+    const worker = (api&&api.anyWorkerName&&api.anyWorkerName()) || '';
+    const viewTabs = [
+      {key:'day', label:'Day', icon:'ti-clock-hour-4'},
+      {key:'week', label:'Week', icon:'ti-layout-columns'},
+    ].map(v=>({
+      label:v.label, icon:v.icon,
+      bg: st.view===v.key?'#241110':'transparent',
+      border: st.view===v.key?'#7A241C':'#2a2a2f',
+      textColor: st.view===v.key?'#E8A89F':MUT,
+      onPick:()=>{ if(st.view!==v.key) this.setState({view:v.key},()=>this.load()); },
+    }));
 
     return {
-      navBoards,
-      who: (api&&api.anyWorkerName&&api.anyWorkerName()) || 'Not signed in',
-      connColor: st.conn==='live'?'var(--good)':st.conn==='loading'?'var(--ink3)':'var(--warn)',
+      navBoards, navOpen:st.navOpen,
+      worker: worker || 'Not signed in',
+      workerInit: worker ? worker.slice(0,1).toUpperCase() : '?',
+      clock: st.now.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}),
+      dateStr: st.now.toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'}),
+      connColor: st.conn==='live'?GREEN:st.conn==='loading'?DIM:AMBER,
       connLabel: st.conn==='live'?'Live · Salesforce':st.conn==='loading'?'Connecting…':'Demo data',
       isAdmin: !!(api&&api.isAdmin&&api.isAdmin()),
-      sfEnvLabel: (st.env&&st.env.active) ? st.env.active : 'Dev2',
+      sfEnvLabel: envActive || 'Dev2',
       readOnly: !canEdit,
-      q:st.q,
-      dayCls: st.view==='day'?'on':'', weekCls: st.view==='week'?'on':'',
+      q:st.q, viewTabs,
       rangeLabel: st.view==='day'
         ? start.toLocaleDateString([], {weekday:'long', month:'short', day:'numeric'})
         : start.toLocaleDateString([], {month:'short', day:'numeric'})+' – '+(()=>{const e=new Date(start);e.setDate(e.getDate()+span-1);return e.toLocaleDateString([], {month:'short', day:'numeric'});})(),
+      shownLabel: rows.length+(rows.length===1?' order':' orders')+(st.q?' matching':' in window'),
       kpis,
-      queue, queueEmpty: queue.length===0,
-      queueHint: canEdit ? 'Drag one onto a press to schedule it.' : 'Managers can drag these onto a press.',
-      gridTitle: st.view==='day' ? 'Presses · '+start.toLocaleDateString([], {weekday:'long'}) : 'Presses · week',
-      gridHint: st.view==='day' ? 'Shop hours '+SHOP_START+':00 – '+SHOP_END+':00.' : 'One column per day. Switch to Day for times.',
-      gridCols: '128px repeat('+cols+', minmax(52px,1fr))',
+      queue, queueCount:queue.length, queueEmpty: queue.length===0,
+      queueHint: canEdit ? 'Highest priority first. Drag one onto a press to schedule it.' : 'Highest priority first. Managers and admins can drag these onto a press.',
+      scoreLegend: PART_LABELS.map((l,i)=>({label:l, color:RAMP[i]})),
+      prepLegend: [{label:'Ready / Great', color:GREEN},{label:'Mediocre', color:AMBER},{label:'Very bad', color:CRIT}],
+      gridTitle: st.view==='day' ? 'Presses · '+start.toLocaleDateString([], {weekday:'long'}) : 'Presses · Week',
+      gridHint: st.view==='day' ? 'Shop hours '+SHOP_START+':00 – '+SHOP_END+':00' : 'One column per day — switch to Day for times',
+      gridCols: '150px repeat('+cols+', minmax(52px,1fr))',
       colCount: cols,
       headers, lanes,
       gridFooter: st.conn==='demo'
         ? 'Demo data — not connected to Salesforce.'
-        : 'Dashed blocks are suggestions; dragging one confirms it and updates the order’s print date.',
+        : 'Dashed blocks are suggestions from the priority model; dragging one confirms it and updates the order’s print date.',
       drawerOpen: !!open, d,
-      envOpen: st.envOpen, envList: envs, envPin: st.envPin, envMsg: st.envMsg, envMsgColor: st.envColor,
-      gateOpen: !st.nameOk,
-      gateDots: [0,1,2,3].map(i=>({bg: i<pin.length ? 'var(--ink)' : 'transparent'})),
-      gatePad, gateMsg: st.gateMsg,
+      sfEnvOpen: st.sfEnvOpen, sfEnvOptions, sfEnvPin: st.sfEnvPin,
+      sfEnvHasMsg: !!st.sfEnvMsg, sfEnvMsg: st.sfEnvMsg,
+      sfEnvHasErr: !!st.sfEnvErr, sfEnvErr: st.sfEnvErr,
+      sfEnvSubmitLabel: st.sfEnvSubmitting ? 'Switching…' : 'Switch Environment',
+      nameGateOpen: !st.nameOk,
+      gateDots: [0,1,2,3].map(i=>({border: i<pin.length?RED:'#2a2a2f', bg: i<pin.length?RED:'transparent'})),
+      gateStatusText: st.gateErr || (st.gateSubmitting?'Verifying…':''),
+      gateStatusColor: st.gateErr?'#E8A89F':DIM,
+      gateShakeAnim: st.gateShake?'ca-shake .45s':'none',
+      gatePad,
       onSearch:this.onSearch.bind(this), onRefresh:this.onRefresh.bind(this),
-      onViewDay:this.onViewDay.bind(this), onViewWeek:this.onViewWeek.bind(this),
+      onOpenNav:this.onOpenNav.bind(this), onCloseNav:this.onCloseNav.bind(this),
       onPrev:this.onPrev.bind(this), onNext:this.onNext.bind(this), onToday:this.onToday.bind(this),
       onCloseDrawer:this.onCloseDrawer.bind(this),
-      onOpenEnv:this.onOpenEnv.bind(this), onCloseEnv:this.onCloseEnv.bind(this),
-      onEnvPin:this.onEnvPin.bind(this), onSubmitEnv:this.onSubmitEnv.bind(this),
+      onOpenSfEnv:this.onOpenSfEnv.bind(this), onCloseSfEnv:this.onCloseSfEnv.bind(this),
+      onSfEnvPin:this.onSfEnvPin.bind(this), onSubmitSfEnv:this.onSubmitSfEnv.bind(this),
       onSwitchUser:this.onSwitchUser.bind(this), onLogout:this.onLogout.bind(this),
     };
   }
