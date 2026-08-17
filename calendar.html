@@ -244,6 +244,15 @@
                   </sc-if>
                 </div>
               </sc-for>
+              <!-- now line: painted after the blocks so it sits on top, and
+                   pointer-events:none so it can never eat a drop -->
+              <sc-if value="{{c.showNow}}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute;left:0;right:0;top:{{c.nowTop}};height:0;pointer-events:none;z-index:4">
+                  <div style="position:absolute;left:0;right:0;top:-1px;height:2px;background:#E24A3A"></div>
+                  <div style="position:absolute;left:0;top:-4px;width:9px;height:9px;border-radius:50%;background:#E24A3A;box-shadow:0 0 8px rgba(226,74,58,.65)"></div>
+                  <div style="position:absolute;right:3px;top:-9px;font:700 8px/17px 'Oswald';letter-spacing:.07em;color:#fff;background:#E24A3A;border-radius:5px;padding:0 6px;white-space:nowrap">{{c.nowLabel}}</div>
+                </div>
+              </sc-if>
               <sc-if value="{{c.empty}}" hint-placeholder-val="{{ false }}">
                 <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:400 10px/1 'Archivo';color:#232327;pointer-events:none">nothing scheduled</div>
               </sc-if>
@@ -1055,6 +1064,17 @@ class Component extends DCLogic {
     const dayCount = st.view==='day' ? 1 : span;
     const dayOfCol = i => { const d=new Date(start); d.setDate(d.getDate()+i); return d; };
     const today = new Date(); today.setHours(0,0,0,0);
+    /* "Now" line. st.now already ticks once a second to drive the header clock,
+       so this rides that render and needs no timer of its own -- at 62px an hour
+       it steps a visible 1px per minute.
+
+       Only drawn on the column that IS today, and only between 7 and 16. Outside
+       shop hours it is hidden rather than clamped to an edge: a line pinned to
+       the top of the grid at 5am reads as "it is 7am now", which is worse than
+       no line. Navigate to last week and nothing draws, which is correct. */
+    const nowH = st.now.getHours() + st.now.getMinutes()/60;
+    const nowInShop = nowH >= SHOP_START && nowH <= SHOP_END;
+    const nowTopPx = (nowH - SHOP_START) * ROW_H;
 
     const hourLabels = Array.from({length:HOURS},(_,i)=>{
       const h=SHOP_START+i;
@@ -1177,7 +1197,13 @@ class Component extends DCLogic {
         };
       });
 
-      return {slots, blocks, empty:blocks.length===0};
+      const isToday = d.getTime()===today.getTime();
+      return {
+        slots, blocks, empty:blocks.length===0,
+        showNow: isToday && nowInShop,
+        nowTop: nowTopPx+'px',
+        nowLabel: st.now.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}),
+      };
     });
 
     /* KPIs -- scoped to the active calendar, so switching to Press 2 answers
