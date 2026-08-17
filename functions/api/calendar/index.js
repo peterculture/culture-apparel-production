@@ -27,7 +27,8 @@
  */
 import { runQuery, jsonError } from "../_sf.js";
 import { fetchMockupsByOpportunity } from "../_mockup.js";
-import { scoreOrder, suggestSlot, prepStatus, byPriority, WEIGHTS, SHOP } from "../_priority.js";
+import { scoreOrder, suggestSlot, prepStatus, byPriority, WEIGHTS, SHOP,
+         PRESS_GROUPS, pressGroupOf, pressAcceptsOrder } from "../_priority.js";
 
 const PM_FIELDS = [
   "Id",
@@ -233,7 +234,14 @@ export async function onRequestGet({ env, request }) {
         `SELECT Id, Name FROM Account WHERE Type = 'Press' ORDER BY Name ASC`,
       );
       if (pressResult.ok) {
-        presses = pressResult.records.map((p) => ({ Id: p.Id, Name: p.Name }));
+        // group is resolved HERE, once, and shipped to the UI. The browser does
+        // not get its own copy of the matching rules -- a second copy would
+        // drift the first time a press is renamed.
+        presses = pressResult.records.map((p) => ({
+          Id: p.Id,
+          Name: p.Name,
+          group: pressGroupOf(p.Name),
+        }));
         presses.forEach((p) => busyByPress.set(p.Id, []));
       }
     } catch (e) {
@@ -315,6 +323,11 @@ export async function onRequestGet({ env, request }) {
 
       let best = null;
       for (const press of presses) {
+        // A screen print job must never be offered the embroidery machine.
+        // Without this the loop just took whichever press was free soonest,
+        // which on a quiet week is the WRONG machine more often than the right
+        // one -- and the suggestion is what a manager drags into place.
+        if (!pressAcceptsOrder(press.group, o.ProductionMethods)) continue;
         const slot = suggestSlot(o, priority.score, busyByPress.get(press.Id) || [], {
           runCount: 1,
         });
@@ -394,6 +407,18 @@ export async function onRequestGet({ env, request }) {
         shopHours: SHOP,
         weights: WEIGHTS, // echoed so the UI can show the breakdown without hardcoding it
         presses,
+        // The five tabs, in shop order, plus which real presses feed each.
+        // Master is synthesised by the UI (it is "no filter"), so it is not in
+        // this list. A press whose name matches no group has group:null and
+        // shows on Master only -- pressesUngrouped says how many, so that is
+        // visible in the UI instead of silently swallowing a machine.
+        pressGroups: PRESS_GROUPS.map((g) => ({
+          key: g.key,
+          label: g.label,
+          methodTypes: g.methodTypes,
+          pressIds: presses.filter((p) => p.group === g.key).map((p) => p.Id),
+        })),
+        pressesUngrouped: presses.filter((p) => !p.group).length,
         totalSize: orders.length,
         unscheduled: orders.filter((o) => o.needsScheduling).length,
         done: true,
