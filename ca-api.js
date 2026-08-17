@@ -213,6 +213,14 @@
     { key:'pre-production', label:'Pre-Production', sub:'Design · screens · receiving', href:'pre-production.html', color:'#C9923A', icon:'ti-clipboard-check' },
     { key:'management', label:'Pre-Production Management', sub:'Order intake · methods · production runs', href:'pre-production.html?view=mgr', color:'#6C7686', icon:'ti-settings' },
     { key:'index', label:'Production Dashboard', sub:'Kanban · print → ship', href:'index.html', color:'#C6372B', icon:'ti-layout-kanban' },
+    // Production Calendar (2026-08-17). Added HERE, in the shared list, rather
+    // than as a one-off pill on each board -- that is what makes the same entry
+    // appear in the sidebar AND on every other dashboard from a single change,
+    // which is the whole reason NAV_BOARDS exists. Deliberately NOT filtered by
+    // canAccessManagement(): everyone can SEE the schedule (the shop floor needs
+    // to know what is running when), and calendar.html gates the drag itself
+    // behind confirmManager() instead of hiding the board.
+    { key:'calendar', label:'Production Calendar', sub:'Priority · press schedule · print dates', href:'calendar.html', color:'#9878C0', icon:'ti-calendar-time' },
     { key:'station', label:'Station Board', sub:'Ink · screens · transfers', href:'station.html', color:'#5E9B9A', icon:'ti-device-tablet' },
     { key:'shipping', label:'Shipping/Receiving', sub:'Post-production · ship · complete', href:'shipping.html', color:'#3E7CB1', icon:'ti-truck-delivery' },
     { key:'stats', label:'Stats', sub:'Prep-time buffer · team status · board totals', href:'stats.html', color:'#7FA644', icon:'ti-chart-bar' },
