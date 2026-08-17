@@ -27,7 +27,7 @@
  */
 import { runQuery, jsonError } from "../_sf.js";
 import { fetchMockupsByOpportunity } from "../_mockup.js";
-import { scoreOrder, suggestPlacement, prepStatus, byPriority, WEIGHTS } from "../_priority.js";
+import { scoreOrder, suggestSlot, prepStatus, byPriority, WEIGHTS, SHOP } from "../_priority.js";
 
 const PM_FIELDS = [
   "Id",
@@ -173,57 +173,126 @@ export async function onRequestGet({ env, request }) {
 
     const orders = Array.from(byOrder.values());
 
-    // Existing runs, in one batched follow-up keyed by method Id. Fails open --
-    // a transient error here costs the overlay, not the whole board.
+    // Presses, and every run already occupying them.
+    //
+    // The occupancy query is deliberately NOT limited to the orders above: a
+    // press is busy because of whatever is booked on it, including runs for
+    // orders outside this window. Suggesting a slot against a partial view of
+    // the press would double-book it.
     const methodIds = records.map((r) => r.Id).filter(Boolean);
-    if (methodIds.length) {
-      try {
-        const quoted = methodIds.map((id) => `'${id}'`).join(",");
-        const runsResult = await runQuery(
-          env,
-          `SELECT ${RUN_FIELDS.join(", ")} FROM Production_Run__c ` +
-            `WHERE PrintMethod__c IN (${quoted})`,
-        );
-        if (runsResult.ok) {
-          const methodToOrder = new Map(records.map((r) => [r.Id, r.Order__c]));
-          runsResult.records.forEach((run) => {
-            const orderId = methodToOrder.get(run.PrintMethod__c);
-            const order = orderId && byOrder.get(orderId);
-            if (!order) return;
-            order.ProductionRuns.push({
-              Id: run.Id,
-              Name: run.Name,
-              PrintMethod__c: run.PrintMethod__c,
-              Press__c: run.Press__c,
-              Press: (run.Press__r && run.Press__r.Name) || null,
-              Scheduled_Start__c: run.Scheduled_Start__c,
-              Scheduled_End__c: run.Scheduled_End__c,
-              Actual_Start__c: run.Actual_Start__c,
-              Actual_End__c: run.Actual_End__c,
-              Quantity_Planned_c__c: run.Quantity_Planned_c__c,
-              Auto_Scheduling_Status__c: run.Auto_Scheduling_Status__c,
-              LastModifiedDate: run.LastModifiedDate,
-            });
-          });
-        } else {
-          console.error("Calendar run fetch failed", runsResult.status);
-        }
-      } catch (e) {
-        console.error("Calendar run fetch error", e);
+    const busyByPress = new Map();
+    let presses = [];
+
+    try {
+      const pressResult = await runQuery(
+        env,
+        `SELECT Id, Name FROM Account WHERE Type = 'Press' ORDER BY Name ASC`,
+      );
+      if (pressResult.ok) {
+        presses = pressResult.records.map((p) => ({ Id: p.Id, Name: p.Name }));
+        presses.forEach((p) => busyByPress.set(p.Id, []));
       }
+    } catch (e) {
+      console.error("Calendar press fetch error", e);
     }
 
-    // Score and place. One number per order, shared by every method and run
+    try {
+      const quoted = methodIds.map((id) => `'${id}'`).join(",");
+      const runWhere =
+        `(Scheduled_Start__c >= ${soqlDateTime(from, false)} ` +
+        `AND Scheduled_Start__c <= ${soqlDateTime(to, true)})` +
+        (methodIds.length ? ` OR PrintMethod__c IN (${quoted})` : "");
+      const runsResult = await runQuery(
+        env,
+        `SELECT ${RUN_FIELDS.join(", ")} FROM Production_Run__c WHERE ${runWhere}`,
+      );
+      if (runsResult.ok) {
+        const methodToOrder = new Map(records.map((r) => [r.Id, r.Order__c]));
+        runsResult.records.forEach((run) => {
+          // Every scheduled run occupies its press, whether or not its order is
+          // on this board.
+          if (run.Press__c && run.Scheduled_Start__c && run.Scheduled_End__c) {
+            if (!busyByPress.has(run.Press__c)) busyByPress.set(run.Press__c, []);
+            busyByPress.get(run.Press__c).push({
+              start: run.Scheduled_Start__c,
+              end: run.Scheduled_End__c,
+            });
+          }
+          const order = byOrder.get(methodToOrder.get(run.PrintMethod__c));
+          if (!order) return;
+          order.ProductionRuns.push({
+            Id: run.Id,
+            Name: run.Name,
+            PrintMethod__c: run.PrintMethod__c,
+            Press__c: run.Press__c,
+            Press: (run.Press__r && run.Press__r.Name) || null,
+            Scheduled_Start__c: run.Scheduled_Start__c,
+            Scheduled_End__c: run.Scheduled_End__c,
+            Actual_Start__c: run.Actual_Start__c,
+            Actual_End__c: run.Actual_End__c,
+            Quantity_Planned_c__c: run.Quantity_Planned_c__c,
+            // Proposal = the machine suggested it. Confirmed = a human placed it
+            // and nothing should move it again. Uros's field, doing exactly the
+            // job a drag-to-reschedule calendar needs.
+            Auto_Scheduling_Status__c: run.Auto_Scheduling_Status__c,
+            LastModifiedDate: run.LastModifiedDate,
+          });
+        });
+      } else {
+        console.error("Calendar run fetch failed", runsResult.status);
+      }
+    } catch (e) {
+      console.error("Calendar run fetch error", e);
+    }
+
+    orders.sort((a, b) => {
+      // Provisional sort so the suggestion loop below hands out capacity
+      // highest-priority-first. Re-sorted properly once every score exists.
+      const sa = scoreOrder(a, a.ProductionMethods).score;
+      const sb = scoreOrder(b, b.ProductionMethods).score;
+      return sb - sa;
+    });
+
+    // Score, then place. One number per order, shared by every method and run
     // beneath it -- see _priority.js.
+    //
+    // Orders that already have runs are placed; they need no suggestion. Orders
+    // without one get a slot proposed on the press that can take them soonest,
+    // which is the AUTO-BASE SCHEDULE step. Dragging that suggestion into a lane
+    // is what turns it into a real Production_Run__c.
     orders.forEach((o) => {
       const priority = scoreOrder(o, o.ProductionMethods);
       o.priority = priority;
       o.prep = prepStatus(priority.days, priority.ready);
-      o.placement = suggestPlacement(o, priority.score);
-      // Unscheduled orders are the ones the manager most needs to see. Flagged
-      // here rather than inferred client-side so the Unassigned lane and the
-      // KPI tiles agree by construction.
       o.needsScheduling = o.ProductionRuns.length === 0;
+      o.suggestion = null;
+
+      if (!o.needsScheduling) return;
+
+      let best = null;
+      for (const press of presses) {
+        const slot = suggestSlot(o, priority.score, busyByPress.get(press.Id) || [], {
+          runCount: 1,
+        });
+        if (!slot || !slot.start) continue;
+        if (!best || slot.start < best.start) {
+          best = { ...slot, pressId: press.Id, pressName: press.Name };
+        }
+      }
+      // No press at all (none configured, or every one full to the horizon) --
+      // still return the day-level intent so the UI can say something useful.
+      o.suggestion =
+        best ||
+        (presses.length
+          ? { start: null, end: null, unplaceable: true }
+          : { start: null, end: null, noPresses: true });
+
+      // Reserve the suggested window so the next order in the loop does not get
+      // handed the same slot. Suggestions compete for capacity exactly the way
+      // real runs do, and the loop runs in priority order.
+      if (best && best.start) {
+        busyByPress.get(best.pressId).push({ start: best.start, end: best.end });
+      }
     });
 
     const mockups = await fetchMockupsByOpportunity(env, orders.map((o) => o.OpportunityId));
@@ -236,7 +305,9 @@ export async function onRequestGet({ env, request }) {
     return Response.json(
       {
         window: { from, to },
+        shopHours: SHOP,
         weights: WEIGHTS, // echoed so the UI can show the breakdown without hardcoding it
+        presses,
         totalSize: orders.length,
         unscheduled: orders.filter((o) => o.needsScheduling).length,
         done: true,
