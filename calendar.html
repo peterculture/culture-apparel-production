@@ -259,16 +259,100 @@
       </div>
 
       <div>
-        <div style="font:500 10px/1 'Oswald';letter-spacing:.13em;text-transform:uppercase;color:#6C665C;margin-bottom:10px">Production Runs</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span style="font:500 10px/1 'Oswald';letter-spacing:.13em;text-transform:uppercase;color:#6C665C">Production Runs</span>
+          <span style="margin-left:auto;font:400 10px/1 'Archivo';color:{{d.qtyColor}}">{{d.qtyLabel}}</span>
+        </div>
+
         <sc-for list="{{d.runs}}" as="r" hint-placeholder-count="1">
           <div style="background:#101013;border:1px solid #202024;border-left:3px solid {{r.color}};border-radius:10px;padding:12px 14px;margin-bottom:8px">
             <div style="font:600 13px/1.1 'Oswald';color:#ECEAE4">{{r.press}} · {{r.when}}</div>
             <div style="font:400 11px/1.3 'Archivo';color:#6C665C;margin-top:4px">{{r.status}}</div>
+
+            <sc-if value="{{r.canEdit}}" hint-placeholder-val="{{ true }}">
+              <div style="border-top:1px solid #1b1b1e;margin-top:12px;padding-top:12px;display:flex;flex-direction:column;gap:9px">
+                <div>
+                  <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:5px">Press</div>
+                  <select value="{{r.pressId}}" onChange="{{ r.onPress }}" style="width:100%;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:12px;color:#ECEAE4;outline:none">
+                    <option value="">Pick a press…</option>
+                    <sc-for list="{{r.pressOptions}}" as="p" hint-placeholder-count="4"><option value="{{p.id}}">{{p.name}}</option></sc-for>
+                  </select>
+                </div>
+                <div>
+                  <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:5px">Scheduled Start</div>
+                  <div style="display:flex;gap:7px">
+                    <input type="date" value="{{r.startDate}}" onInput="{{ r.onStartDate }}" style="flex:1;min-width:0;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 8px;font-size:12px;color:#ECEAE4;outline:none">
+                    <select value="{{r.startTime}}" onChange="{{ r.onStartTime }}" style="width:118px;flex-shrink:0;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 8px;font-size:12px;color:#ECEAE4;outline:none"><option value="">Time…</option><sc-for list="{{r.timeOptions}}" as="tt" hint-placeholder-count="96"><option value="{{tt.value}}">{{tt.label}}</option></sc-for></select>
+                  </div>
+                </div>
+                <div>
+                  <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:5px">Scheduled End</div>
+                  <div style="display:flex;gap:7px">
+                    <input type="date" value="{{r.endDate}}" onInput="{{ r.onEndDate }}" style="flex:1;min-width:0;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 8px;font-size:12px;color:#ECEAE4;outline:none">
+                    <select value="{{r.endTime}}" onChange="{{ r.onEndTime }}" style="width:118px;flex-shrink:0;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 8px;font-size:12px;color:#ECEAE4;outline:none"><option value="">Time…</option><sc-for list="{{r.timeOptions}}" as="tt" hint-placeholder-count="96"><option value="{{tt.value}}">{{tt.label}}</option></sc-for></select>
+                  </div>
+                </div>
+                <div>
+                  <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:5px">Pieces This Run</div>
+                  <input type="number" min="1" value="{{r.qty}}" onInput="{{ r.onQty }}" style="width:140px;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:12px;color:#ECEAE4;outline:none">
+                </div>
+                <div style="display:flex;gap:8px;margin-top:2px">
+                  <button onClick="{{ r.onSave }}" disabled="{{r.busy}}" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;font:700 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#fff;background:#C6372B;border:none;border-radius:8px;padding:11px;cursor:pointer" style-hover="filter:brightness(1.1)"><i class="ti ti-device-floppy"></i>{{r.saveLabel}}</button>
+                  <button onClick="{{ r.onRemove }}" disabled="{{r.busy}}" style="font:700 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#E8A89F;background:transparent;border:1px solid #7A241C;border-radius:8px;padding:11px 13px;cursor:pointer" style-hover="background:#2A100D"><i class="ti ti-trash"></i></button>
+                </div>
+              </div>
+            </sc-if>
           </div>
         </sc-for>
+
         <sc-if value="{{d.noRuns}}" hint-placeholder-val="{{ false }}">
-          <div style="background:#101013;border:1px dashed #232327;border-radius:10px;padding:14px;font:400 11px/1.4 'Archivo';color:#6C665C">Not scheduled yet. {{d.suggestion}}</div>
+          <div style="background:#101013;border:1px dashed #232327;border-radius:10px;padding:14px;font:400 11px/1.4 'Archivo';color:#6C665C;margin-bottom:8px">Not scheduled yet. {{d.suggestion}}</div>
         </sc-if>
+
+        <sc-if value="{{d.showNewRun}}" hint-placeholder-val="{{ true }}">
+          <div style="background:#101013;border:1px solid #202024;border-left:3px solid #5E9B9A;border-radius:10px;padding:12px 14px">
+            <div style="font:600 11px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#5E9B9A;margin-bottom:11px">Add A Run</div>
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <sc-if value="{{d.newRun.manyMethods}}" hint-placeholder-val="{{ false }}">
+                <div>
+                  <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:5px">Production Method</div>
+                  <select value="{{d.newRun.methodId}}" onChange="{{ d.newRun.onMethod }}" style="width:100%;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:12px;color:#ECEAE4;outline:none">
+                    <sc-for list="{{d.newRun.methodOptions}}" as="m" hint-placeholder-count="2"><option value="{{m.id}}">{{m.name}}</option></sc-for>
+                  </select>
+                </div>
+              </sc-if>
+              <div>
+                <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:5px">Press</div>
+                <select value="{{d.newRun.pressId}}" onChange="{{ d.newRun.onPress }}" style="width:100%;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:12px;color:#ECEAE4;outline:none">
+                  <option value="">Pick a press…</option>
+                  <sc-for list="{{d.newRun.pressOptions}}" as="p" hint-placeholder-count="4"><option value="{{p.id}}">{{p.name}}</option></sc-for>
+                </select>
+              </div>
+              <div>
+                <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:5px">Scheduled Start</div>
+                <div style="display:flex;gap:7px">
+                  <input type="date" value="{{d.newRun.startDate}}" onInput="{{ d.newRun.onStartDate }}" style="flex:1;min-width:0;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 8px;font-size:12px;color:#ECEAE4;outline:none">
+                  <select value="{{d.newRun.startTime}}" onChange="{{ d.newRun.onStartTime }}" style="width:118px;flex-shrink:0;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 8px;font-size:12px;color:#ECEAE4;outline:none"><option value="">Time…</option><sc-for list="{{d.newRun.timeOptions}}" as="tt" hint-placeholder-count="96"><option value="{{tt.value}}">{{tt.label}}</option></sc-for></select>
+                </div>
+              </div>
+              <div>
+                <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:5px">Scheduled End</div>
+                <div style="display:flex;gap:7px">
+                  <input type="date" value="{{d.newRun.endDate}}" onInput="{{ d.newRun.onEndDate }}" style="flex:1;min-width:0;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 8px;font-size:12px;color:#ECEAE4;outline:none">
+                  <select value="{{d.newRun.endTime}}" onChange="{{ d.newRun.onEndTime }}" style="width:118px;flex-shrink:0;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 8px;font-size:12px;color:#ECEAE4;outline:none"><option value="">Time…</option><sc-for list="{{d.newRun.timeOptions}}" as="tt" hint-placeholder-count="96"><option value="{{tt.value}}">{{tt.label}}</option></sc-for></select>
+                </div>
+              </div>
+              <div>
+                <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:5px">Pieces This Run</div>
+                <input type="number" min="1" value="{{d.newRun.qty}}" onInput="{{ d.newRun.onQty }}" style="width:140px;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:12px;color:#ECEAE4;outline:none">
+              </div>
+              <button onClick="{{ d.newRun.onSave }}" disabled="{{d.newRun.busy}}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;font:700 11px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#08080A;background:#5E9B9A;border:none;border-radius:9px;padding:13px;cursor:pointer;margin-top:2px" style-hover="filter:brightness(1.1)"><i class="ti ti-plus"></i>{{d.newRun.saveLabel}}</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{d.hasRunErr}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:8px;font:600 10px/1.3 'Oswald';letter-spacing:.03em;text-transform:uppercase;color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:9px;padding:11px 13px;margin-top:9px"><i class="ti ti-alert-triangle"></i>{{d.runErr}}</div></sc-if>
+        <sc-if value="{{d.hasRunMsg}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:7px;font:600 10px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:#BBD382;background:#18230D;border:1px solid #3D5418;border-radius:9px;padding:10px 13px;margin-top:9px"><i class="ti ti-check"></i>{{d.runMsg}}</div></sc-if>
       </div>
 
       <sc-if value="{{d.hasNotes}}" hint-placeholder-val="{{ false }}">
@@ -404,15 +488,19 @@ class Component extends DCLogic {
         this._demoOrder('20962','Phil Waldrep Ministries','WOJ Fall Tees',0,8.8,0,'Screen Print','p1','07:00',2),
         this._demoOrder('19869','Piney River Resort','River Tees',0,8.8,0,'Screen Print','p1','10:30',1.5),
         this._demoOrder('21027','CrossFit Goose Creek','Logo Tee',0,7.5,50,'Screen Print','p2','07:00',1.5),
-        this._demoOrder('20877','Learning Zone','Play The Day Away',0,8.8,0,'Screen Print',null,null,1,['Press 2','08:30']),
+        this._demoOrder('20877','Learning Zone','Play The Day Away',0,8.8,0,'Screen Print',null,null,1,['Press 2','08:30','p2']),
         this._demoOrder('21215','KLIFE','Embroidered Crewneck',0,6.1,100,'Embroidery','p3','07:30',5.5),
-        this._demoOrder('21217','Bean Wandering Coffee','L/S Camo Tees',1,7.0,0,'Screen Print',null,null,1.5,['Press 1','09:00']),
+        this._demoOrder('21217','Bean Wandering Coffee','L/S Camo Tees',1,7.0,0,'Screen Print',null,null,1.5,['Press 1','09:00','p1']),
         this._demoOrder('20611','Church of The City','We Are The Village',1,5.9,100,'Screen Print','p1','13:00',2.5),
       ],
     };
     this.state = {
-      conn:'loading', data:null, view:'day', anchor:0, q:'',
+      // Opens on the WHOLE current working week, not a single day. A shop
+      // manager's first question is "what does this week look like" -- Day view
+      // is the drill-down, not the landing page.
+      conn:'loading', data:null, view:'week', anchor:0, q:'',
       openId:null, dragging:null, overKey:null, navOpen:false,
+      runEdits:{}, runBusy:null, runErr:'', runMsg:'',
       sfEnvOpen:false, sfEnvPin:'', sfEnvMsg:'', sfEnvErr:'', sfEnvPick:null, sfEnvSubmitting:false, env:null,
       nameOk:false, gatePin:'', gateErr:'', gateSubmitting:false, gateShake:false,
       now:new Date(),
@@ -427,7 +515,7 @@ class Component extends DCLogic {
   _demoOrder(num,cust,job,dayOff,score,ready,method,press,start,dur,sug){
     return {
       Id:'o'+num, GOA_Order_Number__c:num, Customer_Order_Name__c:job,
-      Account:{Name:cust}, Duration__c:dur,
+      Account:{Name:cust}, Duration__c:dur, TotalQuantity:Math.round(dur*120),
       priority:{score, days:dayOff, ready:ready/100,
         contributions:{urgency:score*0.45,amRating:score*0.3,prepRisk:score*0.25,firm:0}},
       prep:{key: ready>=100?'good':(dayOff>=3?'good':(dayOff>=1?'warn':'crit')),
@@ -436,10 +524,13 @@ class Component extends DCLogic {
       ProductionRuns: press ? [{Id:'r'+num, Press__c:press, Press:null,
         Scheduled_Start__c:this._demoIso(dayOff,start),
         Scheduled_End__c:this._demoIso(dayOff,start,dur),
+        Quantity_Planned_c__c:Math.round(dur*120),
+        LastModifiedDate:this._demoIso(dayOff,'06:00'),
         Auto_Scheduling_Status__c: num==='20611' ? 'Proposal' : 'Confirmed'}] : [],
       needsScheduling: !press,
       suggestion: press ? null : {start:this._demoIso(dayOff,(sug&&sug[1])||'11:00'),
                                   end:this._demoIso(dayOff,(sug&&sug[1])||'11:00',dur),
+                                  pressId:(sug&&sug[2])||'p2',
                                   pressName:(sug&&sug[0])||'Press 2'},
       Priority_Notes__c: num==='20962' ? 'Booster club pickup is Friday morning.' : null,
     };
@@ -555,9 +646,16 @@ class Component extends DCLogic {
           pressId, scheduledStart:startDate.toISOString(), scheduledEnd:end.toISOString(),
         });
       }else if(method && method.Id){
+        // quantity is REQUIRED by POST /api/production-runs -- it 400s with
+        // bad_quantity on a missing or non-positive-integer value. This used to
+        // be omitted, which meant creating a run always failed while moving an
+        // existing one worked, so the bug only bit on the queue-drag path.
+        const qty = this.qtyOf(order);
+        if(!qty){ alert('This order has no piece count yet, so a run can\'t be created. Add order items in Salesforce first.'); return; }
         await api.createProductionRun({
           printMethodId:method.Id, pressId,
           scheduledStart:startDate.toISOString(), scheduledEnd:end.toISOString(),
+          quantity:qty,
         });
       }else{
         alert('This order has no production method to attach a run to.');
@@ -574,6 +672,12 @@ class Component extends DCLogic {
     }
     this.setState({dragging:null, overKey:null});
     this.load();
+  }
+  /** Positive integer piece count, or null. Server-side roll-up of OrderItem
+   *  quantities (calendar/index.js). Required on every run create. */
+  qtyOf(order){
+    const q = Number(order && order.TotalQuantity);
+    return Number.isFinite(q) && q > 0 ? Math.round(q) : null;
   }
   durationOf(order){
     const runs=order.ProductionRuns||[];
@@ -596,7 +700,11 @@ class Component extends DCLogic {
   onPrev(){ this.setState({anchor:this.state.anchor-(this.state.view==='day'?1:7)},()=>this.load()); }
   onNext(){ this.setState({anchor:this.state.anchor+(this.state.view==='day'?1:7)},()=>this.load()); }
   onToday(){ this.setState({anchor:0},()=>this.load()); }
-  onCloseDrawer(){ this.setState({openId:null}); }
+  // Opening or closing ALWAYS clears the run form. Without this, half-typed
+  // edits for one order would still be sitting in runEdits when the next one
+  // opens, and a Save would write them to the wrong run.
+  openOrder(id){ this.setState({openId:id, runEdits:{}, runErr:'', runMsg:'', runBusy:null}); }
+  onCloseDrawer(){ this.openOrder(null); }
   onOpenSfEnv(){ this.setState({sfEnvOpen:true,sfEnvMsg:'',sfEnvErr:''}); this.loadEnv(); }
   onCloseSfEnv(){ this.setState({sfEnvOpen:false}); }
   onSfEnvPin(e){ this.setState({sfEnvPin:e.target.value}); }
@@ -632,6 +740,127 @@ class Component extends DCLogic {
     }
   }
 
+  /* ── manual run editing ────────────────────────────────────────────────
+     Dragging is the fast path; this is the exact one. It mirrors index.html's
+     Production Runs section rather than inventing a second vocabulary for the
+     same job: the same "HH:MM" <select> off CAApi.TIME_OPTIONS, the same
+     buildRunDateTime/splitDT pair, the same ifUnmodifiedSince -> 409 handling.
+
+     One simplification: index.html has to go fetch its runs (getProductionRuns)
+     because its cards are per-method. /api/calendar already returns every run
+     with its LastModifiedDate, so this edits what is already on screen and the
+     round trip disappears.
+
+     Auto_Scheduling_Status__c is NOT set here. Both endpoints stamp 'Confirmed'
+     themselves on any schedule write -- which matters more than it looks,
+     because the org's ProductionRunTrigger silently reschedules anything that
+     is not literally 'Confirmed'. A manual edit that did not opt out would be
+     overwritten by the auto-scheduler seconds later. */
+  splitDT(iso){
+    if(!iso) return {date:'', time:''};
+    const d=new Date(iso); if(isNaN(d.getTime())) return {date:'', time:''};
+    const pad=n=>String(n).padStart(2,'0');
+    return {date:d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()), time:pad(d.getHours())+':'+pad(d.getMinutes())};
+  }
+  buildRunDateTime(dateStr,timeStr){
+    if(!dateStr || !timeStr) return null;
+    const d=new Date(dateStr+'T'+timeStr+':00');
+    return isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  /** The live form for one run key ('new' for the create form). Falls back to
+   *  values derived from the record, so render never has to write state. */
+  runForm(key, seed){
+    return this.state.runEdits[key] || seed;
+  }
+  setRunField(key, patch){
+    this.setState(st=>{
+      const base = st.runEdits[key] || (this._runSeeds && this._runSeeds[key]) || {};
+      return {runEdits:Object.assign({}, st.runEdits, {[key]:Object.assign({}, base, patch)}), runErr:'', runMsg:''};
+    });
+  }
+  runFail(msg){ this.setState({runErr:msg, runMsg:'', runBusy:null}); }
+
+  /** Push Order.Print_Date__c to the earliest scheduled start across the
+   *  order's runs, counting `overrideIso` in place of the run being edited.
+   *  Same rule the drag path uses -- the order's official date always follows
+   *  whatever is earliest on the calendar. */
+  async syncPrintDate(order, editedRunId, overrideIso){
+    const api=this._api;
+    const times=(order.ProductionRuns||[])
+      .filter(r=>r.Id!==editedRunId)
+      .map(r=>Date.parse(r.Scheduled_Start__c))
+      .filter(Number.isFinite);
+    if(overrideIso) times.push(Date.parse(overrideIso));
+    if(!times.length) return;
+    await api.patchOrder(order.Id, {Print_Date__c:new Date(Math.min(...times)).toISOString()});
+  }
+
+  async saveRun(order, run, key){
+    const api=this._api, st=this.state;
+    if(st.runBusy) return;
+    if(st.conn!=='live'){ this.runFail('Not connected to Salesforce (demo mode).'); return; }
+    if(!this.canEdit()){ this.runFail('Only managers and admins can change a run.'); return; }
+    const f=st.runEdits[key] || (this._runSeeds && this._runSeeds[key]);
+    if(!f){ this.runFail('Nothing to save.'); return; }
+    if(api && api.confirmManager && !api.confirmManager(run?'Changing this production run':'Creating a production run')) return;
+
+    if(!f.pressId){ this.runFail('Pick a press.'); return; }
+    const start=this.buildRunDateTime(f.startDate,f.startTime);
+    if(!start){ this.runFail('Set the start date and time.'); return; }
+    const end=this.buildRunDateTime(f.endDate,f.endTime);
+    if(!end){ this.runFail('Set the end date and time.'); return; }
+    if(Date.parse(end) <= Date.parse(start)){ this.runFail('The end has to be after the start.'); return; }
+    const qty=Number(f.qty);
+    if(!f.qty || !Number.isFinite(qty) || qty<=0 || Math.floor(qty)!==qty){
+      this.runFail('Enter a whole piece count above zero.'); return;
+    }
+
+    this.setState({runBusy:key, runErr:'', runMsg:''});
+    try{
+      if(run){
+        await api.patchProductionRun(run.Id,
+          {pressId:f.pressId, scheduledStart:start, scheduledEnd:end, quantity:qty},
+          f.loadedAt);
+      }else{
+        const methodId=f.methodId || (((order.ProductionMethods||[])[0]||{}).Id);
+        if(!methodId){ this.runFail('This order has no production method to attach a run to.'); return; }
+        await api.createProductionRun({printMethodId:methodId, pressId:f.pressId,
+          scheduledStart:start, scheduledEnd:end, quantity:qty});
+      }
+      await this.syncPrintDate(order, run?run.Id:null, start);
+      this.setState({runBusy:null, runMsg:run?'Run updated.':'Run created.', runEdits:{}});
+      this.load();
+    }catch(e){
+      // 409 == someone else saved this run after we loaded it. Never silently
+      // overwrite them; reload and make the manager re-apply deliberately.
+      if(e && e.status===409){
+        this.setState({runBusy:null, runErr:'', runEdits:{}});
+        window.alert('Someone else just changed this run, so nothing was saved. Reloading the latest version — review it and re-apply your change.');
+        this.load();
+      }else{
+        console.error('saveRun failed', e);
+        this.runFail('Could not save — '+((e && e.message) ? e.message : 'unknown error'));
+      }
+    }
+  }
+
+  async removeRun(order, run){
+    const api=this._api;
+    if(this.state.conn!=='live'){ this.runFail('Not connected to Salesforce (demo mode).'); return; }
+    if(!this.canEdit()){ this.runFail('Only managers and admins can remove a run.'); return; }
+    if(api && api.confirmManager && !api.confirmManager('Removing a production run')) return;
+    if(!window.confirm('Remove this production run? This can’t be undone.')) return;
+    this.setState({runBusy:run.Id, runErr:'', runMsg:''});
+    try{
+      await api.deleteProductionRun(run.Id);
+      this.setState({runBusy:null, runMsg:'Run removed.', runEdits:{}});
+      this.load();
+    }catch(e){
+      console.error('removeRun failed', e);
+      this.runFail('Could not remove that run — try again.');
+    }
+  }
+
   /* ── render ────────────────────────────────────────────────────────── */
   renderVals(){
     const api=this._api, st=this.state, t=(v)=>this.t(v);
@@ -663,7 +892,7 @@ class Component extends DCLogic {
         canDrag: canEdit ? 'true' : 'false',
         cursor: canEdit ? 'grab' : 'pointer',
         onDragStart:()=>{ if(canEdit) this.setState({dragging:{orderId:o.Id}}); },
-        onOpen:()=>this.setState({openId:o.Id}),
+        onOpen:()=>this.openOrder(o.Id),
       };
     });
 
@@ -729,7 +958,7 @@ class Component extends DCLogic {
             _l:left, _w:Math.max(4,width),
             left:left.toFixed(2)+'%', width:Math.max(4,width).toFixed(2)+'%',
             onDragStart:()=>{ if(canEdit) this.setState({dragging:{orderId:o.Id}}); },
-            onOpen:()=>this.setState({openId:o.Id}),
+            onOpen:()=>this.openOrder(o.Id),
           });
         });
       });
@@ -778,15 +1007,108 @@ class Component extends DCLogic {
 
     /* drawer */
     const open=rows.filter(o=>o.Id===st.openId)[0];
+    const TIME_OPTIONS=(api&&api.TIME_OPTIONS)||[];
+    const pressOptions=presses.map(pr=>({id:pr.Id, name:t(pr.Name)}));
+    // Seeds live on the instance so the handlers can read the same defaults the
+    // form was rendered from, without renderVals writing state.
+    this._runSeeds={};
+
     const d = open ? (()=>{
       const p=open.priority||{score:1};
-      const runs=(open.ProductionRuns||[]).map(r=>({
-        press:pressName(r.Press__c),
-        when:r.Scheduled_Start__c?(new Date(r.Scheduled_Start__c).toLocaleString([], {weekday:'short',hour:'numeric',minute:'2-digit'})):'unscheduled',
-        status:r.Auto_Scheduling_Status__c==='Proposal'?'Suggested — not yet confirmed by a manager':'Confirmed by a manager',
-        color:r.Auto_Scheduling_Status__c==='Proposal'?DIM:GREEN,
-      }));
+      const orderQty=this.qtyOf(open);
+      const dur=this.durationOf(open);
+
+      const runs=(open.ProductionRuns||[]).map(r=>{
+        const key=r.Id;
+        const ss=this.splitDT(r.Scheduled_Start__c), se=this.splitDT(r.Scheduled_End__c);
+        const seed={pressId:r.Press__c||null, startDate:ss.date, startTime:ss.time,
+                    endDate:se.date, endTime:se.time,
+                    qty: r.Quantity_Planned_c__c!=null ? String(r.Quantity_Planned_c__c) : (orderQty?String(orderQty):''),
+                    loadedAt:r.LastModifiedDate||null};
+        this._runSeeds[key]=seed;
+        const f=this.runForm(key, seed);
+        const proposal=r.Auto_Scheduling_Status__c==='Proposal';
+        return {
+          press:pressName(r.Press__c),
+          when:r.Scheduled_Start__c?(new Date(r.Scheduled_Start__c).toLocaleString([], {weekday:'short',hour:'numeric',minute:'2-digit'})):'unscheduled',
+          status:proposal?'Suggested — not yet confirmed by a manager':'Confirmed by a manager',
+          color:proposal?DIM:GREEN,
+          canEdit,
+          pressOptions:pressOptions.map(o=>({id:o.id, name:o.name})),
+          timeOptions:TIME_OPTIONS,
+          pressId:f.pressId||'', startDate:f.startDate, startTime:f.startTime,
+          endDate:f.endDate, endTime:f.endTime, qty:f.qty,
+          busy: st.runBusy===key,
+          saveLabel: st.runBusy===key ? 'Saving…' : 'Save Changes',
+          onPress:(e)=>this.setRunField(key,{pressId:e.target.value||null}),
+          onStartDate:(e)=>this.setRunField(key,{startDate:e.target.value}),
+          onStartTime:(e)=>this.setRunField(key,{startTime:e.target.value}),
+          onEndDate:(e)=>this.setRunField(key,{endDate:e.target.value}),
+          onEndTime:(e)=>this.setRunField(key,{endTime:e.target.value}),
+          onQty:(e)=>this.setRunField(key,{qty:e.target.value}),
+          onSave:()=>this.saveRun(open, r, key),
+          onRemove:()=>this.removeRun(open, r),
+        };
+      });
+
+      /* Create form, prefilled so the common case is "look at it, hit Create"
+         rather than typing five fields. Three sources, in order:
+           1. the model's suggested slot, for an order with no runs at all;
+           2. the end of the LAST existing run, for an order that already has
+              one -- a second run almost always continues where the first
+              stopped, and this is a real case since Duration__c is the order
+              total split across runs;
+           3. the order's own print date, if there is neither. */
+      const sug=open.suggestion;
+      const lastEnd=(open.ProductionRuns||[])
+        .map(r=>Date.parse(r.Scheduled_End__c))
+        .filter(Number.isFinite)
+        .sort((a,b)=>b-a)[0];
+      const seedStartIso = (sug&&sug.start) ? sug.start
+        : Number.isFinite(lastEnd) ? new Date(lastEnd).toISOString()
+        : (open.Print_Date__c || null);
+      const sStart=this.splitDT(seedStartIso);
+      const seedPress = (sug&&sug.pressId) ||
+        ((open.ProductionRuns||[]).slice(-1)[0]||{}).Press__c || null;
+      const sEndIso=(sug&&sug.end) ? sug.end
+        : (seedStartIso ? new Date(Date.parse(seedStartIso)+dur*3600000).toISOString() : null);
+      const sEnd=this.splitDT(sEndIso);
+      const methods=(open.ProductionMethods||[]).filter(m=>m&&m.Id);
+      const newSeed={
+        pressId:seedPress,
+        startDate:sStart.date, startTime:sStart.time||'07:00',
+        endDate:sEnd.date||sStart.date, endTime:sEnd.time||'',
+        qty: orderQty?String(orderQty):'',
+        methodId: methods.length?methods[0].Id:null,
+      };
+      this._runSeeds['new']=newSeed;
+      const nf=this.runForm('new', newSeed);
+      const newRun={
+        pressOptions, timeOptions:TIME_OPTIONS,
+        pressId:nf.pressId||'', startDate:nf.startDate, startTime:nf.startTime,
+        endDate:nf.endDate, endTime:nf.endTime, qty:nf.qty,
+        methodId:nf.methodId||'',
+        methodOptions:methods.map(m=>({id:m.Id, name:t(m.Type__c)||'Method'})),
+        manyMethods:methods.length>1,
+        busy: st.runBusy==='new',
+        saveLabel: st.runBusy==='new' ? 'Creating…' : 'Create Run',
+        onPress:(e)=>this.setRunField('new',{pressId:e.target.value||null}),
+        onMethod:(e)=>this.setRunField('new',{methodId:e.target.value||null}),
+        onStartDate:(e)=>this.setRunField('new',{startDate:e.target.value}),
+        onStartTime:(e)=>this.setRunField('new',{startTime:e.target.value}),
+        onEndDate:(e)=>this.setRunField('new',{endDate:e.target.value}),
+        onEndTime:(e)=>this.setRunField('new',{endTime:e.target.value}),
+        onQty:(e)=>this.setRunField('new',{qty:e.target.value}),
+        onSave:()=>this.saveRun(open, null, 'new'),
+      };
+
       return {
+        runsEditable: canEdit,
+        newRun, showNewRun: canEdit,
+        qtyLabel: orderQty ? orderQty.toLocaleString()+(orderQty===1?' piece':' pieces') : 'no piece count on this order',
+        qtyColor: orderQty ? DIM : AMBER,
+        runErr:st.runErr, hasRunErr:!!st.runErr,
+        runMsg:st.runMsg, hasRunMsg:!!st.runMsg,
         num:t(open.GOA_Order_Number__c)||open.OrderNumber||'—',
         customer:t(open.Account&&open.Account.Name)||'—',
         job:t(open.Customer_Order_Name__c)||'—',
