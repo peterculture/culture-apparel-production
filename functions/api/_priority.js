@@ -217,6 +217,111 @@ export function suggestPlacement(order, score, weights, now) {
   return { suggested, earliest, target, latest, priorityDay, pastDeadline };
 }
 
+/* ── Time-of-day placement ────────────────────────────────────────────────
+ *
+ * suggestPlacement() above picks a DAY. The calendar needs a real start and end
+ * time, because the shop genuinely packs a press: Monday 17 Aug had eight runs
+ * back to back on 10 Head Press from 07:00 to 16:00. A day-level suggestion
+ * cannot express that, and Uros's Apex cannot either -- it marks a whole day
+ * busy per run (slot.addDays(1)), which is the single assumption in that code
+ * most at odds with how the floor actually works.
+ */
+
+/** Shop hours, taken from the real print-shop calendar (7am-4pm), not from
+ *  ProductionAutoSchedulerService, which assumes 8-5 and disagrees with it. */
+export const SHOP = { startHour: 7, endHour: 16 };
+
+/**
+ * How long a run occupies a press, in hours.
+ *
+ * Order.Duration__c is the hours the OrderScheduling flow writes (V31+) and is
+ * the total for the ORDER. When an order has several runs we divide it rather
+ * than giving each run the full span, which would triple-book a press for a
+ * three-run order. Falls back to 2 hours -- the same default
+ * Print_End_Date_Time__c already uses when Duration__c is blank.
+ */
+export function runDurationHours(order, runCount) {
+  const total = Number(order && order.Duration__c);
+  const n = Math.max(1, runCount || 1);
+  const hours = Number.isFinite(total) && total > 0 ? total / n : 2;
+  // Never longer than a working day, never shorter than 15 minutes.
+  return Math.max(0.25, Math.min(SHOP.endHour - SHOP.startHour, hours));
+}
+
+/** Local-midnight-anchored Date for a day offset from now. */
+function dayStart(offset, now) {
+  const d = new Date(now == null ? Date.now() : now);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + offset);
+  return d;
+}
+
+/**
+ * First free window of `durationH` hours on a given day, given the ranges that
+ * press is already busy. Returns {start, end} as Dates, or null if the day is
+ * too full.
+ *
+ * `busy` is [{start, end}] in any order; overlapping entries are fine.
+ */
+export function packInto(dayOffset, durationH, busy, now) {
+  const base = dayStart(dayOffset, now);
+  const open = new Date(base); open.setHours(SHOP.startHour, 0, 0, 0);
+  const close = new Date(base); close.setHours(SHOP.endHour, 0, 0, 0);
+  const needMs = durationH * 3600000;
+
+  // Only ranges that touch this day matter, sorted by start.
+  const ranges = (busy || [])
+    .map((b) => ({ start: new Date(b.start), end: new Date(b.end) }))
+    .filter((b) => b.end > open && b.start < close)
+    .sort((a, b) => a.start - b.start);
+
+  let cursor = open;
+  for (const r of ranges) {
+    if (r.start - cursor >= needMs) break;      // gap before this booking fits
+    if (r.end > cursor) cursor = r.end;         // otherwise slide past it
+  }
+  const end = new Date(cursor.getTime() + needMs);
+  return end <= close ? { start: cursor, end } : null;
+}
+
+/**
+ * The AUTO-BASE SCHEDULE step, with times. Starts at the day the priority blend
+ * suggests and walks forward until the press has room, so a busy day pushes a
+ * job to the next one rather than double-booking.
+ *
+ * Walking FORWARD only is deliberate: the blend has already decided the
+ * earliest day this job deserves, and searching backwards from there would
+ * quietly undo the pull-earlier-only rule in suggestPlacement().
+ */
+export function suggestSlot(order, score, busy, opts) {
+  const o = opts || {};
+  const now = o.now;
+  const place = suggestPlacement(order, score, o.weights, now);
+  if (!place) return null;
+
+  const durationH = runDurationHours(order, o.runCount);
+  const horizon = Math.max(place.latest == null ? place.target + 14 : place.latest, place.suggested);
+
+  for (let day = place.suggested; day <= horizon + 14; day++) {
+    const d = dayStart(day, now);
+    if (d.getDay() === 0) continue;             // shop is closed Sunday
+    const slot = packInto(day, durationH, busy, now);
+    if (slot) {
+      return {
+        start: slot.start.toISOString(),
+        end: slot.end.toISOString(),
+        day,
+        durationHours: durationH,
+        bumped: day !== place.suggested,        // the press was full on the suggested day
+        placement: place,
+      };
+    }
+  }
+  // Every day to the horizon is full. Say so rather than inventing a slot --
+  // the calendar shows these in the Unassigned lane for a human to sort out.
+  return { start: null, end: null, day: null, durationHours: durationH, bumped: false, unplaceable: true, placement: place };
+}
+
 /**
  * Order the whole board. Highest score first; ties break on the sooner print
  * date so the queue is stable rather than arbitrary.
