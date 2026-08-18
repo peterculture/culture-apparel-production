@@ -46,6 +46,7 @@
  * the card drawer's Production Runs section.
  */
 import { sfFetch, apiVersion, jsonError, checkNotModifiedSince } from "../_sf.js";
+import { rollupPrintDateFromRun, rollupPrintDateToOrder, orderIdForRun } from "../_print-date-rollup.js";
 
 const PR_OBJECT = "Production_Run__c";
 const PR_PRESS_FIELD = "Press__c";
@@ -162,6 +163,12 @@ export async function onRequestPatch({ params, request, env }) {
       return jsonError("update_failed", resp.status);
     }
 
+    // Keep Order.Print_Date__c in step with the runs. Scheduled start moves it;
+    // actual start overrides scheduled. Awaited so the caller's next read sees
+    // the new date, but best-effort inside -- it can never fail this write.
+    // See _print-date-rollup.js.
+    await rollupPrintDateFromRun(env, id);
+
     return Response.json(
       { ok: true, id, updated: Object.keys(payload) },
       { headers: { "Cache-Control": "no-store" } },
@@ -177,6 +184,10 @@ export async function onRequestDelete({ params, env }) {
     const id = params && params.id;
     if (!SF_ID.test(id)) return jsonError("invalid_id", 400);
 
+    // Resolve the order BEFORE deleting -- the hop back to it runs through the
+    // run's own PrintMethod__c, which is gone the moment the delete lands.
+    const orderId = await orderIdForRun(env, id);
+
     const path = `/services/data/${apiVersion(env)}/sobjects/${PR_OBJECT}/${id}`;
     const resp = await sfFetch(env, path, { method: "DELETE" });
 
@@ -185,6 +196,11 @@ export async function onRequestDelete({ params, env }) {
       console.error("Production run delete failed", resp.status, detail);
       return jsonError("delete_failed", resp.status);
     }
+
+    // Removing a run can move the order's print date back to a later run, or
+    // leave no runs at all -- in which case the rollup deliberately leaves the
+    // Account Manager's original date standing rather than blanking it.
+    if (orderId) await rollupPrintDateToOrder(env, orderId);
 
     return Response.json({ ok: true, id }, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
