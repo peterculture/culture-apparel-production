@@ -61,6 +61,7 @@
  * moments after creation.
  */
 import { sfFetch, apiVersion, jsonError, runQuery } from "../_sf.js";
+import { rollupPrintDateToOrder, orderIdForMethod } from "../_print-date-rollup.js";
 
 const PR_OBJECT = "Production_Run__c";
 const PR_PRINTMETHOD_FIELD = "PrintMethod__c";
@@ -171,6 +172,12 @@ export async function onRequestPost({ env, request }) {
         { status: 502 },
       );
     }
+
+    // A brand new run almost always IS the order's print date -- creating one
+    // is how an unscheduled order gets scheduled at all. Resolved from the
+    // method because that is what the caller gave us. See _print-date-rollup.js.
+    const orderId = await orderIdForMethod(env, printMethodId);
+    if (orderId) await rollupPrintDateToOrder(env, orderId);
 
     return Response.json(
       { ok: true, id: data.id },
