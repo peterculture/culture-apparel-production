@@ -62,6 +62,7 @@
  */
 import { sfFetch, apiVersion, jsonError, runQuery } from "../_sf.js";
 import { rollupPrintDateToOrder, orderIdForMethod } from "../_print-date-rollup.js";
+import { RUN_PLANNED } from "../_run-schedule-status.js";
 
 const PR_OBJECT = "Production_Run__c";
 const PR_PRINTMETHOD_FIELD = "PrintMethod__c";
@@ -146,14 +147,22 @@ export async function onRequestPost({ env, request }) {
     // -> ProductionRunTriggerHelper -> ProductionAutoSchedulerService.
     // scheduleFromRuns() -- that runs on EVERY Production_Run__c insert/update
     // and silently OVERWRITES Scheduled_Start__c/Scheduled_End__c with its own
-    // computed slot (plus a fixed 9-hour block) for any run whose
-    // Auto_Scheduling_Status__c isn't exactly 'Confirmed'
-    // (ProductionAutoSchedulerSelector.getSchedulableByPress() filters
-    // `WHERE Auto_Scheduling_Status__c != 'Confirmed'`). This is why manually
-    // set Scheduled Start/End never stuck -- the trigger clobbered them right
-    // after our create. Writing 'Confirmed' here opts this run OUT of the
-    // auto-scheduler so the manager's manual schedule actually sticks.
-    Auto_Scheduling_Status__c: "Confirmed",
+    // computed slot (plus a fixed 9-hour block) for any run the selector
+    // considers schedulable. This is why manually set Scheduled Start/End
+    // never stuck -- the trigger clobbered them right after our create.
+    // Writing a pinned status here opts this run OUT of the auto-scheduler so
+    // the manager's manual schedule actually sticks.
+    //
+    // CHANGED 2026-08-18: this used to write 'Confirmed'. As of the
+    // ProductionEventPublisher work, Confirmed also means PUBLISHED -- it puts
+    // the run on the shop's Event calendar, and in production that syncs to
+    // Google. Creating a run would therefore have announced it to everyone the
+    // instant it was saved, with no chance to lay out a week first.
+    //
+    // 'Planned' gives identical protection from the auto-scheduler while
+    // staying private. Publishing is now a separate, deliberate act: the
+    // Confirm action in the calendar dashboard. See _run-schedule-status.js.
+    Auto_Scheduling_Status__c: RUN_PLANNED,
   };
 
   try {
