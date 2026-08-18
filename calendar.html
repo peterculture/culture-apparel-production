@@ -483,8 +483,9 @@
  * Reads /api/calendar, which returns every order printing in the window with a
  * computed 1-10 priority, a prep status, any runs already scheduled, and -- for
  * anything unscheduled -- a suggested press and time slot. Managers drag a job
- * onto a press; that writes the run AND Order.Print_Date__c, so the calendar and
- * the rest of the app can never disagree about when something prints.
+ * onto a press; the run endpoints then roll Order.Print_Date__c up from the runs
+ * themselves (_print-date-rollup.js), so the calendar and the rest of the app can
+ * never disagree about when something prints -- and neither can the other boards.
  *
  * CHROME. Every visual token here is lifted from index.html rather than invented:
  * same header, same slide-out nav, same KPI tiles, same drawer, same env modal,
@@ -762,11 +763,11 @@ class Component extends DCLogic {
         alert('This order has no production method to attach a run to.');
         return;
       }
-      // Order.Print_Date__c = earliest run start. Requires Print_Date__c in
-      // ALLOWED_FIELDS in functions/api/orders/[id].js.
-      const others=(order.ProductionRuns||[]).filter(r=>r!==run).map(r=>Date.parse(r.Scheduled_Start__c)).filter(Number.isFinite);
-      const earliest=Math.min(startDate.getTime(), ...(others.length?others:[startDate.getTime()]));
-      await api.patchOrder(order.Id, {Print_Date__c:new Date(earliest).toISOString()});
+      // Order.Print_Date__c is NOT written from here any more. The run
+      // endpoints roll it up server-side (functions/api/_print-date-rollup.js)
+      // so a run edited from index.html or pre-production.html moves the order's
+      // date too -- and so there is exactly one writer rather than a client and
+      // a server racing to set the same field.
     }catch(e){
       console.error('drop failed', e);
       alert('Could not save that move — '+(e && e.message ? e.message : 'unknown error'));
@@ -881,21 +882,6 @@ class Component extends DCLogic {
   }
   runFail(msg){ this.setState({runErr:msg, runMsg:'', runBusy:null}); }
 
-  /** Push Order.Print_Date__c to the earliest scheduled start across the
-   *  order's runs, counting `overrideIso` in place of the run being edited.
-   *  Same rule the drag path uses -- the order's official date always follows
-   *  whatever is earliest on the calendar. */
-  async syncPrintDate(order, editedRunId, overrideIso){
-    const api=this._api;
-    const times=(order.ProductionRuns||[])
-      .filter(r=>r.Id!==editedRunId)
-      .map(r=>Date.parse(r.Scheduled_Start__c))
-      .filter(Number.isFinite);
-    if(overrideIso) times.push(Date.parse(overrideIso));
-    if(!times.length) return;
-    await api.patchOrder(order.Id, {Print_Date__c:new Date(Math.min(...times)).toISOString()});
-  }
-
   async saveRun(order, run, key){
     const api=this._api, st=this.state;
     if(st.runBusy) return;
@@ -928,7 +914,6 @@ class Component extends DCLogic {
         await api.createProductionRun({printMethodId:methodId, pressId:f.pressId,
           scheduledStart:start, scheduledEnd:end, quantity:qty});
       }
-      await this.syncPrintDate(order, run?run.Id:null, start);
       this.setState({runBusy:null, runMsg:run?'Run updated.':'Run created.', runEdits:{}});
       this.load();
     }catch(e){
