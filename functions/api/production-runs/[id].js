@@ -34,10 +34,22 @@
  * clear it (e.g. correcting a mis-logged Actual Start) without touching the
  * other. Field names match production-runs/index.js exactly -- see that
  * file's docblock for the Quantity_Planned_c__c naming quirk AND the
- * Auto-Scheduling (POC) trigger gotcha -- this endpoint sets
- * Auto_Scheduling_Status__c = 'Confirmed' whenever the schedule is touched,
- * for the same reason (otherwise the org's auto-scheduler trigger silently
- * overwrites Scheduled_Start__c/Scheduled_End__c right back after this save).
+ * Auto-Scheduling (POC) trigger gotcha.
+ *
+ *     "confirm": true | false                          // OPTIONAL, 2026-08-18
+ *                     Publishes or un-publishes the run. true sets
+ *                     Auto_Scheduling_Status__c = 'Confirmed', which the Apex
+ *                     ProductionEventPublisher turns into an Event on the
+ *                     shop calendar (and, in production, on Google). false
+ *                     sets 'Planned' -- still pinned so the auto-scheduler
+ *                     leaves it alone, but private, and any existing calendar
+ *                     entry is deleted. Powers Confirm / Unconfirm on the
+ *                     calendar board.
+ *
+ * When the schedule moves and "confirm" is absent, the run is pinned
+ * automatically -- Planned normally, or left Confirmed if it already was.
+ * Dragging a published run moves its calendar entry; it never silently
+ * removes it. See _run-schedule-status.js for the whole state machine.
  *
  * DELETE /api/production-runs/:id
  *
@@ -45,8 +57,9 @@
  * a run created by mistake, or one that's no longer needed, straight from
  * the card drawer's Production Runs section.
  */
-import { sfFetch, apiVersion, jsonError, checkNotModifiedSince } from "../_sf.js";
+import { sfFetch, apiVersion, jsonError, checkNotModifiedSince, runQuery } from "../_sf.js";
 import { rollupPrintDateFromRun, rollupPrintDateToOrder, orderIdForRun } from "../_print-date-rollup.js";
+import { RUN_PLANNED, RUN_CONFIRMED, statusForScheduleWrite } from "../_run-schedule-status.js";
 
 const PR_OBJECT = "Production_Run__c";
 const PR_PRESS_FIELD = "Press__c";
@@ -78,6 +91,10 @@ export async function onRequestPatch({ params, request, env }) {
     if (!body || typeof body !== "object") return jsonError("invalid_body", 400);
 
     const payload = {};
+    // Set when this request moves the run's scheduled window, which decides
+    // whether we need to pin it against the auto-scheduler. Resolved into an
+    // actual status further down, once we know what the run is today.
+    let scheduleTouched = false;
 
     if ("pressId" in body) {
       if (!body.pressId || !SF_ID.test(body.pressId)) return jsonError("bad_pressId", 400);
@@ -96,11 +113,27 @@ export async function onRequestPatch({ params, request, env }) {
       if (end) payload[PR_SCHED_END_FIELD] = end.toISOString();
       // See production-runs/index.js for the full writeup: the org's
       // "Auto-Scheduling (POC)" trigger rewrites Scheduled_Start__c/
-      // Scheduled_End__c on every insert/update unless Auto_Scheduling_
-      // Status__c = 'Confirmed'. A manager editing the schedule from the
-      // drawer is deliberately overriding it, same as at creation -- keep it
-      // marked Confirmed so the auto-scheduler leaves this run alone.
-      if (start || end) payload.Auto_Scheduling_Status__c = "Confirmed";
+      // Scheduled_End__c on every insert/update unless the run carries a
+      // pinned status. A manager editing the schedule is deliberately
+      // overriding the machine, so the run must stay pinned.
+      //
+      // CHANGED 2026-08-18: this wrote 'Confirmed', which now also PUBLISHES
+      // to the shop calendar. Two cases have to behave differently, so the
+      // current status decides -- see statusForScheduleWrite():
+      //   already Confirmed -> stays Confirmed, and its calendar entry moves
+      //                        with it. Dragging a published run must not
+      //                        quietly pull it off everyone's calendar.
+      //   anything else     -> Planned. Pinned, private, awaiting Confirm.
+      if (start || end) scheduleTouched = true;
+    }
+
+    // Explicit publish control, used by the Confirm / Unconfirm actions on the
+    // calendar board. Sent on its own (validate an existing run without moving
+    // it) or alongside a schedule change (place and publish in one gesture).
+    // An explicit value always wins over the inferred one above.
+    if ("confirm" in body) {
+      if (typeof body.confirm !== "boolean") return jsonError("bad_confirm", 400);
+      payload.Auto_Scheduling_Status__c = body.confirm ? RUN_CONFIRMED : RUN_PLANNED;
     }
 
     if ("quantity" in body) {
@@ -136,6 +169,31 @@ export async function onRequestPatch({ params, request, env }) {
       if (new Date(payload[PR_ACTUAL_END_FIELD]).getTime() < new Date(payload[PR_ACTUAL_START_FIELD]).getTime()) {
         return jsonError("actualEnd_before_actualStart", 400);
       }
+    }
+
+    // Pin the run against the auto-scheduler, without ever un-publishing it.
+    // One extra SOQL, only on saves that actually move the schedule and don't
+    // already say what they want. Worth it: guessing wrong in the "already
+    // Confirmed" direction would silently delete a calendar entry the shop is
+    // working from, and guessing wrong the other way lets the auto-scheduler
+    // throw away what the manager just typed.
+    if (scheduleTouched && !("confirm" in body)) {
+      let current = null;
+      try {
+        const r = await runQuery(
+          env,
+          `SELECT Auto_Scheduling_Status__c FROM ${PR_OBJECT} WHERE Id = '${id}'`,
+        );
+        current = r.ok && r.records[0] ? r.records[0].Auto_Scheduling_Status__c : null;
+      } catch (e) {
+        // Unreadable status is not a reason to fail the manager's save. Falling
+        // through with null means statusForScheduleWrite() returns Planned --
+        // the run stays pinned and simply isn't published. Losing a calendar
+        // entry is recoverable with one click; losing the typed schedule to the
+        // auto-scheduler is not obvious to anyone.
+        console.error("run status read failed, defaulting to Planned", id, e);
+      }
+      payload.Auto_Scheduling_Status__c = statusForScheduleWrite(current);
     }
 
     if (Object.keys(payload).length === 0) return jsonError("no_valid_fields", 400);
