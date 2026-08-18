@@ -315,6 +315,11 @@
             <div style="font:600 13px/1.1 'Oswald';color:#ECEAE4">{{r.press}} · {{r.when}}</div>
             <div style="font:400 11px/1.3 'Archivo';color:#6C665C;margin-top:4px">{{r.status}}</div>
 
+            <sc-if value="{{r.canConfirm}}" hint-placeholder-val="{{ true }}">
+              <button onClick="{{ r.onToggleConfirm }}" disabled="{{r.busy}}" style="margin-top:11px;width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;font:700 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:{{r.confirmFg}};background:{{r.confirmBg}};border:1px solid {{r.confirmBorder}};border-radius:8px;padding:11px;cursor:pointer" style-hover="filter:brightness(1.12)"><i class="ti {{r.confirmIcon}}"></i>{{r.confirmLabel}}</button>
+              <div style="font:400 10px/1.35 'Archivo';color:#6C665C;margin-top:6px">{{r.confirmHint}}</div>
+            </sc-if>
+
             <sc-if value="{{r.canEdit}}" hint-placeholder-val="{{ true }}">
               <div style="border-top:1px solid #1b1b1e;margin-top:12px;padding-top:12px;display:flex;flex-direction:column;gap:9px">
                 <div>
@@ -518,6 +523,41 @@ const RED = '#C6372B', GREEN = '#7FA644', AMBER = '#E0B870', CRIT = '#E24A3A', P
    red's own hue, 29deg). A categorical four-hue set cannot pass here: any
    red/green pair at equal lightness collapses under deuteranopia, which is what
    the previous palette did on all-pairs. */
+/* ── how a run's scheduling status reads on the board ──────────────────────
+   Auto_Scheduling_Status__c has four values and they collapse into three
+   things a manager actually cares about:
+
+     auto       Proposal / Unable to auto-schedule / blank. The machine put it
+                there and the machine will move it again on the next save.
+                Drawn dashed and dimmed -- it is a suggestion, not a booking.
+     planned    A human placed it. Pinned, so the auto-scheduler will not touch
+                it, but NOT on the shop's Event calendar. Solid and amber.
+     confirmed  Validated. On the Salesforce calendar, and in production that
+                syncs straight to Google. Solid and purple.
+
+   The planned/confirmed split is the whole point of the Confirm button: until
+   2026-08-18 there was no way to place a run without simultaneously announcing
+   it to everyone, so a manager could not lay out a week before it was settled.
+   Anything that is not literally 'Confirmed' is NOT published -- err that way,
+   because claiming something is on the shop calendar when it isn't is the
+   failure that gets a job missed. */
+const RUN_PLANNED = 'Planned', RUN_CONFIRMED = 'Confirmed';
+function schedState(r){
+  const s = r && r.Auto_Scheduling_Status__c;
+  if (s === RUN_CONFIRMED) return {
+    key:'confirmed', published:true, accent:PURPLE, border:'solid', opacity:'1',
+    label:'Confirmed — on the shop calendar',
+  };
+  if (s === RUN_PLANNED) return {
+    key:'planned', published:false, accent:AMBER, border:'solid', opacity:'1',
+    label:'Planned — not on the shop calendar yet',
+  };
+  return {
+    key:'auto', published:false, accent:DIM, border:'dashed', opacity:'.86',
+    label:'Suggested by the auto-scheduler — it may move again',
+  };
+}
+
 const RAMP = ['#F5A695', '#DA8674', '#BE6755', '#A24937'];
 const PART_LABELS = ['Urgency', 'AM rating', 'Prep', 'Firm'];
 
@@ -584,7 +624,13 @@ class Component extends DCLogic {
         Scheduled_End__c:this._demoIso(dayOff,start,dur),
         Quantity_Planned_c__c:Math.round(dur*120),
         LastModifiedDate:this._demoIso(dayOff,'06:00'),
-        Auto_Scheduling_Status__c: num==='20611' ? 'Proposal' : 'Confirmed'}] : [],
+        // All three states are represented on purpose. Demo mode is where the
+        // planned-vs-confirmed distinction gets eyeballed, and a fixture that
+        // only ever showed Confirmed would have hidden the amber styling
+        // entirely -- the same way the old fixture handing two orders the same
+        // slot hid the packing bug.
+        Auto_Scheduling_Status__c: num==='20611' ? 'Proposal'
+                                 : (num==='19869' || num==='21215' ? 'Planned' : 'Confirmed')}] : [],
       needsScheduling: !press,
       suggestion: press ? null : {start:this._demoIso(dayOff,(sug&&sug[1])||'11:00'),
                                   end:this._demoIso(dayOff,(sug&&sug[1])||'11:00',dur),
@@ -853,11 +899,18 @@ class Component extends DCLogic {
      with its LastModifiedDate, so this edits what is already on screen and the
      round trip disappears.
 
-     Auto_Scheduling_Status__c is NOT set here. Both endpoints stamp 'Confirmed'
+     Auto_Scheduling_Status__c is NOT set here. Both endpoints pin the run
      themselves on any schedule write -- which matters more than it looks,
      because the org's ProductionRunTrigger silently reschedules anything that
-     is not literally 'Confirmed'. A manual edit that did not opt out would be
-     overwritten by the auto-scheduler seconds later. */
+     is not pinned. A manual edit that did not opt out would be overwritten by
+     the auto-scheduler seconds later.
+
+     CHANGED 2026-08-18: they now stamp 'Planned' rather than 'Confirmed' --
+     same protection from the auto-scheduler, but it no longer publishes to the
+     shop calendar as a side effect of typing a date. Publishing is the Confirm
+     button above, and nothing else. The one exception lives server-side: a run
+     that is ALREADY Confirmed stays Confirmed through an edit, so dragging a
+     published job moves its calendar entry instead of silently deleting it. */
   splitDT(iso){
     if(!iso) return {date:'', time:''};
     const d=new Date(iso); if(isNaN(d.getTime())) return {date:'', time:''};
@@ -881,6 +934,42 @@ class Component extends DCLogic {
     });
   }
   runFail(msg){ this.setState({runErr:msg, runMsg:'', runBusy:null}); }
+
+  /* Publish / un-publish one run. This is the ONLY thing on the board that
+     changes what the rest of the shop sees: Confirmed is what the Apex
+     ProductionEventPublisher turns into a Salesforce Event, and in production
+     that Event calendar syncs straight to Google. Everything else here is
+     private planning.
+
+     It deliberately sends nothing but {confirm}. Bundling the schedule fields
+     in would mean a stale form on screen could silently move the run at the
+     same moment it went public -- the two actions stay separate so that
+     confirming means only "publish what is already here".
+
+     Un-confirming does NOT clear the times. The run stays exactly where the
+     manager put it and stays pinned against the auto-scheduler; only the
+     calendar entry goes away. */
+  async toggleConfirm(order, run, key, publish){
+    const api=this._api, st=this.state;
+    if(st.runBusy) return;
+    if(!run || !run.Id){ this.runFail('That run has not been saved yet.'); return; }
+    if(st.conn!=='live'){ this.runFail('Not connected to Salesforce (demo mode).'); return; }
+    if(!this.canEdit()){ this.runFail('Only managers and admins can confirm a run.'); return; }
+    if(api && api.confirmManager &&
+       !api.confirmManager(publish ? 'Putting this run on the shop calendar'
+                                   : 'Taking this run off the shop calendar')) return;
+
+    this.setState({runBusy:key});
+    try{
+      await api.patchProductionRun(run.Id, {confirm: !!publish});
+      await this.load();
+    }catch(e){
+      console.error('confirm failed', e);
+      this.runFail('Could not '+(publish?'confirm':'unconfirm')+' that run — '+(e && e.message ? e.message : 'unknown error'));
+    }finally{
+      this.setState({runBusy:null});
+    }
+  }
 
   async saveRun(order, run, key){
     const api=this._api, st=this.state;
@@ -1152,20 +1241,20 @@ class Component extends DCLogic {
       const blocks = items.map(it=>{
         const {o,r}=it;
         const p=o.priority||{score:1};
-        const proposal=r.Auto_Scheduling_Status__c==='Proposal';
+        const sched=schedState(r);
         const h=Math.max(30,(it.endH-it.startH)*ROW_H-3);
         const w=100/laneCount;
         const pname=t(r.Press||pressName(r.Press__c));
         return {
           num:t(o.GOA_Order_Number__c)||o.OrderNumber||'—',
           customer:t(o.Account&&o.Account.Name)||'—',
-          press:pname, pressColor: proposal?DIM:PURPLE,
+          press:pname, pressColor: sched.accent,
           time:hhmm(r.Scheduled_Start__c)+'–'+hhmm(r.Scheduled_End__c||r.Scheduled_Start__c),
           title:[t(o.Account&&o.Account.Name), pname, hhmm(r.Scheduled_Start__c)+'–'+hhmm(r.Scheduled_End__c||r.Scheduled_Start__c)].filter(Boolean).join(' · '),
           score:(p.score||1).toFixed(1), scoreColor:scoreColor(p.score||1),
           color:prepColor(o.prep&&o.prep.key),
-          borderStyle: proposal?'dashed':'solid',
-          opacity: proposal?'.86':'1',
+          borderStyle: sched.border,
+          opacity: sched.opacity,
           // Three tiers by how much width this block actually got. The ORDER
           // NUMBER survives every tier -- it is the thing a manager reads to
           // find the job -- so at the narrowest tier the score steps aside and
@@ -1229,13 +1318,29 @@ class Component extends DCLogic {
                     loadedAt:r.LastModifiedDate||null};
         this._runSeeds[key]=seed;
         const f=this.runForm(key, seed);
-        const proposal=r.Auto_Scheduling_Status__c==='Proposal';
+        const sched=schedState(r);
+        const pub=sched.published;
         return {
           press:pressName(r.Press__c),
           when:r.Scheduled_Start__c?(new Date(r.Scheduled_Start__c).toLocaleString([], {weekday:'short',hour:'numeric',minute:'2-digit'})):'unscheduled',
-          status:proposal?'Suggested — not yet confirmed by a manager':'Confirmed by a manager',
-          color:proposal?DIM:GREEN,
+          status:sched.label,
+          color:sched.accent,
           canEdit,
+          /* Confirm is the moment a run becomes public, so the button says what
+             will actually happen rather than naming a status value. Managers
+             only -- publishing to the shop calendar (and, in production,
+             everyone's Google) is not something the board should let just
+             anyone do. */
+          canConfirm: canEdit,
+          confirmLabel: st.runBusy===key ? 'Saving…' : (pub ? 'Unconfirm' : 'Confirm Schedule'),
+          confirmIcon: pub ? 'ti-calendar-off' : 'ti-calendar-check',
+          confirmFg: pub ? '#E8D5A8' : '#fff',
+          confirmBg: pub ? 'transparent' : GREEN,
+          confirmBorder: pub ? '#6B5A2E' : GREEN,
+          confirmHint: pub
+            ? 'Takes it off the shop calendar. The scheduled time stays exactly as it is.'
+            : 'Puts this run on the shop calendar — and on Google, once this reaches production.',
+          onToggleConfirm:()=>this.toggleConfirm(open, r, key, !pub),
           pressOptions:pressOptions.map(o=>({id:o.id, name:o.name})),
           timeOptions:TIME_OPTIONS,
           pressId:f.pressId||'', startDate:f.startDate, startTime:f.startTime,
