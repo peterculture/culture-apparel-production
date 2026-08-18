@@ -357,6 +357,23 @@
   // Every Production_Run__c attached to one Production_Method__c -- powers
   // the card drawer's "Production Runs" section (view + edit existing runs).
   function getProductionRuns(methodId){ return jget('/api/production-runs?methodId=' + encodeURIComponent(methodId)).then(function (d) { return d.records || []; }); }
+  // The Account Manager's SUGGESTED runs for an order (Proposed_Run__c), set on
+  // the Close and Create Order screen. These are recommendations only -- they
+  // are not Production Runs, they hold no press time, and they cannot reach the
+  // Event calendar. The shop reads them while creating the real runs.
+  // Returns [] rather than throwing when an order has none, which is the common
+  // case: every order closed before 2026-08-18 has zero.
+  function getProposedRuns(orderId){
+    return jget('/api/proposed-runs?orderId=' + encodeURIComponent(orderId))
+      .then(function (d) { return (d && d.proposals) || []; })
+      .catch(function () { return []; });
+  }
+  // Records what the shop decided about one suggestion. fields: any subset of
+  // { status: 'Proposed'|'Accepted'|'Rejected'|'Superseded', createdRunId }.
+  // Writes only to Proposed_Run__c -- it cannot move press time.
+  function patchProposedRun(id, fields){
+    return jsend('/api/proposed-runs/' + encodeURIComponent(id), 'PATCH', fields || {});
+  }
   // Updates one Production_Run__c. fields: any subset of { pressId, scheduledStart,
   // scheduledEnd, quantity, actualStart, actualEnd } -- actualStart/actualEnd accept
   // '' to clear that field. See functions/api/production-runs/[id].js.
@@ -711,7 +728,7 @@
     getShippingOrders: getShippingOrders, completeOrder: completeOrder, getStatsTrend: getStatsTrend,
     CHECK_FIELD: CHECK_FIELD, RECV_FROM_SF: RECV_FROM_SF, RECV_TO_SF: RECV_TO_SF, TIME_OPTIONS: TIME_OPTIONS,
     PLACEMENTS: PLACEMENTS, methodsList: methodsList, METHOD_META: METHOD_META,
-    getOrders: getOrders, getProductionOrders: getProductionOrders, getInbox: getInbox, getPreProductionItems: getPreProductionItems, patchItem: patchItem, deleteItem: deleteItem, createItem: createItem, searchVendors: searchVendors, searchPlans: searchPlans, searchPresses: searchPresses, createMethod: createMethod, createProductionRun: createProductionRun, getProductionRuns: getProductionRuns, patchProductionRun: patchProductionRun, deleteProductionRun: deleteProductionRun, patchMethodStatus: patchMethodStatus, patchMethodChecklist: patchMethodChecklist, getMethodsForOrder: getMethodsForOrder, patchMethodFields: patchMethodFields, deleteMethod: deleteMethod, patchOrder: patchOrder, getOrderSizes: getOrderSizes, createReprintOrder: createReprintOrder,
+    getOrders: getOrders, getProductionOrders: getProductionOrders, getInbox: getInbox, getPreProductionItems: getPreProductionItems, patchItem: patchItem, deleteItem: deleteItem, createItem: createItem, searchVendors: searchVendors, searchPlans: searchPlans, searchPresses: searchPresses, createMethod: createMethod, createProductionRun: createProductionRun, getProductionRuns: getProductionRuns, patchProductionRun: patchProductionRun, deleteProductionRun: deleteProductionRun, getProposedRuns: getProposedRuns, patchProposedRun: patchProposedRun, patchMethodStatus: patchMethodStatus, patchMethodChecklist: patchMethodChecklist, getMethodsForOrder: getMethodsForOrder, patchMethodFields: patchMethodFields, deleteMethod: deleteMethod, patchOrder: patchOrder, getOrderSizes: getOrderSizes, createReprintOrder: createReprintOrder,
     getPackaging: getPackaging, postPackaging: postPackaging, deletePackaging: deletePackaging,
     getShipments: getShipments, postShipment: postShipment, deleteShipment: deleteShipment, getZkWizardUrl: getZkWizardUrl,
     splitShipment: splitShipment, combineShipment: combineShipment,
