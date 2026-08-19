@@ -526,6 +526,10 @@ export async function onRequestGet({ env, request }) {
           // clue why.
           `SELECT Id, Name, Type__c, Status__c, Mesh_Count__c, Pantone_Color__c, ` +
           `Thread_Color__c, Thread_Number__c, Transfer_Type__c, ` +
+          // The per-type sub-status is what the station board tabs on, so
+          // carrying it lets the calendar link straight to the stage the item
+          // is actually sitting at rather than the station's master list.
+          `Screen_Sub_Status__c, Ink_Sub_Status__c, Transfers_Sub_Status__c, ` +
           `Production_Method__c, Production_Method__r.Type__c, Production_Method__r.Order__c ` +
           `FROM Pre_Production_Item__c WHERE Production_Method__r.Order__c IN (${quotedIds}) ` +
           `AND (Status__c = null OR Status__c != 'Ready') ` +
@@ -552,6 +556,26 @@ export async function onRequestGet({ env, request }) {
                 : it.Type__c === "Ink" ? (it.Pantone_Color__c || null)
                 : it.Type__c === "Thread" ? ([it.Thread_Color__c, it.Thread_Number__c].filter(Boolean).join(" ") || null)
                 : it.Type__c === "Transfer" ? (it.Transfer_Type__c || null)
+                : null,
+              // Which station board actually completes this, and which of its
+              // tabs the item is sitting on. See STATIONS in station.html --
+              // these keys are that map's keys, and the stage strings are the
+              // Salesforce sub-status API values the tabs are built from.
+              //
+              // Thread and Digitization get NO station on purpose: the shop
+              // has no board for them (the four stations are ink, screen,
+              // transfer, garment). Sending someone to a station that cannot
+              // complete their item is worse than sending them nowhere, so the
+              // UI shows those without a link rather than guessing.
+              station:
+                it.Type__c === "Screen" ? "screen"
+                : it.Type__c === "Ink" ? "ink"
+                : it.Type__c === "Transfer" ? "transfer"
+                : null,
+              stage:
+                it.Type__c === "Screen" ? (it.Screen_Sub_Status__c || null)
+                : it.Type__c === "Ink" ? (it.Ink_Sub_Status__c || null)
+                : it.Type__c === "Transfer" ? (it.Transfers_Sub_Status__c || null)
                 : null,
             });
             byOrderId.set(oid, list);
