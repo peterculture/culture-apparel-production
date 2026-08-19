@@ -860,7 +860,7 @@ class Component extends DCLogic {
     // page's already-built Management form instead of duplicating it). Wait
     // for load() to resolve first so openMgrForOrder() can find this order's
     // existing specs/notes to prefill, same as clicking the button in-page.
-    let addMethodForOrder = null, wantsMgr = false;
+    let addMethodForOrder = null, wantsMgr = false, openCard = null;
     try {
       const params = new URLSearchParams(window.location.search);
       addMethodForOrder = params.get('addMethodForOrder');
@@ -868,6 +868,12 @@ class Component extends DCLogic {
       // entry (see NAV_BOARDS in ca-api.js) -- lands straight on the
       // Management inbox instead of the board view.
       wantsMgr = params.get('view') === 'mgr';
+      // Deep link from the calendar board's "Complete These In Pre-Production"
+      // button. The calendar knows WHICH method has outstanding prep items, so
+      // it hands that over rather than dropping someone on the board to hunt
+      // for the card themselves -- which, on a busy week, is most of the
+      // friction in going and doing the work.
+      openCard = params.get('card');
     } catch (_) {}
     // openMgr() -> loadInbox() bails out with an empty list whenever
     // state.connection isn't 'live' yet (see loadInbox() below), so this
@@ -878,6 +884,11 @@ class Component extends DCLogic {
     this.load().then(()=>{
       if (addMethodForOrder) this.openMgrForOrder(addMethodForOrder);
       else if (wantsMgr) this.openMgr();
+      // Only open it if the card is actually on this board. A method that has
+      // moved past Pre-Production is not here any more, and openOrder() on an
+      // id the board doesn't have would leave an empty drawer with no
+      // explanation -- better to land on the board and let them see why.
+      else if (openCard && (this.state.orders||[]).some(o=>o.id===openCard)) this.openOrder(openCard);
     });
     this.loadSfEnv();
     this._ar=setInterval(()=>{ if(this.state.connection==='live' && !this.state.openId && this.state.view!=='mgr') this.load(); },15000);
