@@ -164,6 +164,9 @@
               <sc-for list="{{o.bars}}" as="b" hint-placeholder-count="4"><i style="display:block;height:100%;width:{{b.w}};background:{{b.c}}"></i></sc-for>
             </div>
             <div style="font:400 10px/1.3 'Archivo';color:#4d483f;margin-top:7px">{{o.suggestion}}</div>
+            <sc-if value="{{o.hasAmHint}}" hint-placeholder-val="{{ false }}">
+              <div style="display:inline-flex;align-items:center;gap:5px;margin-top:7px;font:600 9px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#5E9B9A;background:#101c1c;border:1px solid #23403f;border-radius:6px;padding:5px 7px"><i class="ti ti-user-check"></i>{{o.amHint}}</div>
+            </sc-if>
           </div>
         </div>
       </sc-for>
@@ -358,6 +361,32 @@
 
         <sc-if value="{{d.noRuns}}" hint-placeholder-val="{{ false }}">
           <div style="background:#101013;border:1px dashed #232327;border-radius:10px;padding:14px;font:400 11px/1.4 'Archivo';color:#6C665C;margin-bottom:8px">Not scheduled yet. {{d.suggestion}}</div>
+        </sc-if>
+
+        <sc-if value="{{d.hasProposals}}" hint-placeholder-val="{{ false }}">
+          <div style="background:#101316;border:1px solid #1d2a2a;border-radius:11px;padding:13px 14px;margin-bottom:8px">
+            <div style="display:flex;align-items:center;gap:7px;margin-bottom:3px">
+              <i class="ti ti-user-check" style="font-size:14px;color:#5E9B9A"></i>
+              <div style="font:600 10px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#5E9B9A">Account Manager Suggested</div>
+            </div>
+            <div style="font:400 10px/1.45 'Archivo';color:#6C665C;margin-bottom:10px">What was promised when the order closed. Nothing here is booked — use one to fill in the run below, or turn it down.</div>
+            <sc-for list="{{d.proposals}}" as="p" hint-placeholder-count="1">
+              <div style="background:#0D0D0F;border:1px solid #1f1f23;border-radius:9px;padding:10px 11px;margin-bottom:7px">
+                <div style="display:flex;align-items:baseline;gap:8px">
+                  <div style="font:600 13px/1.2 'Oswald';color:#ECEAE4">{{p.machine}}</div>
+                  <div style="font:400 11px/1.2 'Archivo';color:#9C978C">{{p.when}}</div>
+                </div>
+                <div style="font:400 10px/1.4 'Archivo';color:#6C665C;margin-top:3px">{{p.name}} · {{p.meta}}</div>
+                <sc-if value="{{p.hasNotes}}" hint-placeholder-val="{{ false }}">
+                  <div style="font:400 11px/1.45 'Archivo';color:#C9C6BF;margin-top:6px;white-space:pre-wrap">{{p.notes}}</div>
+                </sc-if>
+                <div style="display:flex;gap:7px;margin-top:9px">
+                  <button onClick="{{ p.onUse }}" disabled="{{p.busy}}" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;font:700 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#5E9B9A;background:transparent;border:1px solid #2c4645;border-radius:7px;padding:9px;cursor:pointer" style-hover="background:#132020"><i class="ti ti-arrow-down-to-arc"></i>{{p.useLabel}}</button>
+                  <button onClick="{{ p.onReject }}" disabled="{{p.busy}}" style="font:700 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#8a8378;background:transparent;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;cursor:pointer" style-hover="color:#E8A89F;border-color:#7A241C">Turn Down</button>
+                </div>
+              </div>
+            </sc-for>
+          </div>
         </sc-if>
 
         <sc-if value="{{d.showNewRun}}" hint-placeholder-val="{{ true }}">
@@ -598,6 +627,9 @@ class Component extends DCLogic {
       // is the drill-down, not the landing page.
       conn:'loading', data:null, view:'week', anchor:0, q:'', group:'all',
       openId:null, dragging:null, overKey:null, navOpen:false,
+      // Which AM suggestion the open drawer's Create Run form was filled from,
+      // so it can be stamped Accepted once the real run exists.
+      proposalUsedId:null,
       runEdits:{}, runBusy:null, runErr:'', runMsg:'',
       sfEnvOpen:false, sfEnvPin:'', sfEnvMsg:'', sfEnvErr:'', sfEnvPick:null, sfEnvSubmitting:false, env:null,
       nameOk:false, gatePin:'', gateErr:'', gateSubmitting:false, gateShake:false,
@@ -632,6 +664,16 @@ class Component extends DCLogic {
         Auto_Scheduling_Status__c: num==='20611' ? 'Proposal'
                                  : (num==='19869' || num==='21215' ? 'Planned' : 'Confirmed')}] : [],
       needsScheduling: !press,
+      // One unscheduled job carries an AM suggestion so the queue badge and the
+      // drawer panel are visible in demo mode. Without a fixture, the whole
+      // proposals path would only ever be exercised against a live org --
+      // which is how the lane-packing bug hid for as long as it did.
+      Proposals: num==='20877' ? [{
+        id:'p1', name:'PROP-0001', machineGroup:'Screen Print',
+        proposedStart:this._demoIso(1,'09:00'), proposedHours:2, quantity:180,
+        notes:'Customer asked for these before the rest of the order.',
+        proposedBy:'Chief AM',
+      }] : [],
       suggestion: press ? null : {start:this._demoIso(dayOff,(sug&&sug[1])||'11:00'),
                                   end:this._demoIso(dayOff,(sug&&sug[1])||'11:00',dur),
                                   pressId:(sug&&sug[2])||'p2',
@@ -935,6 +977,59 @@ class Component extends DCLogic {
   }
   runFail(msg){ this.setState({runErr:msg, runMsg:'', runBusy:null}); }
 
+  /* ── the Account Manager's suggestions ──────────────────────────────────
+     These are Proposed_Run__c rows the AM filled in when the order closed.
+     They hold no press time and cannot reach the calendar; they exist so the
+     shop manager -- who now owns the scheduling decision -- can see what was
+     promised to the customer without leaving the board.
+
+     "Use" only fills the Create Run form in. Nothing is booked until the
+     manager creates the run, and nothing is published until they confirm it.
+     Keeping those three steps separate is the whole point of the workflow. */
+  useProposal(p){
+    if(!p) return;
+    if(!this.canEdit()){ this.runFail('Only managers and admins can schedule runs.'); return; }
+    const patch={};
+    if(p.proposedStart){
+      const ss=this.splitDT(p.proposedStart);
+      patch.startDate=ss.date; patch.startTime=ss.time;
+      const hrs=Number(p.proposedHours);
+      // Only derive an end when the AM actually gave hours. Inventing a
+      // duration would put a confident-looking wrong time in front of someone
+      // about to commit press time.
+      if(Number.isFinite(hrs) && hrs>0){
+        const e=this.splitDT(new Date(Date.parse(p.proposedStart)+hrs*3600000).toISOString());
+        patch.endDate=e.date; patch.endTime=e.time;
+      }
+    }
+    // Never overwrite a real piece count with a blank.
+    if(p.quantity!=null && Number(p.quantity)>0) patch.qty=String(p.quantity);
+    this.setRunField('new', patch);
+    this.setState({proposalUsedId:p.id, runErr:'',
+      runMsg:'Filled in from '+p.name+' — adjust anything that does not fit the floor, then create the run.'});
+  }
+
+  async rejectProposal(p){
+    const api=this._api;
+    if(!p) return;
+    if(this.state.conn!=='live'){ this.runFail('Not connected to Salesforce (demo mode).'); return; }
+    if(!this.canEdit()){ this.runFail('Only managers and admins can decide on suggestions.'); return; }
+    // Rejected rather than deleted on purpose: "the shop was asked for this
+    // date and said no" is the most useful thing on the record, and it
+    // disappears with the row.
+    if(!window.confirm('Turn down '+p.name+'? It stays on the order as rejected so the account manager can see the answer.')) return;
+    this.setState({runBusy:'prop-'+p.id, runErr:'', runMsg:''});
+    try{
+      await api.patchProposedRun(p.id, {status:'Rejected'});
+      this.setState({runBusy:null, proposalUsedId:this.state.proposalUsedId===p.id?null:this.state.proposalUsedId});
+      this.load();
+    }catch(e){
+      console.error('reject failed', e);
+      this.setState({runBusy:null});
+      this.runFail('Could not turn that suggestion down — '+((e&&e.message)?e.message:'unknown error'));
+    }
+  }
+
   /* Publish / un-publish one run. This is the ONLY thing on the board that
      changes what the rest of the shop sees: Confirmed is what the Apex
      ProductionEventPublisher turns into a Salesforce Event, and in production
@@ -1000,10 +1095,25 @@ class Component extends DCLogic {
       }else{
         const methodId=f.methodId || (((order.ProductionMethods||[])[0]||{}).Id);
         if(!methodId){ this.runFail('This order has no production method to attach a run to.'); return; }
-        await api.createProductionRun({printMethodId:methodId, pressId:f.pressId,
+        const res=await api.createProductionRun({printMethodId:methodId, pressId:f.pressId,
           scheduledStart:start, scheduledEnd:end, quantity:qty});
+
+        /* Close the loop on the AM's suggestion: mark it Accepted and point it
+           at the run that came out of it. Without the link "Accepted" is just
+           an assertion; with it, anyone can later ask whether the date the AM
+           promised is the date the shop actually booked.
+
+           After the run, and swallowed on failure. The run is the thing that
+           matters -- a manager should never see "create failed" because a
+           bookkeeping write on a suggestion didn't land. Worst case the
+           proposal stays Proposed and someone tidies it later. */
+        const usedId=this.state.proposalUsedId;
+        if(usedId && api.patchProposedRun){
+          try{ await api.patchProposedRun(usedId, {status:'Accepted', createdRunId:(res&&res.id)||undefined}); }
+          catch(e){ console.error('proposal accept failed', usedId, e); }
+        }
       }
-      this.setState({runBusy:null, runMsg:run?'Run updated.':'Run created.', runEdits:{}});
+      this.setState({runBusy:null, runMsg:run?'Run updated.':'Run created.', runEdits:{}, proposalUsedId:null});
       this.load();
     }catch(e){
       // 409 == someone else saved this run after we loaded it. Never silently
@@ -1051,6 +1161,11 @@ class Component extends DCLogic {
     const contribs = p => { const c=(p&&p.contributions)||{}; return [c.urgency||0, c.amRating||0, c.prepRisk||0, c.firm||0]; };
     const barsOf = p => contribs(p).map((v,i)=>({w:pct(v), c:RAMP[i]})).filter(b=>parseFloat(b.w)>0.4);
     const hhmm = iso => { const d=new Date(iso); return d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}).replace(':00',''); };
+    /* Day + time, for anything that may fall outside the window on screen --
+       an AM suggestion can name a date the board isn't showing, and "2:30 PM"
+       with no day attached would read as today. */
+    const dayHM = iso => { const d=new Date(iso); return isNaN(d.getTime()) ? '' :
+      d.toLocaleString([], {weekday:'short', month:'numeric', day:'numeric', hour:'numeric', minute:'2-digit'}); };
     const pressName = id => t((presses.filter(x=>x.Id===id)[0]||{}).Name) || 'Unassigned';
 
     /* ── the five calendars ───────────────────────────────────────────────
@@ -1125,6 +1240,15 @@ class Component extends DCLogic {
         prepLabel:t(o.prep&&o.prep.label)||'—', prepColor:prepColor(o.prep&&o.prep.key),
         prepIcon:prepIcon(o.prep&&o.prep.key), bars:barsOf(p),
         suggestion: sug && sug.start ? ('Suggested: '+t(sug.pressName||'a press')+' · '+hhmm(sug.start)) : 'No free slot found',
+        // The AM's own suggestion, surfaced on the card. Without this the queue
+        // gives no hint that anyone asked for a particular date, and the
+        // manager would only find out by opening the drawer.
+        amHint: (o.Proposals||[]).length
+          ? ('AM: '+t((o.Proposals[0]||{}).machineGroup||'run')
+             +((o.Proposals[0]||{}).proposedStart ? ' · '+dayHM(o.Proposals[0].proposedStart) : '')
+             +((o.Proposals||[]).length>1 ? '  +'+((o.Proposals||[]).length-1)+' more' : ''))
+          : '',
+        hasAmHint: (o.Proposals||[]).length>0,
         canDrag: canEdit ? 'true' : 'false',
         cursor: canEdit ? 'grab' : 'pointer',
         onDragStart:()=>{ if(canEdit) this.setState({dragging:{orderId:o.Id}}); },
@@ -1409,8 +1533,27 @@ class Component extends DCLogic {
         onSave:()=>this.saveRun(open, null, 'new'),
       };
 
+      /* The AM's open suggestions for this order. Only Status__c='Proposed'
+         reaches the board (see calendar/index.js), so anything listed here is
+         still awaiting a decision from the shop. */
+      const proposals=(open.Proposals||[]).map(p=>({
+        id:p.id, name:p.name,
+        machine:t(p.machineGroup)||'—',
+        when: p.proposedStart ? dayHM(p.proposedStart) : 'no date given',
+        meta: [p.proposedHours ? p.proposedHours+(Number(p.proposedHours)===1?' hr':' hrs') : null,
+               p.quantity ? p.quantity+' pcs' : null,
+               t(p.proposedBy)||null].filter(Boolean).join(' · ') || '—',
+        notes:t(p.notes)||'', hasNotes:!!p.notes,
+        used: st.proposalUsedId===p.id,
+        useLabel: st.proposalUsedId===p.id ? 'Filled in' : 'Use this',
+        busy: st.runBusy==='prop-'+p.id,
+        onUse:()=>this.useProposal(p),
+        onReject:()=>this.rejectProposal(p),
+      }));
+
       return {
         runsEditable: canEdit,
+        proposals, hasProposals: proposals.length>0 && canEdit,
         newRun, showNewRun: canEdit,
         qtyLabel: orderQty ? orderQty.toLocaleString()+(orderQty===1?' piece':' pieces') : 'no piece count on this order',
         qtyColor: orderQty ? DIM : AMBER,
