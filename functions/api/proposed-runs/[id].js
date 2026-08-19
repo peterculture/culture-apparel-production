@@ -25,6 +25,7 @@
  * calendar -- the same isolation the object itself was designed for.
  */
 import { sfFetch, apiVersion, jsonError } from "../_sf.js";
+import { requireCap } from "../_session.js";
 
 const OBJECT = "Proposed_Run__c";
 const SF_ID = /^[a-zA-Z0-9]{15,18}$/;
@@ -43,6 +44,9 @@ export async function onRequestPatch({ params, request, env }) {
       return jsonError("invalid_json", 400);
     }
     if (!body || typeof body !== "object") return jsonError("invalid_body", 400);
+
+    const gate = await requireCap(request, env, "proposals.decide");
+    if (gate.denied) return gate.response;
 
     const payload = {};
 
