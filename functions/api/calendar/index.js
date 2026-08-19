@@ -88,31 +88,42 @@ const DEFAULT_BACK_DAYS = 14;
 const DEFAULT_FORWARD_DAYS = 42;
 
 /**
- * Once a method reaches Post-Production its press work is DONE -- the job has
- * come off the press and belongs to shipping/receiving now, not to a board about
- * what still has to be printed. Same for Completed, and for Cancelled (which
- * readiness() in _priority.js already ignores when scoring).
+ * WHAT COUNTS AS FINISHED.
  *
- * Filtering at the METHOD level, not just the order level, is deliberate. An
- * order with Screen Print + Embroidery can have the screen print finished and
- * off the press while the embroidery still has to run. Dropping only the
- * finished METHOD keeps the embroidery on the board where it belongs; dropping
- * the whole order the moment its first method finished would hide real work.
+ * Checked at BOTH levels, deliberately. An order with Screen Print + Embroidery
+ * can have the screen print off the press while the embroidery still has to
+ * run, so "every method is done" is one signal. Order_Substatus__c is a rollup
+ * pinned to the least advanced sibling (see _pm-rollup.js) but orders/[id].js
+ * lets a manager PATCH it directly, and when someone does that they mean "this
+ * order is off the print floor" -- so that is a second signal. Order.Status is
+ * maintained by a different part of the business again, and is the third.
  *
- * The order-level filter below it catches the other direction. Order_Substatus__c
- * is a rollup pinned to the LEAST advanced sibling method (see _pm-rollup.js),
- * so it normally cannot say Post-Production while a method lags -- but
- * orders/[id].js lets a manager PATCH it directly, and when someone does that
- * they mean "this order is off the print floor." Both filters, so either signal
- * takes it off the calendar.
- *
- * NOTE the occupancy query further down is deliberately NOT filtered this way.
- * A run that printed this morning genuinely occupied that press this morning;
- * excluding it would let the placer suggest a slot on top of work that really
+ * NOTE the occupancy query further down is unaffected by any of this. A run
+ * that printed this morning genuinely occupied that press this morning;
+ * ignoring it would let the placer suggest a slot on top of work that really
  * happened. Capacity is about the press, not about the job's paperwork.
  */
-const DONE_METHOD_STATUSES = ["Post-Production", "Completed", "Cancelled"];
+/**
+ * CHANGED 2026-08-19: finished work is no longer hidden, it is FLAGGED.
+ *
+ * The board used to filter Post-Production and Completed out of the query
+ * entirely, which was right while Google Calendar was the shop's system of
+ * record. It is wrong now that this board IS the calendar: scroll back a week
+ * and last Tuesday's jobs had silently vanished, because finishing them made
+ * them disappear. "What did we run?" is a question people ask constantly and
+ * the app had no answer.
+ *
+ * So these two lists now mark an order as DONE rather than excluding it, and
+ * the UI greys it. It stays on the press it ran on, at the time it ran.
+ *
+ * CANCELLED IS STILL EXCLUDED, and deliberately. A cancelled job is not
+ * finished work, it is work that never happened -- drawing it on the calendar
+ * in the same "we did this" grey as a completed job would misrepresent the
+ * week. It belongs to a different question than the one this board answers.
+ */
+const DONE_METHOD_STATUSES = ["Post-Production", "Completed"];
 const DONE_ORDER_SUBSTATUSES = ["Post-Production", "Completed"];
+const HIDDEN_METHOD_STATUSES = ["Cancelled"];
 
 /** ['a','b'] -> "'a','b'" for a SOQL IN list. Values here are all literals we
  *  own -- never interpolate user input through this. */
@@ -141,14 +152,23 @@ export async function onRequestGet({ env, request }) {
       ? url.searchParams.get("to")
       : dayOffset(DEFAULT_FORWARD_DAYS);
 
-    // Completed orders are excluded: the calendar is about what still has to be
-    // made. Order.Status = 'Complete' is the standard field (no "d"), which is
+    // Everything with a print date in the window comes back, finished or not.
+    // Only Cancelled is filtered out -- see the note on HIDDEN_METHOD_STATUSES.
+    //
+    // The `= null OR` half below is not redundant padding. SOQL's null handling
+    // on NOT IN is not something to be casually confident about, and the
+    // failure mode if it goes the ANSI-SQL way is silent: a method with no
+    // status set would vanish from the calendar with nothing to indicate why.
+    // Spelling it out makes the query behave the same either way. A blank
+    // status means "not started", which is exactly the work this board exists
+    // to show.
+    //
+    // Note Order.Status = 'Complete' is the standard field (no "d"), which is
     // NOT the same string as Production_Method__c.Status__c's 'Completed'.
     const soql =
       `SELECT ${PM_FIELDS.join(", ")}, ${ORDER_FIELDS.join(", ")} ` +
       `FROM Production_Method__c ` +
       `WHERE Order__c != null ` +
-      `AND Order__r.Status != 'Complete' ` +
       // The `= null OR` halves are not redundant padding. SOQL's null handling
       // on NOT IN is not something to be casually confident about, and the
       // failure mode if it goes the ANSI-SQL way is silent: a method with no
@@ -156,8 +176,7 @@ export async function onRequestGet({ env, request }) {
       // vanish from the calendar with nothing to indicate why. Spelling it out
       // makes the query behave the same either way. A blank status means "not
       // started", which is exactly the work this board exists to show.
-      `AND (Status__c = null OR Status__c NOT IN (${quoteList(DONE_METHOD_STATUSES)})) ` +
-      `AND (Order__r.Order_Substatus__c = null OR Order__r.Order_Substatus__c NOT IN (${quoteList(DONE_ORDER_SUBSTATUSES)})) ` +
+      `AND (Status__c = null OR Status__c NOT IN (${quoteList(HIDDEN_METHOD_STATUSES)})) ` +
       `AND Order__r.Print_Date__c >= ${soqlDateTime(from, false)} ` +
       `AND Order__r.Print_Date__c <= ${soqlDateTime(to, true)}`;
 
@@ -197,7 +216,10 @@ export async function onRequestGet({ env, request }) {
           ProductionMethods: [],
           ProductionRuns: [],
           TotalQuantity: null, // filled by the OrderItem roll-up below
-
+          // Set once every method is known -- see the pass below the grouping
+          // loop. Order-level, not method-level, because the board draws one
+          // card per order and a half-finished order is still live work.
+          Done: false,
         };
         byOrder.set(pm.Order__c, order);
       }
@@ -217,6 +239,26 @@ export async function onRequestGet({ env, request }) {
     });
 
     const orders = Array.from(byOrder.values());
+
+    /* Which of these are finished?
+     *
+     * Three independent signals, any one of which is enough, because the org
+     * does not keep them perfectly in step: the order-level substatus rollup
+     * can lag its methods, and Order.Status is maintained by a different part
+     * of the business entirely. Treating "any says done" as done errs toward
+     * greying a job that has actually finished rather than leaving stale work
+     * looking live -- and a wrongly-greyed job is a visible, correctable
+     * mistake, where a wrongly-live one quietly implies the press is booked. */
+    orders.forEach((o) => {
+      const methods = o.ProductionMethods || [];
+      const allMethodsDone =
+        methods.length > 0 &&
+        methods.every((m) => DONE_METHOD_STATUSES.indexOf(m.Status__c) !== -1);
+      o.Done =
+        allMethodsDone ||
+        DONE_ORDER_SUBSTATUSES.indexOf(o.Order_Substatus__c) !== -1 ||
+        o.Status === "Complete";
+    });
 
     // Presses, and every run already occupying them.
     //
