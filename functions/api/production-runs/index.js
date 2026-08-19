@@ -63,6 +63,7 @@
 import { sfFetch, apiVersion, jsonError, runQuery } from "../_sf.js";
 import { rollupPrintDateToOrder, orderIdForMethod } from "../_print-date-rollup.js";
 import { RUN_PLANNED } from "../_run-schedule-status.js";
+import { requireCap } from "../_session.js";
 
 const PR_OBJECT = "Production_Run__c";
 const PR_PRINTMETHOD_FIELD = "PrintMethod__c";
@@ -119,6 +120,9 @@ export async function onRequestPost({ env, request }) {
   } catch {
     return jsonError("invalid_json", 400);
   }
+
+  const gate = await requireCap(request, env, "runs.schedule");
+  if (gate.denied) return gate.response;
 
   const { printMethodId, pressId, scheduledStart, scheduledEnd, quantity } = payload || {};
 
