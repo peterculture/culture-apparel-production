@@ -313,13 +313,17 @@
           <div style="margin-top:11px;background:#121215;border:1px solid #232327;border-radius:10px;padding:11px 12px">
             <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:9px">{{d.prepCountLabel}}</div>
             <sc-for list="{{d.prepItems}}" as="it" hint-placeholder-count="2">
-              <div style="display:flex;align-items:baseline;gap:8px;padding:6px 0;border-top:1px solid #1b1b1e">
-                <span style="font:600 11px/1.2 'Oswald';color:#ECEAE4;min-width:74px">{{it.type}}</span>
-                <span style="font:400 11px/1.2 'Archivo';color:#9C978C;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{it.detail}} {{it.method}}</span>
-                <span style="font:600 9px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:{{it.statusColor}};white-space:nowrap">{{it.status}}</span>
+              <div style="padding:7px 0;border-top:1px solid #1b1b1e">
+                <div style="display:flex;align-items:baseline;gap:8px">
+                  <span style="font:600 11px/1.2 'Oswald';color:#ECEAE4;min-width:74px">{{it.type}}</span>
+                  <span style="font:400 11px/1.2 'Archivo';color:#9C978C;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{it.detail}} {{it.method}}</span>
+                  <span style="font:600 9px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:{{it.statusColor}};white-space:nowrap">{{it.status}}</span>
+                </div>
+                <sc-if value="{{it.hasStation}}" hint-placeholder-val="{{ true }}">
+                  <a href="{{it.stationHref}}" style="display:inline-flex;align-items:center;gap:5px;margin-top:6px;font:700 9px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#9C978C;background:#16161a;border:1px solid #2a2a2f;border-radius:6px;padding:7px 9px;text-decoration:none" style-hover="border-color:#5E9B9A;color:#5E9B9A"><i class="ti ti-external-link"></i>Go to {{it.stationLabel}}</a>
+                </sc-if>
               </div>
             </sc-for>
-            <a href="{{d.prepHref}}" style="margin-top:10px;width:100%;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:7px;font:700 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#ECEAE4;background:#16161a;border:1px solid #2a2a2f;border-radius:8px;padding:11px;cursor:pointer;text-decoration:none" style-hover="border-color:#5E9B9A;color:#5E9B9A"><i class="ti ti-checkup-list"></i>Complete These In Pre-Production</a>
           </div>
         </sc-if>
       </div>
@@ -693,8 +697,10 @@ class Component extends DCLogic {
       // Two outstanding prep items on the job printing today, so the block chip
       // and the drawer list are both exercised in demo mode.
       OpenPrepItems: num==='20962' ? [
-        {id:'i1', name:'PPI-1', type:'Screen', status:'In Progress', methodId:'m1', methodType:'Screen Print', detail:'156 mesh'},
-        {id:'i2', name:'PPI-2', type:'Ink', status:'Not Started', methodId:'m1', methodType:'Screen Print', detail:'PMS 186 C'},
+        {id:'i1', name:'PPI-1', type:'Screen', status:'In Progress', methodId:'m1', methodType:'Screen Print', detail:'156 mesh', station:'screen', stage:'Ready for Exposure'},
+        {id:'i2', name:'PPI-2', type:'Ink', status:'Not Started', methodId:'m1', methodType:'Screen Print', detail:'PMS 186 C', station:'ink', stage:'Needs Mixing'},
+        // No station exists for Thread -- proves the no-link path renders.
+        {id:'i3', name:'PPI-3', type:'Thread', status:'Not Started', methodId:'m2', methodType:'Embroidery', detail:'Isacord 0010', station:null, stage:null},
       ] : [],
       Proposals: num==='20877' ? [{
         id:'p1', name:'PROP-0001', machineGroup:'Screen Print',
@@ -1631,6 +1637,16 @@ class Component extends DCLogic {
          A run scheduled for Tuesday with three unfinished screens is a plan
          waiting on somebody, and until now the board had no way to say so or
          to hand you somewhere to go about it. */
+      /* One link PER ITEM, not one for the list. The four station boards are
+         separate places -- screens are burned at the Blue Lagoon, inks mixed at
+         the Ink Station -- so a single button could only ever be right for one
+         item and would quietly send everyone else to the wrong board.
+
+         Thread and Digitization have no station at all (there are four:
+         ink, screen, transfer, garment). Those render without a link. Guessing
+         a destination that cannot complete the item is worse than admitting
+         there isn't one. */
+      const STATION_LABEL={ink:'Ink Station', screen:'The Blue Lagoon', transfer:'Transfer Station', garment:'Garment Station'};
       const prepItems=(open.OpenPrepItems||[]).map(it=>({
         id:it.id,
         type:t(it.type)||'Item',
@@ -1641,18 +1657,21 @@ class Component extends DCLogic {
         // In Progress reads as movement, Not Started as a standing risk -- the
         // second is the one worth catching a manager's eye.
         statusColor: it.status==='In Progress' ? AMBER : CRIT,
+        hasStation: !!it.station,
+        stationLabel: STATION_LABEL[it.station] || '',
+        // Carrying the stage lands them on the tab the item is actually
+        // sitting on rather than the station's master list. station.html
+        // validates ?tab against that station's own stages and falls back to
+        // master, so an unexpected value degrades instead of breaking.
+        stationHref: it.station
+          ? 'station.html?station='+encodeURIComponent(it.station)+(it.stage?('&tab='+encodeURIComponent(it.stage)):'')
+          : '',
       }));
-      // One link per METHOD is wrong here -- the shop completes prep from the
-      // card, and the card IS the method. Deep-link to the first outstanding
-      // item's method so the drawer opens on the right one rather than making
-      // someone hunt the board for it.
-      const prepMethodId=(open.OpenPrepItems||[]).map(i=>i.methodId).filter(Boolean)[0]||null;
 
       return {
         runsEditable: canEdit,
         prepItems, hasPrepItems: prepItems.length>0,
         prepCountLabel: prepItems.length+(prepItems.length===1?' item still open':' items still open'),
-        prepHref: 'pre-production.html'+(prepMethodId?('?card='+encodeURIComponent(prepMethodId)):''),
         proposals, hasProposals: proposals.length>0 && canEdit,
         newRun, showNewRun: canEdit,
         qtyLabel: orderQty ? orderQty.toLocaleString()+(orderQty===1?' piece':' pieces') : 'no piece count on this order',
