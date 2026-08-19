@@ -824,6 +824,12 @@ class Component extends DCLogic {
       // Same suggestions, cached per ORDER so the card drawer can show them
       // without waiting for someone to open the Create Production Run modal.
       proposalsByOrder:{},
+      // Suggestions decided in THIS session. "Use this" marks the row Accepted
+      // on the server and both surfaces here list only Proposed rows, so a
+      // refetch drops it on its own -- this makes it go at the click instead.
+      // An id comes back out if the write failed, because an undecided
+      // suggestion must not look decided.
+      hiddenProposalIds:[],
       // Card drawer's "Production Runs" section (view + edit existing runs
       // under this card's Production_Method__c) -- see openOrder()/
       // loadRunsForCard()/saveRunRow(). runsByMethod caches the raw records
@@ -1554,6 +1560,9 @@ class Component extends DCLogic {
     if(!window.confirm('Turn down '+p.name+'? It stays on the order as rejected so the account manager can see the answer.')) return;
     try{
       await this._api.patchProposedRun(p.id, {status:'Rejected'});
+      // Hidden as well as refetched, so the row leaves when it is turned down
+      // rather than when the fetch comes back.
+      this.setState(st=>({hiddenProposalIds: st.hiddenProposalIds.concat([p.id])}));
       this.loadProposals(orderId);
     }catch(e){ console.error('reject failed', e); }
   }
@@ -1588,7 +1597,21 @@ class Component extends DCLogic {
 
      Quantity is only copied when the AM supplied one, so this never overwrites
      a real piece count with a blank. */
-  useProposal(p){
+  /* The AM suggestions still awaiting an answer. Accepted and Rejected rows
+     used to render greyed out with a status label; they don't any more. Once
+     the shop has answered, the panel has nothing left to ask, and both this
+     board and the calendar now drop it entirely. */
+  openProposals(list){
+    const hidden=this.state.hiddenProposalIds||[];
+    return (list||[]).filter(p=>p && p.status==='Proposed' && hidden.indexOf(p.id)===-1);
+  }
+
+  /* Take a suggestion: fill the Create Production Run form AND mark it
+     Accepted now, rather than waiting for the run to save. Deciding is the
+     act; building the run is the follow-through. submitRun() re-sends the
+     status alongside the Created Run link, which doubles as the repair path
+     if this write fails. */
+  async useProposal(p){
     if(!p) return;
     const patch={};
     if(p.proposedStart){
@@ -1602,7 +1625,20 @@ class Component extends DCLogic {
     }
     if(p.quantity!=null && Number(p.quantity)>0) patch.qty=String(p.quantity);
     this.setRunField(patch);
-    this.setState({proposalUsedId:p.id, runErr:'', runMsg:'Filled in from '+p.name+'. Change anything that does not fit the floor.'});
+    this.setState(st=>({proposalUsedId:p.id, runErr:'',
+      hiddenProposalIds: st.hiddenProposalIds.concat([p.id]),
+      runMsg:'Filled in from '+p.name+'. Change anything that does not fit the floor.'}));
+
+    if(this.state.connection!=='live' || !this._api || !this._api.patchProposedRun) return;
+    try{
+      await this._api.patchProposedRun(p.id, {status:'Accepted'});
+    }catch(e){
+      console.error('proposal accept failed', p.id, e);
+      this.setState(st=>({
+        hiddenProposalIds: st.hiddenProposalIds.filter(id=>id!==p.id),
+        runErr:'Filled the form in, but could not mark '+p.name+' as accepted — it will still show as open until that write succeeds.',
+      }));
+    }
   }
   setRunField(patch){ this.setState(st=>({ runForm:Object.assign({}, st.runForm||this.defaultRunForm(), patch) })); }
   runPressSearch(q){ this.setRunField({pressQ:q, pressId:null, pressName:''}); if(!this._api) return; clearTimeout(this._rpt); this._rpt=setTimeout(()=>{ this._api.searchPresses(q).then(r=>this.setState({runPressResults:r})).catch(()=>{}); },250); }
@@ -1776,13 +1812,11 @@ class Component extends DCLogic {
       createdPanel, onOpenRunModal:()=>this.openRunModal(),
       // Create Production Run modal
       runModalOpen:st.runModalOpen, onCloseRunModal:()=>this.closeRunModal(),
-      // The AM's suggestions. Only rows still awaiting a decision are offered
-      // as something to build from -- an Accepted one already produced a run,
-      // and re-using it would double-book the job. They stay listed either way,
-      // greyed, because "we already did this one" is information the manager
-      // needs as much as the open ones.
-      proposals:(st.proposals||[]).map(p=>{
-        const open = p.status==='Proposed';
+      // The AM's suggestions -- only the ones still awaiting a decision. A row
+      // that has been used or turned down is gone from here for good; the
+      // question it was asking has an answer, and the Production Runs list is
+      // where the result of that answer lives.
+      proposals:this.openProposals(st.proposals).map(p=>{
         const when = p.proposedStart
           ? new Date(p.proposedStart).toLocaleString([], {weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit'})
           : 'no date given';
@@ -1795,16 +1829,17 @@ class Component extends DCLogic {
           machine:p.machineGroup||'—',
           when, meta:bits.join(' · ')||'—',
           notes:p.notes||'', hasNotes:!!p.notes,
-          statusLabel: open ? '' : p.status,
-          isOpen: open,
-          used: st.proposalUsedId===p.id,
-          accent: open ? '#5E9B9A' : '#3a3a40',
-          nameColor: open ? '#ECEAE4' : '#6C665C',
-          useLabel: st.proposalUsedId===p.id ? 'Filled in' : 'Use this',
+          // Every row that renders is now an open one, so the greyed-out
+          // "already decided" treatment has nothing left to describe.
+          statusLabel: '',
+          isOpen: true,
+          accent: '#5E9B9A',
+          nameColor: '#ECEAE4',
+          useLabel: 'Use this',
           onUse:()=>this.useProposal(p),
         };
       }),
-      hasProposals:(st.proposals||[]).length>0,
+      hasProposals:this.openProposals(st.proposals).length>0,
       runForm:rf, runPressPicked:!!rf.pressId, runPressResultsView,
       // Scheduled Start/End dropdown options -- see ca-api.js's TIME_OPTIONS
       // (15-minute increments, matching Salesforce's own time picker for
@@ -1986,7 +2021,7 @@ class Component extends DCLogic {
          reason it is a separate object). "Use" hands off to the same Create
          Production Run modal the drawer already opens, prefilled, so there is
          one place that creates runs rather than two that can drift. */
-      const drawerProposals=(st.proposalsByOrder[src.orderId]||[]).map(p=>({
+      const drawerProposals=this.openProposals(st.proposalsByOrder[src.orderId]).map(p=>({
         id:p.id, name:p.name,
         machine:p.machineGroup||'—',
         when: p.proposedStart ? new Date(p.proposedStart).toLocaleString([], {weekday:'short', month:'numeric', day:'numeric', hour:'numeric', minute:'2-digit'}) : 'no date given',
