@@ -102,8 +102,7 @@ const DEFAULT_FORWARD_DAYS = 42;
  * that printed this morning genuinely occupied that press this morning;
  * ignoring it would let the placer suggest a slot on top of work that really
  * happened. Capacity is about the press, not about the job's paperwork.
- */
-/**
+ *
  * CHANGED 2026-08-19: finished work is no longer hidden, it is FLAGGED.
  *
  * The board used to filter Post-Production and Completed out of the query
@@ -492,6 +491,79 @@ export async function onRequestGet({ env, request }) {
       } catch (e) {
         console.error("Calendar proposed-run fetch error", e);
         orders.forEach((o) => { o.Proposals = []; });
+      }
+    }
+
+    /**
+     * Outstanding pre-production items for the orders in this window.
+     *
+     * WHY THE CALENDAR CARES. A run block says when a job prints. It says
+     * nothing about whether the screens are burned or the ink is mixed -- and
+     * a run scheduled for Tuesday morning with three unfinished prep items is
+     * not really scheduled, it is a plan waiting on somebody. The prep BAR on
+     * each block already hints at this via the method-level checklist, but a
+     * colour cannot tell you WHICH item is outstanding or let you go do
+     * anything about it.
+     *
+     * "Ready" is the finished state (see pre-production-items/index.js), so
+     * anything else -- Not Started, In Progress, or blank -- is still work.
+     * Blank counts as outstanding on purpose: an item nobody has touched is
+     * the most outstanding kind there is.
+     *
+     * Fails open like the other roll-ups: on error the board simply shows no
+     * prep detail, exactly as it did before this existed.
+     */
+    if (orderIds.length) {
+      try {
+        const quotedIds = orderIds.map((oid) => `'${oid}'`).join(",");
+        const itemResult = await runQuery(
+          env,
+          // Pre_Production_Item__c has NO Order__c of its own -- it reaches the
+          // order through its method (item -> Production_Method__c -> Order__c),
+          // exactly as pre-production-items/index.js does. Filtering on a
+          // non-existent Order__c would 400, and because this whole block fails
+          // open, it would have failed SILENTLY: no prep detail, no error, no
+          // clue why.
+          `SELECT Id, Name, Type__c, Status__c, Mesh_Count__c, Pantone_Color__c, ` +
+          `Thread_Color__c, Thread_Number__c, Transfer_Type__c, ` +
+          `Production_Method__c, Production_Method__r.Type__c, Production_Method__r.Order__c ` +
+          `FROM Pre_Production_Item__c WHERE Production_Method__r.Order__c IN (${quotedIds}) ` +
+          `AND (Status__c = null OR Status__c != 'Ready') ` +
+          `ORDER BY Type__c, Name`,
+        );
+        if (itemResult.ok) {
+          const byOrderId = new Map();
+          itemResult.records.forEach((it) => {
+            const oid = (it.Production_Method__r && it.Production_Method__r.Order__c) || null;
+            if (!oid) return;
+            const list = byOrderId.get(oid) || [];
+            list.push({
+              id: it.Id,
+              name: it.Name,
+              type: it.Type__c || "Item",
+              status: it.Status__c || "Not Started",
+              methodId: it.Production_Method__c || null,
+              methodType: (it.Production_Method__r && it.Production_Method__r.Type__c) || null,
+              // The one identifying detail that makes an item recognisable on
+              // the floor -- a mesh count for a screen, a Pantone for an ink.
+              // Which field that is depends on the type.
+              detail:
+                it.Type__c === "Screen" ? (it.Mesh_Count__c ? it.Mesh_Count__c + " mesh" : null)
+                : it.Type__c === "Ink" ? (it.Pantone_Color__c || null)
+                : it.Type__c === "Thread" ? ([it.Thread_Color__c, it.Thread_Number__c].filter(Boolean).join(" ") || null)
+                : it.Type__c === "Transfer" ? (it.Transfer_Type__c || null)
+                : null,
+            });
+            byOrderId.set(oid, list);
+          });
+          orders.forEach((o) => { o.OpenPrepItems = byOrderId.get(o.Id) || []; });
+        } else {
+          console.warn("Calendar prep-item fetch failed", itemResult.status);
+          orders.forEach((o) => { o.OpenPrepItems = []; });
+        }
+      } catch (e) {
+        console.error("Calendar prep-item fetch error", e);
+        orders.forEach((o) => { o.OpenPrepItems = []; });
       }
     }
 
