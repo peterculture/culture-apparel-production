@@ -658,6 +658,14 @@ class Component extends DCLogic {
       // Which AM suggestion the open drawer's Create Run form was filled from,
       // so it can be stamped Accepted once the real run exists.
       proposalUsedId:null,
+      // Proposals the manager has already acted on in THIS session. "Use this"
+      // marks the suggestion Accepted on the server, and the server-side
+      // ride-along only sends Proposed rows -- so after the next load these are
+      // gone on their own. This list is what makes them disappear at the click
+      // rather than at the refresh. If the write fails the id comes back out,
+      // because a suggestion nobody actually recorded a decision on must not
+      // look decided.
+      hiddenProposalIds:[],
       // The Add A Run form starts COLLAPSED. Most of the time a manager opens
       // an order to look at it, not to book press time -- and the expanded form
       // is seven controls tall, which pushed the runs that already exist, the
@@ -1048,10 +1056,36 @@ class Component extends DCLogic {
      shop manager -- who now owns the scheduling decision -- can see what was
      promised to the customer without leaving the board.
 
-     "Use" only fills the Create Run form in. Nothing is booked until the
-     manager creates the run, and nothing is published until they confirm it.
-     Keeping those three steps separate is the whole point of the workflow. */
-  useProposal(p){
+     "Use" answers the suggestion and fills the Create Run form in. It books
+     nothing: the run does not exist until the manager creates it, and nothing
+     reaches the calendar until they confirm it. Keeping those three steps
+     separate is the whole point of the workflow -- what "Use" settles is only
+     whether the shop is still considering the AM's date. */
+  /* The AM suggestions still awaiting an answer from the shop.
+
+     Filtered twice on purpose. The server already sends only Proposed rows,
+     which is what makes a decision stick across refreshes and across everyone
+     else's screens; hiddenProposalIds is the same filter applied a beat
+     earlier, so the panel goes at the click instead of at the next load. */
+  openProposals(list){
+    const hidden=this.state.hiddenProposalIds||[];
+    return (list||[]).filter(p=>p && hidden.indexOf(p.id)===-1);
+  }
+
+  /* Take one of the AM's suggestions.
+
+     Two things happen, and the order matters. The form fills in, and the
+     suggestion is marked Accepted right now -- not when the run is finally
+     created. Deciding is the act; creating the run is the follow-through, and
+     the board should stop asking about a question that has been answered.
+
+     Accepted rows never come back: the calendar ride-along and the
+     pre-production board both list only Proposed ones, so this removes the
+     panel from every surface and every user's screen, not just this drawer.
+     The Created Run link is stamped on later by saveRun, which also re-sends
+     the status -- that second write is the repair path if this one fails. */
+  async useProposal(p){
+    const api=this._api;
     if(!p) return;
     if(!this.canEdit()){ this.runFail('Only managers and admins can schedule runs.'); return; }
     const patch={};
@@ -1073,8 +1107,25 @@ class Component extends DCLogic {
     // Expand the form as part of filling it in. "Use this" silently writing
     // into a panel the manager cannot see would look like the button did
     // nothing at all.
-    this.setState({proposalUsedId:p.id, runErr:'', newRunOpen:true,
-      runMsg:'Filled in from '+p.name+' — adjust anything that does not fit the floor, then create the run.'});
+    this.setState(st=>({proposalUsedId:p.id, runErr:'', newRunOpen:true,
+      hiddenProposalIds: st.hiddenProposalIds.concat([p.id]),
+      runMsg:'Filled in from '+p.name+' — adjust anything that does not fit the floor, then create the run.'}));
+
+    // Demo mode has no server to tell; the panel still goes away so the
+    // demo behaves like the real board.
+    if(this.state.conn!=='live' || !api || !api.patchProposedRun) return;
+    try{
+      await api.patchProposedRun(p.id, {status:'Accepted'});
+    }catch(e){
+      console.error('proposal accept failed', p.id, e);
+      // Put it back. The form keeps what it was filled with -- that work is
+      // still good -- but the suggestion goes back to undecided, because
+      // nothing was recorded.
+      this.setState(st=>({
+        hiddenProposalIds: st.hiddenProposalIds.filter(id=>id!==p.id),
+        runErr:'Filled the form in, but could not mark '+p.name+' as accepted — it will still show as open until that write succeeds.',
+      }));
+    }
   }
 
   async rejectProposal(p){
@@ -1089,7 +1140,11 @@ class Component extends DCLogic {
     this.setState({runBusy:'prop-'+p.id, runErr:'', runMsg:''});
     try{
       await api.patchProposedRun(p.id, {status:'Rejected'});
-      this.setState({runBusy:null, proposalUsedId:this.state.proposalUsedId===p.id?null:this.state.proposalUsedId});
+      // Hidden as well as reloaded, for the same reason as "Use this": a
+      // decided suggestion should leave the screen when it is decided.
+      this.setState(st=>({runBusy:null,
+        hiddenProposalIds: st.hiddenProposalIds.concat([p.id]),
+        proposalUsedId: st.proposalUsedId===p.id ? null : st.proposalUsedId}));
       this.load();
     }catch(e){
       console.error('reject failed', e);
@@ -1312,6 +1367,7 @@ class Component extends DCLogic {
     const live = scoped.filter(o=>!o.Done);
     const queue = live.filter(o=>o.needsScheduling).map(o=>{
       const p=o.priority||{score:1}, sug=o.suggestion;
+      const qProps=this.openProposals(o.Proposals);
       return {
         customer:t(o.Account&&o.Account.Name)||'—',
         sub:[t(o.Customer_Order_Name__c), t(o.GOA_Order_Number__c)].filter(Boolean).join(' · ')||'—',
@@ -1323,12 +1379,12 @@ class Component extends DCLogic {
         // The AM's own suggestion, surfaced on the card. Without this the queue
         // gives no hint that anyone asked for a particular date, and the
         // manager would only find out by opening the drawer.
-        amHint: (o.Proposals||[]).length
-          ? ('AM: '+t((o.Proposals[0]||{}).machineGroup||'run')
-             +((o.Proposals[0]||{}).proposedStart ? ' · '+dayHM(o.Proposals[0].proposedStart) : '')
-             +((o.Proposals||[]).length>1 ? '  +'+((o.Proposals||[]).length-1)+' more' : ''))
+        amHint: qProps.length
+          ? ('AM: '+t((qProps[0]||{}).machineGroup||'run')
+             +((qProps[0]||{}).proposedStart ? ' · '+dayHM(qProps[0].proposedStart) : '')
+             +(qProps.length>1 ? '  +'+(qProps.length-1)+' more' : ''))
           : '',
-        hasAmHint: (o.Proposals||[]).length>0,
+        hasAmHint: qProps.length>0,
         canDrag: canEdit ? 'true' : 'false',
         cursor: canEdit ? 'grab' : 'pointer',
         onDragStart:()=>{ if(canEdit) this.setState({dragging:{orderId:o.Id}}); },
@@ -1638,7 +1694,7 @@ class Component extends DCLogic {
       /* The AM's open suggestions for this order. Only Status__c='Proposed'
          reaches the board (see calendar/index.js), so anything listed here is
          still awaiting a decision from the shop. */
-      const proposals=(open.Proposals||[]).map(p=>({
+      const proposals=this.openProposals(open.Proposals).map(p=>({
         id:p.id, name:p.name,
         machine:t(p.machineGroup)||'—',
         when: p.proposedStart ? dayHM(p.proposedStart) : 'no date given',
@@ -1646,8 +1702,9 @@ class Component extends DCLogic {
                p.quantity ? p.quantity+' pcs' : null,
                t(p.proposedBy)||null].filter(Boolean).join(' · ') || '—',
         notes:t(p.notes)||'', hasNotes:!!p.notes,
-        used: st.proposalUsedId===p.id,
-        useLabel: st.proposalUsedId===p.id ? 'Filled in' : 'Use this',
+        // No "Filled in" state any more -- a used suggestion leaves the list
+        // outright, so the only row that can render is one still open.
+        useLabel: 'Use this',
         busy: st.runBusy==='prop-'+p.id,
         onUse:()=>this.useProposal(p),
         onReject:()=>this.rejectProposal(p),
