@@ -394,6 +394,65 @@ export async function onRequestGet({ env, request }) {
       }
     }
 
+    /**
+     * The Account Manager's SUGGESTED runs (Proposed_Run__c), attached to the
+     * orders in this window.
+     *
+     * WHY THEY RIDE ALONG HERE rather than being fetched per order by the
+     * board: the shop manager now owns the scheduling decision, and these are
+     * the input to it. If the board had to ask for them one order at a time
+     * they would only load when a drawer opens, which means the queue could
+     * never show which jobs have a suggestion waiting -- and a suggestion
+     * nobody can see is the same as no suggestion at all.
+     *
+     * Only Status__c = 'Proposed' comes back. Accepted ones already produced a
+     * run that is on the board in its own right, and offering them again would
+     * invite double-booking the same job.
+     *
+     * Fails open, same contract as the OrderItem roll-up above: on any error
+     * the board renders exactly as it did before proposals existed.
+     */
+    if (orderIds.length) {
+      try {
+        const quotedIds = orderIds.map((oid) => `'${oid}'`).join(",");
+        const propResult = await runQuery(
+          env,
+          `SELECT Id, Name, Order__c, Machine_Group__c, Proposed_Start__c, Proposed_Hours__c, ` +
+          `Quantity__c, Sequence__c, Notes__c, Status__c, CreatedBy.Name ` +
+          `FROM Proposed_Run__c WHERE Order__c IN (${quotedIds}) AND Status__c = 'Proposed' ` +
+          `ORDER BY Sequence__c ASC NULLS LAST, Proposed_Start__c ASC NULLS LAST, CreatedDate ASC`,
+        );
+        if (propResult.ok) {
+          const byOrderId = new Map();
+          propResult.records.forEach((p) => {
+            const list = byOrderId.get(p.Order__c) || [];
+            list.push({
+              id: p.Id,
+              name: p.Name,
+              machineGroup: p.Machine_Group__c || null,
+              proposedStart: p.Proposed_Start__c || null,
+              proposedHours: p.Proposed_Hours__c == null ? null : Number(p.Proposed_Hours__c),
+              quantity: p.Quantity__c == null ? null : Number(p.Quantity__c),
+              notes: p.Notes__c || null,
+              proposedBy: (p.CreatedBy && p.CreatedBy.Name) || null,
+            });
+            byOrderId.set(p.Order__c, list);
+          });
+          orders.forEach((o) => { o.Proposals = byOrderId.get(o.Id) || []; });
+        } else {
+          // A 400 here is the expected shape when Proposed_Run__c does not
+          // exist yet in whichever org is active -- staging and production
+          // won't have it until the object is promoted. Not worth alarming
+          // about; the board simply shows no suggestions.
+          console.warn("Calendar proposed-run fetch failed", propResult.status);
+          orders.forEach((o) => { o.Proposals = []; });
+        }
+      } catch (e) {
+        console.error("Calendar proposed-run fetch error", e);
+        orders.forEach((o) => { o.Proposals = []; });
+      }
+    }
+
     const mockups = await fetchMockupsByOpportunity(env, orders.map((o) => o.OpportunityId));
     orders.forEach((o) => {
       o.DesignMockupUrl = mockups.get(o.OpportunityId) || null;
