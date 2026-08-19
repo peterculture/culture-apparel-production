@@ -60,6 +60,7 @@
 import { sfFetch, apiVersion, jsonError, checkNotModifiedSince, runQuery } from "../_sf.js";
 import { rollupPrintDateFromRun, rollupPrintDateToOrder, orderIdForRun } from "../_print-date-rollup.js";
 import { RUN_PLANNED, RUN_CONFIRMED, statusForScheduleWrite } from "../_run-schedule-status.js";
+import { requireCap } from "../_session.js";
 
 const PR_OBJECT = "Production_Run__c";
 const PR_PRESS_FIELD = "Press__c";
@@ -89,6 +90,14 @@ export async function onRequestPatch({ params, request, env }) {
       return jsonError("invalid_json", 400);
     }
     if (!body || typeof body !== "object") return jsonError("invalid_body", 400);
+
+    // Two different permissions live in this one endpoint, because two very
+    // different things happen here. Moving a run around is private planning;
+    // confirming it publishes to the shop calendar and, in production, to
+    // Google. Someone can reasonably be trusted with the first and not the
+    // second, so "confirm" in the body demands its own capability.
+    const gate = await requireCap(request, env, "confirm" in body ? "runs.confirm" : "runs.schedule");
+    if (gate.denied) return gate.response;
 
     const payload = {};
     // Set when this request moves the run's scheduled window, which decides
@@ -237,10 +246,13 @@ export async function onRequestPatch({ params, request, env }) {
   }
 }
 
-export async function onRequestDelete({ params, env }) {
+export async function onRequestDelete({ params, env, request }) {
   try {
     const id = params && params.id;
     if (!SF_ID.test(id)) return jsonError("invalid_id", 400);
+
+    const gate = await requireCap(request, env, "runs.delete");
+    if (gate.denied) return gate.response;
 
     // Resolve the order BEFORE deleting -- the hop back to it runs through the
     // run's own PrintMethod__c, which is gone the moment the delete lands.
