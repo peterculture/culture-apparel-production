@@ -38,7 +38,7 @@
 /** Tunable weights. Changing these is a deploy, not a Salesforce release. */
 export const WEIGHTS = {
   urgency: 0.45,   // wU  how much raw closeness to the print date matters
-  amRating: 0.30,  // wA  the account manager's 1-5
+  amRating: 0.30,  // wA  the account manager's rating, see AM_RATING_MAX
   prepRisk: 0.25,  // wP  unfinished pre-production, amplified by proximity
   firmBonus: 1.0,  // flat points added when the delivery date is firm
   halfLife: 3,     // days out at which urgency reads 5/10
@@ -47,6 +47,23 @@ export const WEIGHTS = {
   placeByDate: 0.6,
   placeByPriority: 0.4,
 };
+
+/**
+ * The top of the Account Manager's rating scale, matching the
+ * Order.Priority_Rating__c picklist.
+ *
+ * CHANGED 2026-08-18: the picklist went from 1-5 to 1-3. This was hardcoded as
+ * `/ 5` inside scoreOrder(), which is the kind of thing that breaks silently --
+ * with a 1-3 picklist and a /5 divisor, the AM's strongest possible signal
+ * scores 6 out of 10 instead of 10, so their input quietly carries 60% of the
+ * weight it is supposed to and every score is a little wrong forever. Nothing
+ * errors, no test fails, the numbers just drift.
+ *
+ * If the scale ever changes again, this is the only line to touch -- and the
+ * clamp below means stale records left on an out-of-range value can't push a
+ * contribution above its ceiling in the meantime.
+ */
+export const AM_RATING_MAX = 3;
 
 /**
  * The prep checklist that actually counts, per Production_Method__c.Type__c.
@@ -194,8 +211,14 @@ export function scoreOrder(order, methods, weights, now) {
   const days = daysUntil(order && order.Print_Date__c, now);
 
   const U = urgency(days, w.halfLife);
+  // Picklist values come back as strings ("3"), which Number() coerces cleanly;
+  // null contributes nothing rather than counting as the bottom of the scale,
+  // because "not rated" and "rated lowest" are different statements.
+  //
+  // Clamped to 10 so a record still holding a pre-2026-08-18 rating of 4 or 5
+  // can't score above the ceiling and outrank everything on the board.
   const rating = Number(order && order.Priority_Rating__c);
-  const A = Number.isFinite(rating) ? (rating / 5) * 10 : 0;
+  const A = Number.isFinite(rating) ? Math.min(10, (rating / AM_RATING_MAX) * 10) : 0;
   const ready = readiness(methods);
   const P = (1 - ready) * U;
   const F = order && order.Firm__c ? w.firmBonus : 0;
