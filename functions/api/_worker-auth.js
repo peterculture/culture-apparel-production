@@ -75,9 +75,16 @@ export async function matchWorkerPin(env, pin) {
   // long the check takes doesn't itself leak which position in the roster
   // matched -- same constant-time spirit as safeEqual() below, just applied
   // across the whole map instead of one comparison.
+  //
+  // TWO ENTRY SHAPES (2026-08-18). A value may be the PIN as a bare string, or
+  // an object { pin, caps }. Both are supported on purpose: converting the
+  // whole roster in one go is exactly the kind of edit that locks a shop out
+  // of its own system at 6am, so entries can move over one at a time.
   let matched = null;
   for (const name of Object.keys(pins)) {
-    const expected = pins[name];
+    const entry = pins[name];
+    if (entry == null) continue;
+    const expected = typeof entry === "object" ? entry.pin : entry;
     if (expected == null) continue;
     if (safeEqual(candidate, String(expected))) matched = name;
   }
