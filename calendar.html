@@ -743,8 +743,22 @@ class Component extends DCLogic {
   dayOf(offset){ const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+offset); return d; }
   windowDays(){
     const a=this.state.anchor;
-    const span = this.state.view==='day' ? 1 : 6;
-    const start = this.state.view==='day' ? this.dayOf(a) : this.mondayOf(a);
+    const v=this.state.view;
+    /* Three views, three window shapes:
+         day    one day, anchored on whatever day you stepped to
+         3day   three CONSECUTIVE days from that same anchor -- a rolling
+                outlook, not a fixed block, so "next" walks forward three at a
+                time rather than jumping to a calendar boundary
+         week   Mon-Sat, snapped to the week the anchor falls in
+
+       3day deliberately does NOT skip Sunday. Skipping it would make the
+       columns non-contiguous, and every piece of block-placement maths below
+       assumes column i is start + i days. A run landing in the wrong column is
+       exactly the kind of bug that looks fine until someone shows up on the
+       wrong day, and an empty Sunday column is honest -- it says nothing runs
+       Sunday, which is true. */
+    const span = v==='day' ? 1 : v==='3day' ? 3 : 6;
+    const start = (v==='day' || v==='3day') ? this.dayOf(a) : this.mondayOf(a);
     const end = new Date(start); end.setDate(end.getDate()+span-1);
     const iso = d => d.toISOString().slice(0,10);
     // Pull a little either side so the queue isn't empty at a window edge.
@@ -892,8 +906,11 @@ class Component extends DCLogic {
   onRefresh(){ this.load(); }
   onOpenNav(){ this.setState({navOpen:true}); }
   onCloseNav(){ this.setState({navOpen:false}); }
-  onPrev(){ this.setState({anchor:this.state.anchor-(this.state.view==='day'?1:7)},()=>this.load()); }
-  onNext(){ this.setState({anchor:this.state.anchor+(this.state.view==='day'?1:7)},()=>this.load()); }
+  /* Step by whatever the view shows, so Next never skips days or repeats
+     them: 1 for Day, 3 for the rolling 3-day outlook, 7 for Mon-Sat. */
+  viewStep(){ const v=this.state.view; return v==='day'?1:v==='3day'?3:7; }
+  onPrev(){ this.setState({anchor:this.state.anchor-this.viewStep()},()=>this.load()); }
+  onNext(){ this.setState({anchor:this.state.anchor+this.viewStep()},()=>this.load()); }
   onToday(){ this.setState({anchor:0},()=>this.load()); }
   // Opening or closing ALWAYS clears the run form. Without this, half-typed
   // edits for one order would still be sitting in runEdits when the next one
@@ -1273,6 +1290,11 @@ class Component extends DCLogic {
     const ROW_H = 62;                       // px per hour
     const trackH = HOURS*ROW_H;
     const dayCount = st.view==='day' ? 1 : span;
+    /* Column width by view, defined once. Three days get materially more room
+       than six do -- that extra width is the whole reason to pick this view,
+       since it is where a block finally has space for the customer name and
+       the times instead of just an order number. */
+    const COL_PX = st.view==='day' ? 340 : st.view==='3day' ? 260 : 158;
     const dayOfCol = i => { const d=new Date(start); d.setDate(d.getDate()+i); return d; };
     const today = new Date(); today.setHours(0,0,0,0);
     /* "Now" line. st.now already ticks once a second to drive the header clock,
@@ -1372,7 +1394,7 @@ class Component extends DCLogic {
       // Deliberately the MIN width, not the likely one. Columns are minmax(min,1fr)
       // so they usually get more, and estimating high would clip text on the one
       // layout where it is actually tight.
-      const colPx = st.view==='day' ? 340 : 158;
+      const colPx = COL_PX;
       const lanePx = colPx/laneCount;
 
       const blocks = items.map(it=>{
@@ -1440,7 +1462,7 @@ class Component extends DCLogic {
       {label:'Highest Priority', value:top?((top.priority||{}).score||1).toFixed(1):'—', unit:'of 10', accent:RED,
        valueColor:INK, sub:top?(t(top.Account&&top.Account.Name)||'—'):'nothing in this window'},
       {label:'Orders In View', value:live.length, unit:live.length===1?'order':'orders', accent:PURPLE,
-       valueColor:INK, sub:st.view==='day'?'printing this day':'printing this week'},
+       valueColor:INK, sub:st.view==='day'?'printing this day':st.view==='3day'?'printing these three days':'printing this week'},
     ];
 
     /* drawer */
@@ -1636,6 +1658,7 @@ class Component extends DCLogic {
     const worker = (api&&api.anyWorkerName&&api.anyWorkerName()) || '';
     const viewTabs = [
       {key:'day', label:'Day', icon:'ti-clock-hour-4'},
+      {key:'3day', label:'3 Day', icon:'ti-columns-3'},
       {key:'week', label:'Week', icon:'ti-layout-columns'},
     ].map(v=>({
       label:v.label, icon:v.icon,
@@ -1672,14 +1695,15 @@ class Component extends DCLogic {
       prepLegend: [{label:'Ready / Great', color:GREEN},{label:'Mediocre', color:AMBER},{label:'Very bad', color:CRIT}],
       calendars,
       gridTitle: (activeGroup==='all' ? 'Master Calendar' : ((groupDef&&groupDef.label)||'Calendar'))
-                 + ' · ' + (st.view==='day' ? start.toLocaleDateString([], {weekday:'long', month:'short', day:'numeric'}) : 'Week'),
+                 + ' · ' + (st.view==='day' ? start.toLocaleDateString([], {weekday:'long', month:'short', day:'numeric'})
+                            : st.view==='3day' ? '3 Days' : 'Week'),
       gridHint: 'Shop hours '+SHOP_START+':00 – '+SHOP_END+':00'
                 + (ungrouped ? ' · '+ungrouped+' press'+(ungrouped===1?'':'es')+' not in any group — Master only' : ''),
       // Six day columns plus the hour gutter have to clear the 330px queue
       // beside them without pushing Saturday off the edge at a normal laptop
       // width -- that was the first thing this layout got wrong.
-      gridCols: '58px repeat('+dayCount+', minmax('+(st.view==='day'?'340':'158')+'px,1fr))',
-      gridMinW: (58 + dayCount*(st.view==='day'?344:162) + 8)+'px',
+      gridCols: '58px repeat('+dayCount+', minmax('+COL_PX+'px,1fr))',
+      gridMinW: (58 + dayCount*(COL_PX+4) + 8)+'px',
       rowH: ROW_H+'px',
       trackH: trackH+'px',
       // One line per hour, drawn as a background rather than 9 more elements
