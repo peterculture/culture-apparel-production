@@ -410,9 +410,16 @@
           </div>
         </sc-if>
 
-        <sc-if value="{{d.showNewRun}}" hint-placeholder-val="{{ true }}">
+        <sc-if value="{{d.newRunShut}}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ d.onToggleNewRun }}" style="display:inline-flex;align-items:center;gap:6px;font:700 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#5E9B9A;background:transparent;border:1px dashed #2c4645;border-radius:8px;padding:9px 12px;cursor:pointer" style-hover="background:#132020;border-style:solid"><i class="ti ti-plus"></i>Add A Run</button>
+        </sc-if>
+
+        <sc-if value="{{d.newRunOpen}}" hint-placeholder-val="{{ true }}">
           <div style="background:#101013;border:1px solid #202024;border-left:3px solid #5E9B9A;border-radius:10px;padding:12px 14px">
-            <div style="font:600 11px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#5E9B9A;margin-bottom:11px">Add A Run</div>
+            <div onClick="{{ d.onToggleNewRun }}" style="display:flex;align-items:center;gap:7px;margin-bottom:11px;cursor:pointer" style-hover="opacity:.75">
+              <span style="font:600 11px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#5E9B9A">Add A Run</span>
+              <i class="ti ti-chevron-up" style="margin-left:auto;font-size:15px;color:#5E9B9A"></i>
+            </div>
             <div style="display:flex;flex-direction:column;gap:9px">
               <sc-if value="{{d.newRun.manyMethods}}" hint-placeholder-val="{{ false }}">
                 <div>
@@ -651,6 +658,13 @@ class Component extends DCLogic {
       // Which AM suggestion the open drawer's Create Run form was filled from,
       // so it can be stamped Accepted once the real run exists.
       proposalUsedId:null,
+      // The Add A Run form starts COLLAPSED. Most of the time a manager opens
+      // an order to look at it, not to book press time -- and the expanded form
+      // is seven controls tall, which pushed the runs that already exist, the
+      // AM's suggestions, and the open pre-production items off the bottom of
+      // the drawer. It expands on demand, and expands itself whenever something
+      // fills it in (see useProposal).
+      newRunOpen:false,
       runEdits:{}, runBusy:null, runErr:'', runMsg:'',
       sfEnvOpen:false, sfEnvPin:'', sfEnvMsg:'', sfEnvErr:'', sfEnvPick:null, sfEnvSubmitting:false, env:null,
       nameOk:false, gatePin:'', gateErr:'', gateSubmitting:false, gateShake:false,
@@ -944,7 +958,7 @@ class Component extends DCLogic {
   // Opening or closing ALWAYS clears the run form. Without this, half-typed
   // edits for one order would still be sitting in runEdits when the next one
   // opens, and a Save would write them to the wrong run.
-  openOrder(id){ this.setState({openId:id, runEdits:{}, runErr:'', runMsg:'', runBusy:null}); }
+  openOrder(id){ this.setState({openId:id, runEdits:{}, runErr:'', runMsg:'', runBusy:null, newRunOpen:false}); }
   onCloseDrawer(){ this.openOrder(null); }
   onOpenSfEnv(){ this.setState({sfEnvOpen:true,sfEnvMsg:'',sfEnvErr:''}); this.loadEnv(); }
   onCloseSfEnv(){ this.setState({sfEnvOpen:false}); }
@@ -1056,7 +1070,10 @@ class Component extends DCLogic {
     // Never overwrite a real piece count with a blank.
     if(p.quantity!=null && Number(p.quantity)>0) patch.qty=String(p.quantity);
     this.setRunField('new', patch);
-    this.setState({proposalUsedId:p.id, runErr:'',
+    // Expand the form as part of filling it in. "Use this" silently writing
+    // into a panel the manager cannot see would look like the button did
+    // nothing at all.
+    this.setState({proposalUsedId:p.id, runErr:'', newRunOpen:true,
       runMsg:'Filled in from '+p.name+' — adjust anything that does not fit the floor, then create the run.'});
   }
 
@@ -1164,7 +1181,11 @@ class Component extends DCLogic {
           catch(e){ console.error('proposal accept failed', usedId, e); }
         }
       }
-      this.setState({runBusy:null, runMsg:run?'Run updated.':'Run created.', runEdits:{}, proposalUsedId:null});
+      // Collapse the form once the run exists -- it is now a real row in the
+      // list above, and leaving a filled-in form open under it invites a
+      // duplicate. Editing an existing run leaves the form as it was.
+      this.setState({runBusy:null, runMsg:run?'Run updated.':'Run created.', runEdits:{}, proposalUsedId:null,
+        newRunOpen: run ? this.state.newRunOpen : false});
       this.load();
     }catch(e){
       // 409 == someone else saved this run after we loaded it. Never silently
@@ -1673,7 +1694,12 @@ class Component extends DCLogic {
         prepItems, hasPrepItems: prepItems.length>0,
         prepCountLabel: prepItems.length+(prepItems.length===1?' item still open':' items still open'),
         proposals, hasProposals: proposals.length>0 && canEdit,
-        newRun, showNewRun: canEdit,
+        newRun,
+        // Two mutually exclusive faces of the same thing: a one-line button
+        // when shut, the full form when open.
+        newRunShut: canEdit && !st.newRunOpen,
+        newRunOpen: canEdit && !!st.newRunOpen,
+        onToggleNewRun:()=>this.setState({newRunOpen:!this.state.newRunOpen, runErr:''}),
         qtyLabel: orderQty ? orderQty.toLocaleString()+(orderQty===1?' piece':' pieces') : 'no piece count on this order',
         qtyColor: orderQty ? DIM : AMBER,
         runErr:st.runErr, hasRunErr:!!st.runErr,
