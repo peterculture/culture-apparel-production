@@ -91,8 +91,11 @@ export async function onRequestGet({ env, request }) {
     // else changed the run more recently (see ifUnmodifiedSince in
     // production-runs/[id].js).
     const soql =
+      // Auto_Scheduling_Status__c added 2026-08-19 so the pre-production card
+      // drawer can show whether a run is Planned or Confirmed, and offer the
+      // Confirm action there rather than only on the calendar board.
       `SELECT Id, Name, ${PR_PRESS_FIELD}, Press__r.Name, ${PR_SCHED_START_FIELD}, ${PR_SCHED_END_FIELD}, ` +
-      `Actual_Start__c, Actual_End__c, ${PR_QTY_FIELD}, LastModifiedDate ` +
+      `Actual_Start__c, Actual_End__c, ${PR_QTY_FIELD}, Auto_Scheduling_Status__c, LastModifiedDate ` +
       `FROM ${PR_OBJECT} WHERE ${PR_PRINTMETHOD_FIELD} = '${methodId}' ` +
       `ORDER BY ${PR_SCHED_START_FIELD} ASC NULLS LAST`;
     // Naturally small (scoped to one method's own runs), but runQuery is
