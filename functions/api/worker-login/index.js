@@ -20,6 +20,7 @@
  */
 import { jsonError } from "../_sf.js";
 import { matchWorkerPin } from "../_worker-auth.js";
+import { issueSession, sessionCookieHeader } from "../_session.js";
 
 export async function onRequestPost({ env, request }) {
   try {
@@ -42,9 +43,20 @@ export async function onRequestPost({ env, request }) {
 
     if (!match) return jsonError("invalid_pin", 401);
 
+    // ADDED 2026-08-18: hand back a signed, HttpOnly session cookie as well as
+    // the name/role. The body is unchanged, so login.html keeps writing
+    // localStorage exactly as before and every board's existing identity check
+    // still works -- but from here on the SERVER can also tell who is calling,
+    // which is what makes per-person capability checks possible at all.
+    // localStorage decides which buttons get drawn; the cookie decides what the
+    // API will actually do.
+    const headers = { "Cache-Control": "no-store" };
+    const session = await issueSession(env, match.name);
+    if (session) headers["Set-Cookie"] = sessionCookieHeader(session);
+
     return Response.json(
       { ok: true, name: match.name, role: match.role },
-      { headers: { "Cache-Control": "no-store" } },
+      { headers },
     );
   } catch (err) {
     console.error(err);
