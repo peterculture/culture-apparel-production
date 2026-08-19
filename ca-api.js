@@ -75,6 +75,17 @@
      the gate. Role is re-established by the next setIdentity(). */
   function clearIdentity(){
     try { localStorage.removeItem(NAME_KEY); localStorage.removeItem(STATION_NAME_KEY); localStorage.removeItem(ROLE_KEY); } catch (_) {}
+    endServerSession();
+  }
+  /* Drops the server's signed session cookie too (2026-08-18). Clearing
+     localStorage alone is no longer enough: the server now holds its own
+     identity, and a cookie that outlives the person who earned it hands the
+     next person to pick up the tablet their capabilities on every API call --
+     invisibly, because the UI would show the new person as themselves.
+     Fire-and-forget on purpose: switching user must never hang or fail on a
+     network hiccup, and the cookie expires on its own regardless. */
+  function endServerSession(){
+    try { fetch('/api/worker-logout', { method: 'POST', credentials: 'same-origin', keepalive: true }).catch(function(){}); } catch (_) {}
   }
 
   /* ── refresh returns you to the view you were on (2026-08-14) ──
@@ -117,7 +128,7 @@
   // those two pages never adopted ROLE_KEY/NAME_KEY (see their own header
   // comments), so a real "log everyone off this tablet" action has to know
   // about both systems to actually work regardless of which board you're on.
-  function logout(){ try { localStorage.removeItem(ROLE_KEY); localStorage.removeItem(NAME_KEY); localStorage.removeItem('caStationWorkerName'); } catch (_) {} }
+  function logout(){ try { localStorage.removeItem(ROLE_KEY); localStorage.removeItem(NAME_KEY); localStorage.removeItem('caStationWorkerName'); } catch (_) {} endServerSession(); }
   /* ── manager-only action gate ──
      role() reflects whichever PIN was entered at login.html and is easy to
      go stale on a shared tablet: tapping "Switch user" (the repeat icon on
@@ -721,7 +732,7 @@
   ];
 
   window.CAApi = {
-    VALID_NAMES: VALID_NAMES, ROLE_KEY: ROLE_KEY, NAME_KEY: NAME_KEY, STATION_NAME_KEY: STATION_NAME_KEY, role: role, workerName: workerName, anyWorkerName: anyWorkerName, setRole: setRole, setWorkerName: setWorkerName, setIdentity: setIdentity, clearIdentity: clearIdentity, readParam: readParam, writeParams: writeParams, logout: logout, isManager: isManager, isAdmin: isAdmin, canAccessManagement: canAccessManagement, confirmManager: confirmManager, MANAGER_NAMES: MANAGER_NAMES, workerLogin: workerLogin,
+    VALID_NAMES: VALID_NAMES, ROLE_KEY: ROLE_KEY, NAME_KEY: NAME_KEY, STATION_NAME_KEY: STATION_NAME_KEY, role: role, workerName: workerName, anyWorkerName: anyWorkerName, setRole: setRole, setWorkerName: setWorkerName, setIdentity: setIdentity, clearIdentity: clearIdentity, endServerSession: endServerSession, readParam: readParam, writeParams: writeParams, logout: logout, isManager: isManager, isAdmin: isAdmin, canAccessManagement: canAccessManagement, confirmManager: confirmManager, MANAGER_NAMES: MANAGER_NAMES, workerLogin: workerLogin,
     SUBSTATUS_VALUE: SUBSTATUS_VALUE, SUBSTATUS_LABEL: SUBSTATUS_LABEL, STAGE_KEY: STAGE_KEY, STAGE_SUBSTATUS: STAGE_SUBSTATUS, stageOf: stageOf, stageOfMethod: stageOfMethod,
     DELIVERY_LABEL: DELIVERY_LABEL, DELIVERY_METHODS: DELIVERY_METHODS, formatAddress: formatAddress,
     NAV_BOARDS: NAV_BOARDS, buildNavBoards: buildNavBoards,
