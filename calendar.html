@@ -202,7 +202,7 @@
         <sc-for list="{{prepLegend}}" as="s" hint-placeholder-count="3">
           <span style="display:inline-flex;align-items:center;gap:5px;font:400 9px/1 'Archivo';color:#6C665C"><i style="width:9px;height:9px;border-radius:2px;background:{{s.color}};display:inline-block"></i>{{s.label}}</span>
         </sc-for>
-        <span style="font:400 9px/1 'Archivo';color:#4d483f;margin-left:4px">Dashed = suggested · solid = confirmed</span>
+        <span style="font:400 9px/1 'Archivo';color:#4d483f;margin-left:4px">Dashed = auto-suggested · amber = planned · purple = on the shop calendar · greyed = finished</span>
       </div>
 
       <div style="overflow-x:auto">
@@ -664,6 +664,11 @@ class Component extends DCLogic {
         Auto_Scheduling_Status__c: num==='20611' ? 'Proposal'
                                  : (num==='19869' || num==='21215' ? 'Planned' : 'Confirmed')}] : [],
       needsScheduling: !press,
+      // One finished job in the fixtures so the greyed treatment is visible in
+      // demo mode. Same reasoning as the Planned run and the AM proposal: a
+      // state that only ever appears against a live org is a state nobody
+      // looks at until it is wrong in front of a customer.
+      Done: num==='21027',
       // One unscheduled job carries an AM suggestion so the queue badge and the
       // drawer panel are visible in demo mode. Without a fixture, the whole
       // proposals path would only ever be exercised against a live org --
@@ -1203,10 +1208,13 @@ class Component extends DCLogic {
     const scoped = rows.filter(orderInGroup);
 
     /* Tab counts are of ORDERS on that calendar in this window, which is the
-       number a manager is actually asking for ("how much is on Press 1"). */
+       number a manager is actually asking for ("how much is on Press 1").
+       Finished work is excluded for the same reason it is excluded from the
+       KPI tiles: the question is how much is still to do, and history piling
+       into the number as you scroll back would make the tabs useless. */
     const countFor = key => {
       const save=activeGroup;
-      return rows.filter(o=>{
+      return rows.filter(o=>!o.Done).filter(o=>{
         if(key==='all') return true;
         const g=serverGroups.filter(x=>x.key===key)[0];
         const runs=(o.ProductionRuns||[]).filter(r=>r.Press__c);
@@ -1230,7 +1238,12 @@ class Component extends DCLogic {
     });
 
     /* queue */
-    const queue = scoped.filter(o=>o.needsScheduling).map(o=>{
+    /* Finished orders are drawn on the grid but are NOT work. They stay out of
+       the queue, the tab counts and the KPI tiles, so "5 jobs this week" keeps
+       meaning five jobs still to do rather than quietly inflating with history
+       every time someone scrolls back. */
+    const live = scoped.filter(o=>!o.Done);
+    const queue = live.filter(o=>o.needsScheduling).map(o=>{
       const p=o.priority||{score:1}, sug=o.suggestion;
       return {
         customer:t(o.Account&&o.Account.Name)||'—',
@@ -1366,19 +1379,29 @@ class Component extends DCLogic {
         const {o,r}=it;
         const p=o.priority||{score:1};
         const sched=schedState(r);
+        /* Finished work stays on the board so "what did we run last Tuesday"
+           has an answer, but it must never compete visually with work that
+           still has to happen. Grey overrides the scheduling colours entirely:
+           once a job is off the press, whether it was Planned or Confirmed is
+           history, and colouring it as though the distinction still matters
+           would make the live week harder to read. */
+        const done=!!o.Done;
         const h=Math.max(30,(it.endH-it.startH)*ROW_H-3);
         const w=100/laneCount;
         const pname=t(r.Press||pressName(r.Press__c));
         return {
           num:t(o.GOA_Order_Number__c)||o.OrderNumber||'—',
           customer:t(o.Account&&o.Account.Name)||'—',
-          press:pname, pressColor: sched.accent,
+          press:pname, pressColor: done?FAINT:sched.accent,
           time:hhmm(r.Scheduled_Start__c)+'–'+hhmm(r.Scheduled_End__c||r.Scheduled_Start__c),
           title:[t(o.Account&&o.Account.Name), pname, hhmm(r.Scheduled_Start__c)+'–'+hhmm(r.Scheduled_End__c||r.Scheduled_Start__c)].filter(Boolean).join(' · '),
-          score:(p.score||1).toFixed(1), scoreColor:scoreColor(p.score||1),
-          color:prepColor(o.prep&&o.prep.key),
-          borderStyle: sched.border,
-          opacity: sched.opacity,
+          score:(p.score||1).toFixed(1), scoreColor: done?FAINT:scoreColor(p.score||1),
+          color: done?FAINT:prepColor(o.prep&&o.prep.key),
+          borderStyle: done?'solid':sched.border,
+          // .42 was too far -- against this background it read as a rendering
+          // glitch rather than as finished work. .58 still recedes behind every
+          // live block while staying legible enough to answer "what ran here".
+          opacity: done?'.58':sched.opacity,
           // Three tiers by how much width this block actually got. The ORDER
           // NUMBER survives every tier -- it is the thing a manager reads to
           // find the job -- so at the narrowest tier the score steps aside and
@@ -1406,9 +1429,9 @@ class Component extends DCLogic {
 
     /* KPIs -- scoped to the active calendar, so switching to Press 2 answers
        "how much is on Press 2" rather than repeating the whole shop's totals. */
-    const unsched=scoped.filter(o=>o.needsScheduling).length;
-    const risk=scoped.filter(o=>o.prep&&o.prep.key!=='good').length;
-    const top=scoped.slice().sort((a,b)=>((b.priority||{}).score||0)-((a.priority||{}).score||0))[0];
+    const unsched=live.filter(o=>o.needsScheduling).length;
+    const risk=live.filter(o=>o.prep&&o.prep.key!=='good').length;
+    const top=live.slice().sort((a,b)=>((b.priority||{}).score||0)-((a.priority||{}).score||0))[0];
     const kpis=[
       {label:'Needs Scheduling', value:unsched, unit:unsched===1?'order':'orders', accent:unsched?AMBER:GREEN,
        valueColor:unsched?AMBER:INK, sub:unsched?'no production run yet':'everything is placed'},
@@ -1416,7 +1439,7 @@ class Component extends DCLogic {
        valueColor:risk?CRIT:INK, sub:risk?'behind on pre-production':'everything has runway'},
       {label:'Highest Priority', value:top?((top.priority||{}).score||1).toFixed(1):'—', unit:'of 10', accent:RED,
        valueColor:INK, sub:top?(t(top.Account&&top.Account.Name)||'—'):'nothing in this window'},
-      {label:'Orders In View', value:scoped.length, unit:scoped.length===1?'order':'orders', accent:PURPLE,
+      {label:'Orders In View', value:live.length, unit:live.length===1?'order':'orders', accent:PURPLE,
        valueColor:INK, sub:st.view==='day'?'printing this day':'printing this week'},
     ];
 
@@ -1637,7 +1660,11 @@ class Component extends DCLogic {
       rangeLabel: st.view==='day'
         ? start.toLocaleDateString([], {weekday:'long', month:'short', day:'numeric'})
         : start.toLocaleDateString([], {month:'short', day:'numeric'})+' – '+(()=>{const e=new Date(start);e.setDate(e.getDate()+span-1);return e.toLocaleDateString([], {month:'short', day:'numeric'});})(),
-      shownLabel: scoped.length+(scoped.length===1?' order':' orders')+(st.q?' matching':' in window'),
+      shownLabel: live.length+(live.length===1?' order':' orders')+(st.q?' matching':' in window')
+        // Finished jobs are on the grid but not in the count, so say so --
+        // otherwise the number and the number of blocks disagree and the board
+        // looks broken.
+        +((scoped.length-live.length)>0 ? '  ·  '+(scoped.length-live.length)+' finished' : ''),
       kpis,
       queue, queueCount:queue.length, queueEmpty: queue.length===0,
       queueHint: canEdit ? 'Highest priority first. Drag one onto a press to schedule it.' : 'Highest priority first. Managers and admins can drag these onto a press.',
