@@ -26,6 +26,7 @@
  * stale number on the calendar.
  */
 import { runQuery, jsonError } from "../_sf.js";
+import { runQueryOptionalField } from "../_placements.js";
 import { fetchMockupsByOpportunity } from "../_mockup.js";
 import { scoreOrder, suggestSlot, prepStatus, byPriority, WEIGHTS, SHOP,
          PRESS_GROUPS, pressGroupOf, pressAcceptsOrder } from "../_priority.js";
@@ -83,6 +84,12 @@ const RUN_FIELDS = [
   "Auto_Scheduling_Status__c",
   "LastModifiedDate",
 ];
+// Queried separately because the org may not have it yet -- see
+// runQueryOptionalField in _placements.js. The stakes are highest on this
+// endpoint: if the run query dies, it doesn't just lose locations, it strips
+// every run off the calendar grid while still returning 200, so the board
+// would render as a shop with nothing scheduled.
+const RUN_LOCATION_FIELD = "Print_Location__c";
 
 const DEFAULT_BACK_DAYS = 14;
 const DEFAULT_FORWARD_DAYS = 42;
@@ -295,9 +302,12 @@ export async function onRequestGet({ env, request }) {
         `(Scheduled_Start__c >= ${soqlDateTime(from, false)} ` +
         `AND Scheduled_Start__c <= ${soqlDateTime(to, true)})` +
         (methodIds.length ? ` OR PrintMethod__c IN (${quoted})` : "");
-      const runsResult = await runQuery(
+      const runsResult = await runQueryOptionalField(
         env,
-        `SELECT ${RUN_FIELDS.join(", ")} FROM Production_Run__c WHERE ${runWhere}`,
+        (withLocation) =>
+          `SELECT ${RUN_FIELDS.concat(withLocation ? [RUN_LOCATION_FIELD] : []).join(", ")} ` +
+          `FROM Production_Run__c WHERE ${runWhere}`,
+        RUN_LOCATION_FIELD,
       );
       if (runsResult.ok) {
         const methodToOrder = new Map(records.map((r) => [r.Id, r.Order__c]));
@@ -324,6 +334,10 @@ export async function onRequestGet({ env, request }) {
             Actual_Start__c: run.Actual_Start__c,
             Actual_End__c: run.Actual_End__c,
             Quantity_Planned_c__c: run.Quantity_Planned_c__c,
+            // Which location this block prints. Null both when the run has
+            // none set and when the org has no such field -- the grid treats
+            // the two the same (show nothing), so neither needs a code path.
+            Print_Location__c: run[RUN_LOCATION_FIELD] || null,
             // Proposal = the machine suggested it. Confirmed = a human placed it
             // and nothing should move it again. Uros's field, doing exactly the
             // job a drag-to-reschedule calendar needs.
@@ -456,12 +470,16 @@ export async function onRequestGet({ env, request }) {
     if (orderIds.length) {
       try {
         const quotedIds = orderIds.map((oid) => `'${oid}'`).join(",");
-        const propResult = await runQuery(
+        const propResult = await runQueryOptionalField(
           env,
-          `SELECT Id, Name, Order__c, Machine_Group__c, Proposed_Start__c, Proposed_Hours__c, ` +
-          `Quantity__c, Sequence__c, Notes__c, Status__c, CreatedBy.Name ` +
-          `FROM Proposed_Run__c WHERE Order__c IN (${quotedIds}) AND Status__c = 'Proposed' ` +
-          `ORDER BY Sequence__c ASC NULLS LAST, Proposed_Start__c ASC NULLS LAST, CreatedDate ASC`,
+          (withLocation) =>
+            `SELECT Id, Name, Order__c, Machine_Group__c, ` +
+            (withLocation ? `${RUN_LOCATION_FIELD}, ` : "") +
+            `Proposed_Start__c, Proposed_Hours__c, ` +
+            `Quantity__c, Sequence__c, Notes__c, Status__c, CreatedBy.Name ` +
+            `FROM Proposed_Run__c WHERE Order__c IN (${quotedIds}) AND Status__c = 'Proposed' ` +
+            `ORDER BY Sequence__c ASC NULLS LAST, Proposed_Start__c ASC NULLS LAST, CreatedDate ASC`,
+          RUN_LOCATION_FIELD,
         );
         if (propResult.ok) {
           const byOrderId = new Map();
@@ -471,6 +489,7 @@ export async function onRequestGet({ env, request }) {
               id: p.Id,
               name: p.Name,
               machineGroup: p.Machine_Group__c || null,
+              printLocation: p[RUN_LOCATION_FIELD] || null,
               proposedStart: p.Proposed_Start__c || null,
               proposedHours: p.Proposed_Hours__c == null ? null : Number(p.Proposed_Hours__c),
               quantity: p.Quantity__c == null ? null : Number(p.Quantity__c),
