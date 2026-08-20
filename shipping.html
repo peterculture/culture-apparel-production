@@ -441,10 +441,13 @@ class Component extends DCLogic {
     function isoInDays(n){ const d=new Date(); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
     this._demoShipments = { 'demo-3':[{ Id:'ds-1', zkmulti__Carrier__c:'UPS', zkmulti__Service_Type_Name__c:'Ground', zkmulti__Tracking_Number__c:'1Z999AA10123456784', zkmulti__Ship_Date__c:isoInDays(-1), CreatedDate:new Date().toISOString() }] };
   }
+  // See ca-api.js's overlay notes -- timer work is silent, the first load()
+  // and every user-initiated call are not.
+  bg(fn){ const a=window.CAApi; return (a&&a.backgroundLoad) ? a.backgroundLoad(fn) : fn(); }
   componentDidMount(){
     this._t=setInterval(()=>this.setState({now:new Date()}),1000);
-    this.load(); this.loadSfEnv();
-    this._ar=setInterval(()=>{ if(this.state.connection==='live' && !this.state.modalId) this.load(); },20000);
+    this.load(); this.bg(()=>this.loadSfEnv());
+    this._ar=setInterval(()=>{ if(this.state.connection==='live' && !this.state.modalId) this.bg(()=>this.load()); },20000);
   }
   componentWillUnmount(){ clearInterval(this._t); clearInterval(this._ar); this.clearPoll(); }
 
@@ -587,7 +590,9 @@ class Component extends DCLogic {
     this._pollTimer = setInterval(()=>{
       tries++;
       if(tries>POLL_MAX_TRIES){ this.clearPoll(); return; }
-      this.loadShipments(orderId).then(list=>{
+      // Background: fires every 6s for up to 4 minutes while the Zenkraft tab
+      // is open. Must not dim the drawer on every tick.
+      this.bg(()=>this.loadShipments(orderId)).then(list=>{
         const baseline = this.state.shipBaseline[orderId];
         if(baseline!=null && list.length>baseline){
           this.clearPoll();
