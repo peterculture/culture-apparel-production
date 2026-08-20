@@ -64,6 +64,7 @@ import { sfFetch, apiVersion, jsonError, runQuery } from "../_sf.js";
 import { rollupPrintDateToOrder, orderIdForMethod } from "../_print-date-rollup.js";
 import { RUN_PLANNED } from "../_run-schedule-status.js";
 import { requireCap } from "../_session.js";
+import { parsePlacement, runQueryOptionalField } from "../_placements.js";
 
 const PR_OBJECT = "Production_Run__c";
 const PR_PRINTMETHOD_FIELD = "PrintMethod__c";
@@ -71,6 +72,15 @@ const PR_PRESS_FIELD = "Press__c";
 const PR_SCHED_START_FIELD = "Scheduled_Start__c";
 const PR_SCHED_END_FIELD = "Scheduled_End__c";
 const PR_QTY_FIELD = "Quantity_Planned_c__c";
+// Added 2026-08-20. Single-select restricted picklist drawing on the same
+// eleven values as Production_Method__c.Placements__c (see _placements.js).
+// One run prints one location: on a press, front and back are separate
+// passes, so a run that claims both can't be scheduled or counted honestly.
+// OPTIONAL on purpose -- every run that already exists has it blank, and a
+// board must keep working against an org where the field hasn't been
+// promoted yet. Never send the key at all rather than sending null, so a
+// create can't fail on an org that predates the field.
+const PR_LOCATION_FIELD = "Print_Location__c";
 
 const SF_ID = /^[a-zA-Z0-9]{15,18}$/;
 
@@ -90,24 +100,37 @@ export async function onRequestGet({ env, request }) {
     // "what I loaded" and the PATCH endpoint can reject a save if someone
     // else changed the run more recently (see ifUnmodifiedSince in
     // production-runs/[id].js).
-    const soql =
-      // Auto_Scheduling_Status__c added 2026-08-19 so the pre-production card
-      // drawer can show whether a run is Planned or Confirmed, and offer the
-      // Confirm action there rather than only on the calendar board.
+    // Auto_Scheduling_Status__c added 2026-08-19 so the pre-production card
+    // drawer can show whether a run is Planned or Confirmed, and offer the
+    // Confirm action there rather than only on the calendar board.
+    //
+    // Print_Location__c is threaded through runQueryOptionalField because it
+    // may not exist in the active org yet -- naming a missing/FLS-hidden
+    // field in a SELECT is a PARSE error that returns zero rows, not a blank
+    // column, which would empty the drawer's run list entirely. See
+    // _placements.js.
+    const buildSoql = (withLocation) =>
       `SELECT Id, Name, ${PR_PRESS_FIELD}, Press__r.Name, ${PR_SCHED_START_FIELD}, ${PR_SCHED_END_FIELD}, ` +
-      `Actual_Start__c, Actual_End__c, ${PR_QTY_FIELD}, Auto_Scheduling_Status__c, LastModifiedDate ` +
+      `Actual_Start__c, Actual_End__c, ${PR_QTY_FIELD}, ` +
+      (withLocation ? `${PR_LOCATION_FIELD}, ` : "") +
+      `Auto_Scheduling_Status__c, LastModifiedDate ` +
       `FROM ${PR_OBJECT} WHERE ${PR_PRINTMETHOD_FIELD} = '${methodId}' ` +
       `ORDER BY ${PR_SCHED_START_FIELD} ASC NULLS LAST`;
-    // Naturally small (scoped to one method's own runs), but runQuery is
-    // used everywhere a query runs now for consistency -- see _sf.js.
-    const { ok, status, records } = await runQuery(env, soql);
+    const { ok, status, records, hadField } = await runQueryOptionalField(
+      env,
+      buildSoql,
+      PR_LOCATION_FIELD,
+    );
     if (!ok) {
       console.error("Production run list query failed", status);
       return jsonError("query_failed", status);
     }
 
+    // locationAvailable tells the browser whether this org can store a print
+    // location at all, so the run forms can hide the picker instead of
+    // offering a control whose value would be silently dropped on save.
     return Response.json(
-      { records },
+      { records, locationAvailable: !!hadField },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (err) {
@@ -127,7 +150,7 @@ export async function onRequestPost({ env, request }) {
   const gate = await requireCap(request, env, "runs.schedule");
   if (gate.denied) return gate.response;
 
-  const { printMethodId, pressId, scheduledStart, scheduledEnd, quantity } = payload || {};
+  const { printMethodId, pressId, scheduledStart, scheduledEnd, quantity, printLocation } = payload || {};
 
   if (!printMethodId || !SF_ID.test(printMethodId)) return jsonError("missing_printMethodId", 400);
   if (!pressId || !SF_ID.test(pressId)) return jsonError("missing_pressId", 400);
@@ -142,6 +165,15 @@ export async function onRequestPost({ env, request }) {
   if (!Number.isFinite(qtyNum) || qtyNum <= 0 || qtyNum > 999999 || Math.floor(qtyNum) !== qtyNum) {
     return jsonError("bad_quantity", 400);
   }
+
+  // Print location is OPTIONAL: a run created before the manager knows the
+  // location is still a legitimate press booking, and every run that predates
+  // this field has it blank. Validated against the same eleven values as the
+  // method's Placements__c so a bad value 400s here with a useful name,
+  // rather than coming back from the restricted picklist as
+  // INVALID_OR_NULL_FOR_RESTRICTED_PICKLIST.
+  const loc = parsePlacement(printLocation);
+  if (!loc.ok) return Response.json({ error: "bad_printLocation", detail: loc.detail }, { status: 400 });
 
   const body = {
     [PR_PRINTMETHOD_FIELD]: printMethodId,
@@ -171,6 +203,11 @@ export async function onRequestPost({ env, request }) {
     // Confirm action in the calendar dashboard. See _run-schedule-status.js.
     Auto_Scheduling_Status__c: RUN_PLANNED,
   };
+  // Only ever ADD the key when there's a real value. Sending
+  // Print_Location__c: null against an org that doesn't have the field yet
+  // fails the whole insert -- and "no location" and "field not built here"
+  // should not be the difference between a run existing and not existing.
+  if (loc.value) body[PR_LOCATION_FIELD] = loc.value;
 
   try {
     const path = `/services/data/${apiVersion(env)}/sobjects/${PR_OBJECT}`;
