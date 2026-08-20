@@ -309,6 +309,40 @@
     return out;
   })();
 
+  /* ── Production_Method__c.Status__c: what each stage actually means ──
+   *
+   * Added 2026-08-20. The five pipeline statuses are shop jargon that every
+   * board displays but none of them explained, so a new hire reading
+   * "Post-Production" had no way to know it means folding and bagging rather
+   * than "finished". This is the one place that copy lives -- the kanban
+   * column headers, the drawer's status stepper and every Status dropdown all
+   * read from here, so the wording can't drift between boards.
+   *
+   * Written to answer "is this job mine right now?", not to restate the label.
+   * Keep them one short sentence: they render at 10px in the faintest text
+   * colour the palette has, under a heading, on a shop tablet.
+   *
+   * Cancelled and On Hold aren't part of the five, but both appear in every
+   * Status dropdown (see statusOptions in index.html/pre-production.html), and
+   * both are stages that make a card VANISH from the boards -- stageOfMethod()
+   * returns null for them. That is exactly the case where a manager needs a
+   * warning before picking, so they get help text too.
+   */
+  var STATUS_HELP = {
+    'Pre-Production': 'Screens, inks, thread and transfers are being prepped and garments counted in. Nothing is on a press yet.',
+    'Ready for Print': 'Prep is finished and garments are staged. The job can be scheduled onto a press.',
+    'In Production': 'On the press now — printing or stitching is underway.',
+    'Post-Production': 'Off the press. Folding, bagging, counting and quality check before it ships.',
+    'Completed': 'Shipped or picked up. Nothing left to do on this job.',
+    'Cancelled': 'Called off. The job disappears from every board — cancelled work never happened.',
+    'On Hold': 'Paused. Prep may be done, but the job leaves the boards until someone moves it on.'
+  };
+  /** Help copy for a status LABEL, or '' if there isn't any. Never throws on
+   *  an unknown value -- a board should lose the hint, not the render. */
+  function statusHelp(label){
+    return (label && STATUS_HELP[label]) || '';
+  }
+
   /* ══ Centre-screen loading overlay ═════════════════════════════════════
    *
    * Added 2026-08-20. The boards already had a connection dot in the header,
@@ -971,6 +1005,7 @@
     getInventory: getInventory, postInventory: postInventory, stationLogin: stationLogin,
     SIZE_ORDER: SIZE_ORDER, text: text, initials: initials, colorForName: colorForName, methodOf: methodOf, dueInfo: dueInfo, parseSfDate: parseSfDate, pivotItems: pivotItems, runQtyHint: runQtyHint,
     backgroundLoad: backgroundLoad, trackRequest: trackRequest, hideLoader: hideLoader,
+    STATUS_HELP: STATUS_HELP, statusHelp: statusHelp,
     prepBufferStats: prepBufferStats, PREP_STATUS_META: PREP_STATUS_META,
     URG_ICON: URG_ICON, urgCardStyle: urgCardStyle
   };
