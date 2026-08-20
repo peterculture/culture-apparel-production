@@ -758,14 +758,18 @@ class Component extends DCLogic {
     const api = this._api;
     this.setState({ nameOk: !!(api && api.anyWorkerName && api.anyWorkerName()) });
     this.load();
-    this.loadEnv();
+    this.bg(()=>this.loadEnv());
     this._t  = setInterval(()=>this.setState({now:new Date()}), 1000);
     this._ar = setInterval(()=>{
       // Never refresh mid-drag or with a drawer open -- a re-render underneath a
       // drag cancels it, and under a drawer it silently swaps what you're reading.
-      if (this.state.conn==='live' && !this.state.openId && !this.state.dragging) this.load();
+      // bg() also keeps the centre-screen loading overlay down for these ticks.
+      if (this.state.conn==='live' && !this.state.openId && !this.state.dragging) this.bg(()=>this.load());
     }, REFRESH_MS);
   }
+  // See ca-api.js's overlay notes. The first load() above stays unwrapped --
+  // that is the one the user is actually waiting on.
+  bg(fn){ const a=this._api||window.CAApi; return (a&&a.backgroundLoad) ? a.backgroundLoad(fn) : fn(); }
   componentWillUnmount(){ clearInterval(this._t); clearInterval(this._ar); }
 
   async load(){
@@ -783,7 +787,13 @@ class Component extends DCLogic {
   async fetchCalendar(from,to){
     const api = this._api;
     if (api && api.getCalendar) return api.getCalendar(from,to);
-    const r = await fetch('/api/calendar?from='+from+'&to='+to, {headers:{Accept:'application/json'}});
+    // /api/calendar has no CAApi wrapper, so this is the one request in the
+    // app that the overlay's jget/jsend/jdel hooks can't see. trackRequest()
+    // counts it by hand -- without it the calendar would be the only board
+    // that never shows a loading state. It also honours bg(): a request
+    // started inside backgroundLoad() is still counted as silent.
+    const doFetch = fetch('/api/calendar?from='+from+'&to='+to, {headers:{Accept:'application/json'}});
+    const r = await (api && api.trackRequest ? api.trackRequest(doFetch) : doFetch);
     if(!r.ok) throw new Error('calendar_'+r.status);
     return r.json();
   }
