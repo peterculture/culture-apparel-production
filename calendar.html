@@ -367,6 +367,15 @@
                     <select value="{{r.endTime}}" onChange="{{ r.onEndTime }}" style="width:118px;flex-shrink:0;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 8px;font-size:12px;color:#ECEAE4;outline:none"><option value="">Time…</option><sc-for list="{{r.timeOptions}}" as="tt" hint-placeholder-count="96"><option value="{{tt.value}}">{{tt.label}}</option></sc-for></select>
                   </div>
                 </div>
+                <sc-if value="{{r.locationShown}}" hint-placeholder-val="{{ true }}">
+                  <div>
+                    <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:5px">Print Location</div>
+                    <select value="{{r.printLocation}}" onChange="{{ r.onPrintLocation }}" style="width:190px;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:12px;color:#ECEAE4;outline:none">
+                      <option value="">— Not set —</option>
+                      <sc-for list="{{r.locationOptions}}" as="loc" hint-placeholder-count="3"><option value="{{loc}}">{{loc}}</option></sc-for>
+                    </select>
+                  </div>
+                </sc-if>
                 <div>
                   <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:5px">Pieces This Run</div>
                   <input type="number" min="1" value="{{r.qty}}" onInput="{{ r.onQty }}" style="width:140px;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:12px;color:#ECEAE4;outline:none">
@@ -451,6 +460,15 @@
                   <select value="{{d.newRun.endTime}}" onChange="{{ d.newRun.onEndTime }}" style="width:118px;flex-shrink:0;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 8px;font-size:12px;color:#ECEAE4;outline:none"><option value="">Time…</option><sc-for list="{{d.newRun.timeOptions}}" as="tt" hint-placeholder-count="96"><option value="{{tt.value}}">{{tt.label}}</option></sc-for></select>
                 </div>
               </div>
+              <sc-if value="{{d.newRun.locationShown}}" hint-placeholder-val="{{ true }}">
+                <div>
+                  <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:5px">Print Location</div>
+                  <select value="{{d.newRun.printLocation}}" onChange="{{ d.newRun.onPrintLocation }}" style="width:190px;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:12px;color:#ECEAE4;outline:none">
+                    <option value="">— Not set —</option>
+                    <sc-for list="{{d.newRun.locationOptions}}" as="loc" hint-placeholder-count="3"><option value="{{loc}}">{{loc}}</option></sc-for>
+                  </select>
+                </div>
+              </sc-if>
               <div>
                 <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:5px">Pieces This Run</div>
                 <input type="number" min="1" value="{{d.newRun.qty}}" onInput="{{ d.newRun.onQty }}" style="width:140px;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:12px;color:#ECEAE4;outline:none">
@@ -695,11 +713,14 @@ class Component extends DCLogic {
         contributions:{urgency:score*0.45,amRating:score*0.3,prepRisk:score*0.25,firm:0}},
       prep:{key: ready>=100?'good':(dayOff>=3?'good':(dayOff>=1?'warn':'crit')),
             label: ready>=100?'Ready':(dayOff>=3?'Great':(dayOff>=1?'Mediocre':'Very bad'))},
-      ProductionMethods:[{Type__c:method}],
+      // Placements added 2026-08-20 so the demo exercises the Print Location
+      // picker's method-scoping instead of always falling back to all eleven.
+      ProductionMethods:[{Id:'m'+num, Type__c:method, Placements:['Front','Back']}],
       ProductionRuns: press ? [{Id:'r'+num, Press__c:press, Press:null,
         Scheduled_Start__c:this._demoIso(dayOff,start),
         Scheduled_End__c:this._demoIso(dayOff,start,dur),
-        Quantity_Planned_c__c:Math.round(dur*120),
+        Quantity_Planned_c__c:Math.round(dur*120), Print_Location__c:'Front',
+        PrintMethod__c:'m'+num,
         LastModifiedDate:this._demoIso(dayOff,'06:00'),
         // All three states are represented on purpose. Demo mode is where the
         // planned-vs-confirmed distinction gets eyeballed, and a fixture that
@@ -727,7 +748,7 @@ class Component extends DCLogic {
         {id:'i3', name:'PPI-3', type:'Thread', status:'Not Started', methodId:'m2', methodType:'Embroidery', detail:'Isacord 0010', station:null, stage:null},
       ] : [],
       Proposals: num==='20877' ? [{
-        id:'p1', name:'PROP-0001', machineGroup:'Screen Print',
+        id:'p1', name:'PROP-0001', machineGroup:'Screen Print', printLocation:'Left Chest',
         proposedStart:this._demoIso(1,'09:00'), proposedHours:2, quantity:180,
         notes:'Customer asked for these before the rest of the order.',
         proposedBy:'Chief AM',
@@ -1115,6 +1136,19 @@ class Component extends DCLogic {
     }
     // Never overwrite a real piece count with a blank.
     if(p.quantity!=null && Number(p.quantity)>0) patch.qty=String(p.quantity);
+    /* Carry the CAM's print location, but only if the method this run will
+       attach to actually offers it. The CAM proposes before any
+       Production_Method__c exists and so picks from all eleven -- prefilling
+       a value the picker can't display would leave a blank select that
+       silently submits nothing. */
+    if(p.printLocation){
+      const order=((this.state.data&&this.state.data.records)||[]).find(o=>o&&o.Id===this.state.openId);
+      const f=this.runForm('new', (this._runSeeds&&this._runSeeds['new'])||{});
+      const mId=(f&&f.methodId)||(((order&&order.ProductionMethods)||[])[0]||{}).Id||null;
+      const m=((order&&order.ProductionMethods)||[]).find(x=>x&&x.Id===mId);
+      const allowed=(api&&api.locationsForMethod)?api.locationsForMethod(m&&m.Placements):[];
+      if(allowed.indexOf(p.printLocation)!==-1) patch.printLocation=p.printLocation;
+    }
     this.setRunField('new', patch);
     // Expand the form as part of filling it in. "Use this" silently writing
     // into a panel the manager cannot see would look like the button did
@@ -1221,17 +1255,21 @@ class Component extends DCLogic {
       this.runFail('Enter a whole piece count above zero.'); return;
     }
 
+    const locationOn=!!(api&&api.locationAvailable&&api.locationAvailable());
     this.setState({runBusy:key, runErr:'', runMsg:''});
     try{
       if(run){
-        await api.patchProductionRun(run.Id,
-          {pressId:f.pressId, scheduledStart:start, scheduledEnd:end, quantity:qty},
-          f.loadedAt);
+        const body={pressId:f.pressId, scheduledStart:start, scheduledEnd:end, quantity:qty};
+        // '' is meaningful on PATCH: it clears a location set by mistake.
+        if(locationOn) body.printLocation=f.printLocation||'';
+        await api.patchProductionRun(run.Id, body, f.loadedAt);
       }else{
         const methodId=f.methodId || (((order.ProductionMethods||[])[0]||{}).Id);
         if(!methodId){ this.runFail('This order has no production method to attach a run to.'); return; }
-        const res=await api.createProductionRun({printMethodId:methodId, pressId:f.pressId,
-          scheduledStart:start, scheduledEnd:end, quantity:qty});
+        const createBody={printMethodId:methodId, pressId:f.pressId,
+          scheduledStart:start, scheduledEnd:end, quantity:qty};
+        if(locationOn && f.printLocation) createBody.printLocation=f.printLocation;
+        const res=await api.createProductionRun(createBody);
 
         /* Close the loop on the AM's suggestion: mark it Accepted and point it
            at the run that came out of it. Without the link "Accepted" is just
@@ -1606,6 +1644,16 @@ class Component extends DCLogic {
          way. Returns '' when orderQty is null -- see CAApi.runQtyHint. */
       const qtyHintFor=(q)=>{ const a=this._api||window.CAApi; return (a&&a.runQtyHint)?a.runQtyHint(q, orderQty):''; };
       const dur=this.durationOf(open);
+      /* Print-location plumbing for this drawer. locationsFor() maps a
+         Production_Method__c Id to the placements that method actually has,
+         falling back to all eleven when it lists none (see
+         CAApi.locationsForMethod). */
+      const _capi=this._api||window.CAApi;
+      const locationOn=!!(_capi&&_capi.locationAvailable&&_capi.locationAvailable());
+      const locationsFor=(methodId)=>{
+        const m=(open.ProductionMethods||[]).find(x=>x&&x.Id===methodId);
+        return (_capi&&_capi.locationsForMethod)?_capi.locationsForMethod(m&&m.Placements):[];
+      };
 
       const runs=(open.ProductionRuns||[]).map(r=>{
         const key=r.Id;
@@ -1613,6 +1661,9 @@ class Component extends DCLogic {
         const seed={pressId:r.Press__c||null, startDate:ss.date, startTime:ss.time,
                     endDate:se.date, endTime:se.time,
                     qty: r.Quantity_Planned_c__c!=null ? String(r.Quantity_Planned_c__c) : (orderQty?String(orderQty):''),
+                    // '' covers both "no location on this run" and "org has no
+                    // Print_Location__c" -- the row renders the same either way.
+                    printLocation: r.Print_Location__c || '',
                     loadedAt:r.LastModifiedDate||null};
         this._runSeeds[key]=seed;
         const f=this.runForm(key, seed);
@@ -1643,6 +1694,14 @@ class Component extends DCLogic {
           timeOptions:TIME_OPTIONS,
           pressId:f.pressId||'', startDate:f.startDate, startTime:f.startTime,
           endDate:f.endDate, endTime:f.endTime, qty:f.qty,
+          /* Print location, scoped to THIS run's own method -- a run belongs
+             to one Production_Method__c (PrintMethod__c), and an order can
+             carry several with different placements, so the options have to
+             follow the run rather than the order. */
+          locationShown: locationOn,
+          locationOptions: locationsFor(r.PrintMethod__c),
+          printLocation: f.printLocation||'',
+          onPrintLocation:(e)=>this.setRunField(key,{printLocation:e.target.value}),
           /* Order total next to this run's planned count -- see
              CAApi.runQtyHint. orderQty is already computed above via qtyOf()
              (Order.TotalQuantity, which /api/calendar sums from OrderItem), so
@@ -1691,6 +1750,13 @@ class Component extends DCLogic {
         endDate:sEnd.date||sStart.date, endTime:sEnd.time||'',
         qty: orderQty?String(orderQty):'',
         methodId: methods.length?methods[0].Id:null,
+        /* Default the location only when the chosen method has exactly one
+           placement -- then there is no ambiguity and typing it again is
+           busywork. With two or more, leave it blank: guessing "Front"
+           because it happens to be listed first would quietly book the wrong
+           pass, and a blank is honest. */
+        printLocation: (()=>{ const m=methods.length?methods[0]:null;
+          const pl=(m&&m.Placements)||[]; return pl.length===1?pl[0]:''; })(),
       };
       this._runSeeds['new']=newSeed;
       const nf=this.runForm('new', newSeed);
@@ -1700,6 +1766,12 @@ class Component extends DCLogic {
         endDate:nf.endDate, endTime:nf.endTime, qty:nf.qty,
         qtyHint: qtyHintFor(nf.qty), hasQtyHint: !!qtyHintFor(nf.qty),
         methodId:nf.methodId||'',
+        /* Follows the method dropdown above it: switching method re-scopes the
+           locations, because the two are different jobs on the same order. */
+        locationShown: locationOn,
+        locationOptions: locationsFor(nf.methodId),
+        printLocation: nf.printLocation||'',
+        onPrintLocation:(e)=>this.setRunField('new',{printLocation:e.target.value}),
         methodOptions:methods.map(m=>({id:m.Id, name:t(m.Type__c)||'Method'})),
         manyMethods:methods.length>1,
         busy: st.runBusy==='new',
@@ -1721,7 +1793,10 @@ class Component extends DCLogic {
         id:p.id, name:p.name,
         machine:t(p.machineGroup)||'—',
         when: p.proposedStart ? dayHM(p.proposedStart) : 'no date given',
-        meta: [p.proposedHours ? p.proposedHours+(Number(p.proposedHours)===1?' hr':' hrs') : null,
+        // Print location leads -- it is the first thing a manager checks when
+        // deciding whether a suggestion is usable as-is.
+        meta: [t(p.printLocation)||null,
+               p.proposedHours ? p.proposedHours+(Number(p.proposedHours)===1?' hr':' hrs') : null,
                p.quantity ? p.quantity+' pcs' : null,
                t(p.proposedBy)||null].filter(Boolean).join(' · ') || '—',
         notes:t(p.notes)||'', hasNotes:!!p.notes,
