@@ -61,8 +61,10 @@ import { sfFetch, apiVersion, jsonError, checkNotModifiedSince, runQuery } from 
 import { rollupPrintDateFromRun, rollupPrintDateToOrder, orderIdForRun } from "../_print-date-rollup.js";
 import { RUN_PLANNED, RUN_CONFIRMED, statusForScheduleWrite } from "../_run-schedule-status.js";
 import { requireCap } from "../_session.js";
+import { parsePlacement } from "../_placements.js";
 
 const PR_OBJECT = "Production_Run__c";
+const PR_LOCATION_FIELD = "Print_Location__c";
 const PR_PRESS_FIELD = "Press__c";
 const PR_SCHED_START_FIELD = "Scheduled_Start__c";
 const PR_SCHED_END_FIELD = "Scheduled_End__c";
@@ -108,6 +110,18 @@ export async function onRequestPatch({ params, request, env }) {
     if ("pressId" in body) {
       if (!body.pressId || !SF_ID.test(body.pressId)) return jsonError("bad_pressId", 400);
       payload[PR_PRESS_FIELD] = body.pressId;
+    }
+
+    // Print location. "" clears it -- same affordance the actual start/end
+    // fields below already have, because a run stamped with the wrong
+    // location needs a route back to blank and Salesforce wants null, not "".
+    // Unlike the create path this DOES write null: a PATCH naming the field
+    // is a deliberate act from a UI that only renders the control when the
+    // org actually has the field.
+    if ("printLocation" in body) {
+      const loc = parsePlacement(body.printLocation);
+      if (!loc.ok) return Response.json({ error: "bad_printLocation", detail: loc.detail }, { status: 400 });
+      if (loc.value !== undefined) payload[PR_LOCATION_FIELD] = loc.value;
     }
 
     if ("scheduledStart" in body || "scheduledEnd" in body) {
