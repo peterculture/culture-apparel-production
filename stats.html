@@ -192,10 +192,15 @@ class Component extends DCLogic {
       navOpen:false,
     };
   }
+  // See ca-api.js's overlay notes. This board's refresh is unconditional (it
+  // is the one board that self-heals out of demo mode), which makes marking it
+  // background especially important -- otherwise it would dim the screen every
+  // 20 seconds forever on a wall display nobody is touching.
+  bg(fn){ const a=window.CAApi; return (a&&a.backgroundLoad) ? a.backgroundLoad(fn) : fn(); }
   componentDidMount(){
     this._t = setInterval(()=>this.setState({ now:new Date() }), 1000);
     this.load();
-    this._ar = setInterval(()=>this.load(), 20000);
+    this._ar = setInterval(()=>this.bg(()=>this.load()), 20000);
     this.renderChart();
   }
   componentDidUpdate(){ this.renderChart(); }
