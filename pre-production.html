@@ -372,6 +372,15 @@
                   </div>
                 </div>
 
+                <sc-if value="{{run.locationShown}}" hint-placeholder-val="{{ true }}">
+                  <div>
+                    <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Print Location</div>
+                    <select value="{{run.printLocation}}" onChange="{{ run.onPrintLocation }}" style="width:100%;max-width:200px;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:12px;color:#ECEAE4;outline:none">
+                      <option value="">— Not set —</option>
+                      <sc-for list="{{run.locationOptions}}" as="loc" hint-placeholder-count="3"><option value="{{loc}}">{{loc}}</option></sc-for>
+                    </select>
+                  </div>
+                </sc-if>
                 <div>
                   <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Total Garments</div>
                   <input type="number" min="1" value="{{run.qty}}" onInput="{{ run.onQty }}" style="width:100%;max-width:140px;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:12px;color:#ECEAE4;outline:none">
@@ -748,6 +757,17 @@
             <select value="{{runForm.endTime}}" onChange="{{ onRunEndTime }}" style="width:150px;background:#121215;border:1px solid #242428;border-radius:9px;padding:11px 13px;font-size:13px;color:#ECEAE4;outline:none"><option value="">Time…</option><sc-for list="{{runTimeOptions}}" as="t" hint-placeholder-count="96"><option value="{{t.value}}">{{t.label}}</option></sc-for></select>
           </div>
         </div>
+
+        <sc-if value="{{runLocationShown}}" hint-placeholder-val="{{ true }}">
+          <div>
+            <div style="font:600 11px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#8a8378;margin-bottom:8px">Print Location</div>
+            <select value="{{runLocation}}" onChange="{{ onRunLocation }}" style="width:100%;max-width:280px;background:#121215;border:1px solid #242428;border-radius:9px;padding:11px 13px;font-size:13px;color:#ECEAE4;outline:none">
+              <option value="">— Not set —</option>
+              <sc-for list="{{runLocationOptions}}" as="loc" hint-placeholder-count="3"><option value="{{loc}}">{{loc}}</option></sc-for>
+            </select>
+            <div style="font:400 11px/1.5 'Archivo';letter-spacing:.02em;color:#4d483f;margin-top:7px;max-width:280px">One run prints one location — front and back are separate passes. Choices come from this method's placements.</div>
+          </div>
+        </sc-if>
 
         <div>
           <div style="font:600 11px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#8a8378;margin-bottom:8px">Total Garments to Print</div>
@@ -1295,6 +1315,7 @@ class Component extends DCLogic {
       startDate:ss.date, startTime:ss.time, endDate:se.date, endTime:se.time,
       actualStartDate:as.date, actualStartTime:as.time, actualEndDate:ae.date, actualEndTime:ae.time,
       qty: r.qty!=null ? String(r.qty) : '',
+      printLocation: r.printLocation || '',
       // Carried through from loadRunsForCard's mapped record so saveRunRow can
       // send it back as ifUnmodifiedSince -- see ca-api.js's patchProductionRun.
       loadedAt: r.lastModifiedDate || null,
@@ -1310,6 +1331,10 @@ class Component extends DCLogic {
         scheduledStart:r.Scheduled_Start__c||null, scheduledEnd:r.Scheduled_End__c||null,
         actualStart:r.Actual_Start__c||null, actualEnd:r.Actual_End__c||null,
         qty: r.Quantity_Planned_c__c!=null ? r.Quantity_Planned_c__c : null,
+        // Print_Location__c comes back null both when the run has no
+        // location and when the org doesn't have the field -- the row treats
+        // the two identically, so neither needs its own branch.
+        printLocation: r.Print_Location__c || '',
         schedStatus: r.Auto_Scheduling_Status__c || null,
         lastModifiedDate: r.LastModifiedDate || null,
       }));
@@ -1354,9 +1379,14 @@ class Component extends DCLogic {
     const actualEnd = (f.actualEndDate && f.actualEndTime) ? this.buildRunDateTime(f.actualEndDate,f.actualEndTime) : '';
     if(f.actualStartDate && f.actualStartTime && !actualStart){ fail('Actual Start date/time is invalid'); return; }
     if(f.actualEndDate && f.actualEndTime && !actualEnd){ fail('Actual End date/time is invalid'); return; }
+    const locationOn=!!(this._api&&this._api.locationAvailable&&this._api.locationAvailable());
     this.setState(st=>({ runRowSaving:Object.assign({}, st.runRowSaving, {[runId]:true}), runRowErr:Object.assign({}, st.runRowErr, {[runId]:''}), runRowMsg:Object.assign({}, st.runRowMsg, {[runId]:''}) }));
     try{
-      const res=await this._api.patchProductionRun(runId, { pressId:f.pressId, scheduledStart:start, scheduledEnd:end, quantity:qtyNum, actualStart:actualStart, actualEnd:actualEnd }, f.loadedAt);
+      const rowBody={ pressId:f.pressId, scheduledStart:start, scheduledEnd:end, quantity:qtyNum, actualStart:actualStart, actualEnd:actualEnd };
+      // Only sent when the org has the field. '' is a real value here -- it
+      // clears a location set by mistake (see production-runs/[id].js).
+      if(locationOn) rowBody.printLocation=f.printLocation||'';
+      const res=await this._api.patchProductionRun(runId, rowBody, f.loadedAt);
       if(res && (res.error || res.ok===false)) throw new Error(res.error||'update_failed');
       this.setState(st=>({ runRowSaving:Object.assign({}, st.runRowSaving, {[runId]:false}), runRowMsg:Object.assign({}, st.runRowMsg, {[runId]:'Saved'}) }));
     }catch(e){
@@ -1485,7 +1515,9 @@ class Component extends DCLogic {
       this.setState(s2=>({
         submitting:false, mgrSource:null,
         inbox:(s2.inbox||[]).filter(o=>o.Id!==oid),
-        createdPanel:{ pmId, orderId:oid, methodLabel },
+        // placements ride along so the Create Production Run modal can scope
+        // its Print Location picker to this method's own locations.
+        createdPanel:{ pmId, orderId:oid, methodLabel, placements:(f.placements||[]).slice() },
         runModalOpen:false, runForm:this.defaultRunForm(), runPressResults:[], runErr:'', runMsg:'',
       }));
       // Best-effort refresh of the underlying board data in the background
@@ -1535,7 +1567,9 @@ class Component extends DCLogic {
   // its source field isn't set, same as before.
   defaultRunForm(printDate, printEndDateTime){
     const start=this.splitDT(printDate), end=this.splitDT(printEndDateTime);
-    return { pressId:null, pressName:'', pressQ:'', startDate:start.date, startTime:start.time, endDate:end.date, endTime:end.time, qty:'' };
+    // printLocation defaults to '' = "not set". Optional on purpose: a run is
+    // a legitimate press booking before anyone knows which location it prints.
+    return { pressId:null, pressName:'', pressQ:'', startDate:start.date, startTime:start.time, endDate:end.date, endTime:end.time, qty:'', printLocation:'' };
   }
   openRunModal(){
     const cp=this.state.createdPanel||{};
@@ -1644,6 +1678,17 @@ class Component extends DCLogic {
       }
     }
     if(p.quantity!=null && Number(p.quantity)>0) patch.qty=String(p.quantity);
+    // Carry the CAM's print location across. Only when the method actually
+    // offers it: the CAM proposes before any Production_Method__c exists and
+    // therefore picks from all eleven, so a proposal can name a location this
+    // method doesn't have. Prefilling one the picker can't display would show
+    // a blank select that silently submits nothing.
+    if(p.printLocation){
+      const api=this._api||window.CAApi;
+      const cp=this.state.createdPanel||{};
+      const allowed=(api&&api.locationsForMethod)?api.locationsForMethod(cp.placements):[];
+      if(allowed.indexOf(p.printLocation)!==-1) patch.printLocation=p.printLocation;
+    }
     this.setRunField(patch);
     this.setState(st=>({proposalUsedId:p.id, runErr:'',
       hiddenProposalIds: st.hiddenProposalIds.concat([p.id]),
@@ -1694,7 +1739,12 @@ class Component extends DCLogic {
     if(!this._api || this.state.connection!=='live'){ this.setState({runErr:'Not connected to Salesforce (demo mode) — deploy to create runs'}); return; }
     this.setState({runSubmitting:true, runErr:'', runMsg:''});
     try{
-      const res=await this._api.createProductionRun({ printMethodId:cp.pmId, pressId:f.pressId, scheduledStart:start, scheduledEnd:end, quantity:qtyNum });
+      // printLocation only rides along when the manager actually chose one --
+      // the endpoint omits the field entirely for a blank value so a create
+      // can't fail against an org that doesn't have Print_Location__c yet.
+      const runBody={ printMethodId:cp.pmId, pressId:f.pressId, scheduledStart:start, scheduledEnd:end, quantity:qtyNum };
+      if(f.printLocation) runBody.printLocation=f.printLocation;
+      const res=await this._api.createProductionRun(runBody);
       if(res && (res.error || res.ok===false)) throw new Error(res.error||'create_failed');
 
       // Close the loop on the AM's suggestion: mark it Accepted and point it at
@@ -1741,10 +1791,10 @@ class Component extends DCLogic {
   // panel uses, so the modal's reference block (garment breakdown/specs/
   // notes) and submitRun() both work identically regardless of entry point --
   // they only ever read pmId/orderId/methodLabel off createdPanel.
-  openRunModalForCard(pmId, orderId, methodLabel){
+  openRunModalForCard(pmId, orderId, methodLabel, placements){
     const ref=this.referenceForOrder(orderId);
     this.setState({
-      createdPanel:{ pmId, orderId, methodLabel },
+      createdPanel:{ pmId, orderId, methodLabel, placements:(placements||[]).slice() },
       runModalOpen:true, runForm:this.defaultRunForm(ref.printDateISO, ref.printEndDateTimeISO), runPressResults:[], runErr:'', runMsg:'',
       proposals:[], proposalUsedId:null,
     });
@@ -1885,6 +1935,9 @@ class Component extends DCLogic {
           ? new Date(p.proposedStart).toLocaleString([], {weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit'})
           : 'no date given';
         const bits=[];
+        // Print location leads the detail line -- it is the first thing the
+        // shop manager checks when deciding whether a suggestion is usable.
+        if(p.printLocation) bits.push(p.printLocation);
         if(p.proposedHours) bits.push(p.proposedHours+(Number(p.proposedHours)===1?' hr':' hrs'));
         if(p.quantity) bits.push(p.quantity+' pcs');
         if(p.proposedBy) bits.push(p.proposedBy);
@@ -1905,6 +1958,19 @@ class Component extends DCLogic {
       }),
       hasProposals:this.openProposals(st.proposals).length>0,
       runForm:rf, runPressPicked:!!rf.pressId, runPressResultsView,
+      // Print location picker for the Create Production Run modal. Scoped to
+      // the parent METHOD's placements (a Front+Back job offers Front and
+      // Back, not all eleven) so a run can't be booked for a location the job
+      // doesn't have. cpRaw.methodLabel carries "Screen Print – Front + Back",
+      // but the authoritative list is the method's own placements, which
+      // referenceForOrder()/createdPanel don't hold -- so fall back to the
+      // label's placements when present and to all eleven otherwise.
+      runLocationShown: !!(api && api.locationAvailable && api.locationAvailable()),
+      runLocationOptions: (api && api.locationsForMethod)
+        ? api.locationsForMethod(cpRaw && cpRaw.placements)
+        : [],
+      runLocation: rf.printLocation||'',
+      onRunLocation:(e)=>this.setRunField({printLocation:e.target.value}),
       /* Order total under the run modal's garment field. createdPanel.qty is
          the reference block's own total, re-derived live by
          referenceForOrder() -- the same number the Garment Breakdown grid
@@ -2066,6 +2132,14 @@ class Component extends DCLogic {
           actualEndDate:f.actualEndDate, actualEndTime:f.actualEndTime,
           onActualEndDate:(e)=>this.setRunRowField(r.id,{actualEndDate:e.target.value}), onActualEndTime:(e)=>this.setRunRowField(r.id,{actualEndTime:e.target.value}),
           qty:f.qty, onQty:(e)=>this.setRunRowField(r.id,{qty:e.target.value}),
+          // Print location on an EXISTING run. Options come from the parent
+          // method's placements, same rule as the create modal. Hidden
+          // entirely when the org has no Print_Location__c, so the row can't
+          // offer a control whose value the save would drop.
+          locationShown: !!(window.CAApi&&window.CAApi.locationAvailable&&window.CAApi.locationAvailable()),
+          locationOptions: (window.CAApi&&window.CAApi.locationsForMethod)?window.CAApi.locationsForMethod(src.placements):[],
+          printLocation:f.printLocation||'',
+          onPrintLocation:(e)=>this.setRunRowField(r.id,{printLocation:e.target.value}),
           /* Order total alongside this run's planned count -- see
              CAApi.runQtyHint. src.qty is the card's own pivoted garment total
              (pivotItems), already loaded, so this costs nothing extra. Empty
@@ -2102,11 +2176,12 @@ class Component extends DCLogic {
         id:p.id, name:p.name,
         machine:p.machineGroup||'—',
         when: p.proposedStart ? new Date(p.proposedStart).toLocaleString([], {weekday:'short', month:'numeric', day:'numeric', hour:'numeric', minute:'2-digit'}) : 'no date given',
-        meta: [p.proposedHours ? p.proposedHours+(Number(p.proposedHours)===1?' hr':' hrs') : null,
+        meta: [p.printLocation||null,
+               p.proposedHours ? p.proposedHours+(Number(p.proposedHours)===1?' hr':' hrs') : null,
                p.quantity ? p.quantity+' pcs' : null,
                p.proposedBy||null].filter(Boolean).join(' · ') || '—',
         notes:p.notes||'', hasNotes:!!p.notes,
-        onUse:()=>{ this.openRunModalForCard(src.id, src.orderId, d.methLabel); this.useProposal(p); },
+        onUse:()=>{ this.openRunModalForCard(src.id, src.orderId, d.methLabel, src.placements); this.useProposal(p); },
         onReject:()=>this.rejectProposal(p, src.orderId),
       }));
 
@@ -2115,7 +2190,7 @@ class Component extends DCLogic {
         // "Create Production Run" button in the drawer footer -- reuses
         // d.methLabel (already computed by mk() above) so this doesn't need
         // its own copy of the method-type/placement label logic.
-        onCreateRun:()=>this.openRunModalForCard(src.id, src.orderId, d.methLabel),
+        onCreateRun:()=>this.openRunModalForCard(src.id, src.orderId, d.methLabel, src.placements),
         ready, notReady:!ready, notReadyLabel:'Blocked — '+missing.join(' · '), onSend:()=>this.send(src.id), hasMockup:!!d.mockupUrl, noMockup:!d.mockupUrl, mockupNode:d.mockupUrl?React.createElement('img',{src:d.mockupUrl,alt:'Mockup',style:{width:96,height:96,flexShrink:0,borderRadius:11,border:'1px solid #232327',objectFit:'cover',background:'#121215'}}):null, orderSheetUrl:'order-sheet.html?orderId='+encodeURIComponent(src.orderId),
         specs:d.printSpecs||'', onSpecs:(e)=>this.setSpecs(src.orderId,e.target.value), special:d.specialNotes||'', onSpecial:(e)=>this.setSpecial(src.orderId,e.target.value),
         // Items come back per ORDER (all sibling methods' items together);
