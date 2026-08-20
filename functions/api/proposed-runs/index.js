@@ -21,16 +21,27 @@
  * Read-only apart from the accept/reject PATCH in [id].js -- nothing here ever
  * writes to a Production Run.
  */
-import { runQuery, jsonError } from "../_sf.js";
+import { jsonError } from "../_sf.js";
+import { runQueryOptionalField } from "../_placements.js";
 
 const OBJECT = "Proposed_Run__c";
 const SF_ID = /^[a-zA-Z0-9]{15,18}$/;
 
+// Print_Location__c added 2026-08-20 -- the CAM picks it on the Repeater
+// screen in "Order and Order Items Subflow Design", so the shop manager can
+// see which location a proposal is for before turning it into a real run.
+// Single-select, same eleven values as Production_Method__c.Placements__c.
+//
+// UNLIKE the run's copy this one is NOT scoped to a method's placements:
+// Proposed_Run__c exists precisely because no Production_Method__c exists yet
+// at close time, so there is nothing to scope to. The CAM sees all eleven.
+const LOCATION_FIELD = "Print_Location__c";
 const FIELDS = [
   "Id",
   "Name",
   "Order__c",
   "Machine_Group__c",
+  LOCATION_FIELD,
   "Proposed_Start__c",
   "Proposed_Hours__c",
   "Quantity__c",
@@ -52,12 +63,17 @@ export async function onRequestGet({ request, env }) {
     // optional on the screen, so it is frequently null. Ordering by it alone
     // would scatter the unnumbered ones unpredictably; NULLS LAST then date
     // keeps a numbered list numbered and an unnumbered one chronological.
-    const soql =
-      `SELECT ${FIELDS.join(", ")} FROM ${OBJECT} ` +
+    const buildSoql = (withLocation) =>
+      `SELECT ${FIELDS.filter((f) => withLocation || f !== LOCATION_FIELD).join(", ")} FROM ${OBJECT} ` +
       `WHERE Order__c = '${orderId}' ` +
       `ORDER BY Sequence__c ASC NULLS LAST, Proposed_Start__c ASC NULLS LAST, CreatedDate ASC`;
 
-    const res = await runQuery(env, soql);
+    // Tolerant of Print_Location__c not existing yet: naming a missing or
+    // FLS-hidden field in a SELECT is a parse error that kills the whole
+    // query, and CAApi.getProposedRuns() swallows a failure into [] -- so
+    // without this, an org one step behind on metadata would silently show
+    // "no suggestions" on every order instead of the CAM's actual proposals.
+    const res = await runQueryOptionalField(env, buildSoql, LOCATION_FIELD);
     if (!res.ok) {
       console.error("proposed-runs query failed", res.status, res.detail);
       return jsonError("query_failed", 502);
@@ -68,6 +84,7 @@ export async function onRequestGet({ request, env }) {
       name: r.Name,
       orderId: r.Order__c,
       machineGroup: r.Machine_Group__c || null,
+      printLocation: r[LOCATION_FIELD] || null,
       proposedStart: r.Proposed_Start__c || null,
       proposedHours: r.Proposed_Hours__c == null ? null : Number(r.Proposed_Hours__c),
       quantity: r.Quantity__c == null ? null : Number(r.Quantity__c),
