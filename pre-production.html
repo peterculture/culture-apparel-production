@@ -505,6 +505,8 @@
           <sc-for list="{{inbox}}" as="o" hint-placeholder-count="3">
             <div style="display:flex;background:{{o.cardBg}};border:1px solid {{o.cardBorder}};border-radius:12px;overflow:hidden">
               <div style="width:5px;background:{{o.urgColor}};flex-shrink:0"></div>
+              <sc-if value="{{o.hasThumb}}" hint-placeholder-val="{{ false }}"><img src="{{o.mockupUrl}}" alt="" onError="{{ o.onThumbErr }}" style="width:64px;height:auto;align-self:stretch;object-fit:cover;flex-shrink:0;background:#121215;border-right:1px solid #202024"></sc-if>
+              <sc-if value="{{o.noThumb}}" hint-placeholder-val="{{ true }}"><div style="width:64px;flex-shrink:0;align-self:stretch;background:#1c1c20;border-right:1px solid #2a2a2f;display:flex;align-items:center;justify-content:center"><i class="ti ti-photo-off" style="color:#8a8378;font-size:24px"></i></div></sc-if>
               <div style="padding:15px 16px;flex:1;min-width:0;display:flex;flex-direction:column;gap:11px">
                 <div><div style="font:600 16px/1.1 'Oswald';color:#ECEAE4">{{o.customer}}</div><div style="font:400 10px/1 'Archivo';color:#6C665C;margin-top:5px">{{o.num}} · {{o.account}}</div></div>
                 <div style="display:flex;align-items:center;gap:8px"><span style="font:600 12px/1 'Oswald';color:#ECEAE4;background:#1e1e22;border-radius:5px;padding:4px 8px">{{o.qty}} pcs</span><span style="display:inline-flex;align-items:center;gap:5px;font:600 10px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:{{o.urgColor}}"><i class="ti {{o.urgIcon}}"></i>{{o.dueLabel}}</span></div>
@@ -1737,7 +1739,25 @@ class Component extends DCLogic {
     const inboxAll=(st.inbox||[]).map(r=>{
       const piv=api&&api.pivotItems?api.pivotItems(r):{qty:''}; const due=api&&api.dueInfo?api.dueInfo(r.Print_Date__c):{label:'',urg:'ok'}; const id=r.Id;
       const ucs = window.CAApi.urgCardStyle(due.urg);
-      return { id, num:t(r.GOA_Order_Number__c)||r.OrderNumber||id, customer:t(r.Customer_Order_Name__c)||t(r.Account&&r.Account.Name)||'—', account:t(r.Account&&r.Account.Name)||'', qty:piv.qty, dueLabel:due.label, urgColor:UC[due.urg]||UC.ok, urgIcon:(window.CAApi.URG_ICON && window.CAApi.URG_ICON[due.urg])||'ti-clock-hour-4', cardBg:ucs.bg, cardBorder:ucs.border, onPick:()=>this.pickInbox(id) };
+      // Card-face mockup thumbnail (added 2026-08-20) -- same treatment as the
+      // worker board's cards (renderVals below) and index.html's, so an order
+      // looks the same before and after it has a Production Method. The URL
+      // already rides along on /api/inbox as DesignMockupUrl (see
+      // inbox/index.js, which calls fetchMockupsByOpportunity exactly like
+      // /api/orders does), so this needs no extra request.
+      //
+      // thumbErr is keyed by card id. Board cards key it by
+      // Production_Method__c Id and these key it by Order Id -- Salesforce Ids
+      // are globally unique, so the two namespaces share one map safely and an
+      // order that fails to load here stays failed if it later shows up on the
+      // board without a reload.
+      const mockupUrl=r.DesignMockupUrl||null;
+      return { id, num:t(r.GOA_Order_Number__c)||r.OrderNumber||id, customer:t(r.Customer_Order_Name__c)||t(r.Account&&r.Account.Name)||'—', account:t(r.Account&&r.Account.Name)||'', qty:piv.qty, dueLabel:due.label, urgColor:UC[due.urg]||UC.ok, urgIcon:(window.CAApi.URG_ICON && window.CAApi.URG_ICON[due.urg])||'ti-clock-hour-4', cardBg:ucs.bg, cardBorder:ucs.border,
+        mockupUrl, hasThumb: !!mockupUrl && !st.thumbErr[id], noThumb: !mockupUrl || !!st.thumbErr[id],
+        // try/catch mirrors the board's copy -- a throwing fallback handler
+        // must never leave a card stuck showing a dead <img> forever.
+        onThumbErr: ()=>{ try{ this.setState(s2=>({thumbErr:Object.assign({},s2.thumbErr,{[id]:true})})); }catch(err){ console.error('onThumbErr failed for inbox order', id, err); } },
+        onPick:()=>this.pickInbox(id) };
     });
     // Order name / order number search, scoped to this Management inbox
     // list -- mirrors the board's own search (renderVals() below) but keyed
