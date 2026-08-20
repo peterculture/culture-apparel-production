@@ -328,6 +328,38 @@
    * returns null for them. That is exactly the case where a manager needs a
    * warning before picking, so they get help text too.
    */
+  /* ── Print location on runs ──────────────────────────────────────────
+   * Production_Run__c.Print_Location__c and Proposed_Run__c.Print_Location__c
+   * are single-select restricted picklists over the same eleven values as
+   * Production_Method__c.Placements__c (PLACEMENTS below).
+   *
+   * Optimistic by design: true until an endpoint tells us otherwise, so the
+   * picker is present on a healthy org from the very first render instead of
+   * popping in after the first run list loads. GET /api/production-runs sets
+   * it from its own SELECT fallback. */
+  var _locationAvailable = true;
+  function locationAvailable(){ return _locationAvailable !== false; }
+
+  /**
+   * Which locations a run under this method may use.
+   * Scoped to the parent method's Placements__c so a manager can't schedule a
+   * location the job doesn't have -- but falls back to all eleven when the
+   * method has none recorded, because an empty picker would be a dead end on
+   * the many older methods whose placements were never filled in.
+   * `placements` may be the raw ";"-joined string or an array.
+   */
+  function locationsForMethod(placements){
+    var list = placements;
+    if (typeof list === 'string') list = list.split(';');
+    if (!list || !list.length) return PLACEMENTS.slice();
+    var out = [];
+    for (var i = 0; i < list.length; i++) {
+      var v = String(list[i] || '').trim();
+      if (v && out.indexOf(v) === -1) out.push(v);
+    }
+    return out.length ? out : PLACEMENTS.slice();
+  }
+
   var STATUS_HELP = {
     'Pre-Production': 'Screens, inks, thread and transfers are being prepped and garments counted in. Nothing is on a press yet.',
     'Ready for Print': 'Prep is finished and garments are staged. The job can be scheduled onto a press.',
@@ -592,7 +624,18 @@
   function createProductionRun(body){ return jsend('/api/production-runs', 'POST', body); }
   // Every Production_Run__c attached to one Production_Method__c -- powers
   // the card drawer's "Production Runs" section (view + edit existing runs).
-  function getProductionRuns(methodId){ return jget('/api/production-runs?methodId=' + encodeURIComponent(methodId)).then(function (d) { return d.records || []; }); }
+  function getProductionRuns(methodId){
+    return jget('/api/production-runs?methodId=' + encodeURIComponent(methodId)).then(function (d) {
+      // The endpoint reports whether Print_Location__c is queryable in the
+      // active org (see _placements.js). Remembered here so the run forms can
+      // hide the location picker against an org where the field hasn't been
+      // built or has FLS off -- offering it there would let a manager pick a
+      // location and then have the whole CREATE fail, which is worse than not
+      // offering it at all.
+      if (d && typeof d.locationAvailable === 'boolean') _locationAvailable = d.locationAvailable;
+      return d.records || [];
+    });
+  }
   // The Account Manager's SUGGESTED runs for an order (Proposed_Run__c), set on
   // the Close and Create Order screen. These are recommendations only -- they
   // are not Production Runs, they hold no press time, and they cannot reach the
@@ -1006,6 +1049,7 @@
     SIZE_ORDER: SIZE_ORDER, text: text, initials: initials, colorForName: colorForName, methodOf: methodOf, dueInfo: dueInfo, parseSfDate: parseSfDate, pivotItems: pivotItems, runQtyHint: runQtyHint,
     backgroundLoad: backgroundLoad, trackRequest: trackRequest, hideLoader: hideLoader,
     STATUS_HELP: STATUS_HELP, statusHelp: statusHelp,
+    locationAvailable: locationAvailable, locationsForMethod: locationsForMethod,
     prepBufferStats: prepBufferStats, PREP_STATUS_META: PREP_STATUS_META,
     URG_ICON: URG_ICON, urgCardStyle: urgCardStyle
   };
