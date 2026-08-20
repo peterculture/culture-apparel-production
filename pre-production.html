@@ -521,9 +521,13 @@
 
       <sc-if value="{{mgrShowForm}}" hint-placeholder-val="{{ false }}">
         <button onClick="{{ onBackToInbox }}" style="display:inline-flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#8a8378;background:transparent;border:1px solid #242428;border-radius:8px;padding:8px 12px;cursor:pointer;margin-bottom:16px"><i class="ti ti-chevron-left"></i>All incoming</button>
-        <div style="background:#0D0D0F;border:1px solid #1f1f23;border-left:4px solid #C6372B;border-radius:12px;padding:16px 18px;margin-bottom:22px">
-          <div style="font:600 19px/1.1 'Oswald';color:#ECEAE4">{{mgrOrder.customer}}</div>
-          <div style="font:400 12px/1 'Archivo';color:#6C665C;margin-top:6px">{{mgrOrder.num}} · {{mgrOrder.account}} · {{mgrOrder.qty}} pcs</div>
+        <div style="display:flex;align-items:center;gap:16px;background:#0D0D0F;border:1px solid #1f1f23;border-left:4px solid #C6372B;border-radius:12px;padding:16px 18px;margin-bottom:22px">
+          <sc-if value="{{mgrOrder.hasThumb}}" hint-placeholder-val="{{ false }}"><img src="{{mgrOrder.mockupUrl}}" alt="Mockup" onError="{{ mgrOrder.onThumbErr }}" style="width:96px;height:96px;flex-shrink:0;border-radius:11px;border:1px solid #232327;object-fit:cover;background:#121215"></sc-if>
+          <sc-if value="{{mgrOrder.noThumb}}" hint-placeholder-val="{{ true }}"><div style="width:96px;height:96px;flex-shrink:0;border-radius:11px;background:#1c1c20;border:1px solid #2a2a2f;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px"><i class="ti ti-photo-off" style="color:#8a8378;font-size:26px"></i><span style="font:600 8px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#6C665C">No Mockup</span></div></sc-if>
+          <div style="min-width:0">
+            <div style="font:600 19px/1.1 'Oswald';color:#ECEAE4">{{mgrOrder.customer}}</div>
+            <div style="font:400 12px/1 'Archivo';color:#6C665C;margin-top:6px">{{mgrOrder.num}} · {{mgrOrder.account}} · {{mgrOrder.qty}} pcs</div>
+          </div>
         </div>
 
         <div style="display:flex;flex-direction:column;gap:22px">
@@ -1765,7 +1769,7 @@ class Component extends DCLogic {
     const mgrQ=(st.mgrQ||'').trim().toLowerCase();
     const inbox = mgrQ ? inboxAll.filter(o=>(o.customer+' '+o.num+' '+o.account).toLowerCase().includes(mgrQ)) : inboxAll;
     const f=st.form, hasOrder=!!st.mgrId && !!f, mgrView=st.view==='mgr';
-    let mgrOrder={num:'',customer:'',account:'',qty:''}, methodOptions=[], placementOptions=[], statusOptions=[], vendorResults=[], planResults=[], itemsView=[], itemTypeButtons=[];
+    let mgrOrder={num:'',customer:'',account:'',qty:'',mockupUrl:null,hasThumb:false,noThumb:true,onThumbErr:null}, methodOptions=[], placementOptions=[], statusOptions=[], vendorResults=[], planResults=[], itemsView=[], itemTypeButtons=[];
     if(hasOrder){
       // The order might be a brand-new inbox pick, OR an already-staffed
       // order a manager is adding a second method/placement to (see
@@ -1775,7 +1779,25 @@ class Component extends DCLogic {
       // may no longer match it (or the manager cleared the box after
       // picking), but the picked order's own details must still resolve.
       const ord=inboxAll.find(o=>o.id===st.mgrId) || (st.orders||[]).find(o=>o.orderId===st.mgrId);
-      if(ord) mgrOrder={num:ord.num,customer:ord.customer,account:ord.account,qty:ord.qty};
+      if(ord){
+        // Mockup in the set-up header (added 2026-08-20). This is the screen
+        // where the manager picks method, placements, mesh counts and thread
+        // colors, so the artwork needs to be visible WHILE those choices are
+        // being made -- not just back on the card they clicked to get here.
+        //
+        // Both lookup sources carry mockupUrl already: inbox cards get it
+        // above from DesignMockupUrl, and board cards get it in load() (same
+        // field, /api/orders). So this works for a fresh inbox pick AND for
+        // openMgrForOrder's "add a second method to an existing order" path.
+        //
+        // Keyed on st.mgrId -- the Order Id in both paths, and the same key
+        // the inbox card used, so a mockup that failed to load on the card is
+        // still known-bad here instead of retrying and flashing a dead box.
+        const mu=ord.mockupUrl||null;
+        mgrOrder={num:ord.num,customer:ord.customer,account:ord.account,qty:ord.qty,
+          mockupUrl:mu, hasThumb: !!mu && !st.thumbErr[st.mgrId], noThumb: !mu || !!st.thumbErr[st.mgrId],
+          onThumbErr: ()=>{ try{ const oid=st.mgrId; this.setState(s2=>({thumbErr:Object.assign({},s2.thumbErr,{[oid]:true})})); }catch(err){ console.error('onThumbErr failed for set-up header', st.mgrId, err); } } };
+      }
       methodOptions=['Screen Print','Embroidery','Heat Press','Promotional Items'].map(x=>({ label:x, onPick:()=>this.setForm({method:x}), bg:f.method===x?'#2a1210':'#121215', border:f.method===x?'#C6372B':'#242428', color:f.method===x?'#ECEAE4':'#8a8378' }));
       placementOptions=(api&&api.PLACEMENTS?api.PLACEMENTS:['Front','Back','Left Sleeve','Right Sleeve','Left Chest','Right Chest','Full Front','Full Back','Tag','Hood','Pocket']).map(x=>{ const on=(f.placements||[]).includes(x); return { label:x, onPick:()=>this.togglePlacement(x), bg:on?'#2a1210':'#121215', border:on?'#C6372B':'#242428', color:on?'#ECEAE4':'#8a8378' }; });
       statusOptions=['Pre-Production','Ready for Print','In Production','Post-Production','Completed','Cancelled','On Hold'].map(s=>({ value:s, label:s }));
