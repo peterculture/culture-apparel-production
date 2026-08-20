@@ -699,6 +699,38 @@
     if (!line1 && !line2) return null;
     return { line1: line1, line2: line2, country: text(addr.country) };
   }
+  /**
+   * Label for a production run's garment count, in the context of the whole
+   * order. Added 2026-08-20 at the shop's request.
+   *
+   * A run row's editable number is Quantity_Planned_c__c -- the garments THIS
+   * run covers -- which is frequently a subset of the job (a 300-piece order
+   * split across two press runs). The field is labelled "Total Garments" on
+   * index.html and pre-production.html and "Pieces This Run" on calendar.html,
+   * which made it easy to read a half-run as the whole order. This renders the
+   * order total next to it so a worker can tell those apart at a glance
+   * without opening the size breakdown.
+   *
+   * Lives here rather than in each board because all three already keep their
+   * own copies of the run-row view model, and the wording drifting three ways
+   * is exactly the failure this file exists to prevent.
+   *
+   * Returns '' when the order total isn't usable -- an order whose OrderItems
+   * failed to load, or one with no sized line items. Callers hide the line
+   * entirely on '' rather than printing "of 0", which reads as a real zero.
+   */
+  function runQtyHint(runQty, orderTotal){
+    var total = Number(orderTotal);
+    if (!Number.isFinite(total) || total <= 0) return '';
+    var planned = Number(runQty);
+    // Blank/'' input while a manager is mid-edit: still show the order total,
+    // just without a subset claim we can't back up yet.
+    if (!Number.isFinite(planned) || planned <= 0) return total + ' garments on this order';
+    // >= rather than ===: a planned count above the order total is bad data,
+    // but "All N" is still the honest read and beats "350 of 300".
+    if (planned >= total) return 'All ' + total + ' garments on this order';
+    return planned + ' of ' + total + ' garments on this order';
+  }
   function pivotItems(rec){
     var items = (rec.OrderItems && rec.OrderItems.records) || [];
     var bySize = {}, total = 0, garment = '';
@@ -746,7 +778,7 @@
     getSfEnv: getSfEnv, setSfEnv: setSfEnv,
     getStationItems: getStationItems, updateItemStatus: updateItemStatus, updateOrderReceiving: updateOrderReceiving,
     getInventory: getInventory, postInventory: postInventory, stationLogin: stationLogin,
-    SIZE_ORDER: SIZE_ORDER, text: text, initials: initials, colorForName: colorForName, methodOf: methodOf, dueInfo: dueInfo, parseSfDate: parseSfDate, pivotItems: pivotItems,
+    SIZE_ORDER: SIZE_ORDER, text: text, initials: initials, colorForName: colorForName, methodOf: methodOf, dueInfo: dueInfo, parseSfDate: parseSfDate, pivotItems: pivotItems, runQtyHint: runQtyHint,
     prepBufferStats: prepBufferStats, PREP_STATUS_META: PREP_STATUS_META,
     URG_ICON: URG_ICON, urgCardStyle: urgCardStyle
   };
