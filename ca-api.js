@@ -309,15 +309,206 @@
     return out;
   })();
 
+  /* ══ Centre-screen loading overlay ═════════════════════════════════════
+   *
+   * Added 2026-08-20. The boards already had a connection dot in the header,
+   * but on a shop-floor tablet at arm's length nobody notices an 8px dot --
+   * a tap that takes two seconds just looks like the tap didn't register, so
+   * workers tap again. This is the same signal, centre screen and unmissable.
+   *
+   * It lives HERE rather than in each page's template on purpose:
+   *   - It hooks jget/jsend/jdel below, so every existing CAApi call gets it
+   *     with no per-page wiring and no chance of a board being forgotten.
+   *   - The node is appended to <body>, OUTSIDE support.js's #dc-root, so it
+   *     is never part of the React tree, never re-rendered, and can't be
+   *     clobbered when a board re-renders mid-request.
+   *
+   * THREE RULES THAT KEEP IT FROM BEING ANNOYING -- do not remove casually:
+   *
+   * 1. DELAY. Nothing is shown for the first LOADER_DELAY_MS. Most calls
+   *    against a warm Salesforce token return well inside that, and a
+   *    full-screen panel that flashes for 90ms reads as a glitch, not as
+   *    feedback.
+   *
+   * 2. BACKGROUND WORK IS SILENT. Every board auto-refreshes on a 15-20s
+   *    timer, and the Zenkraft label poll runs every 6s for up to 4 minutes.
+   *    Those must never dim the screen -- a manager typing into the drawer
+   *    would be interrupted four times a minute. Pages wrap those callbacks
+   *    in CAApi.backgroundLoad(); anything started inside is not counted.
+   *
+   * 3. IT ALWAYS LETS GO. jget/jsend/jdel pass no AbortSignal and no timeout
+   *    (see the note on connection state at the top of this file), so a hung
+   *    request never settles and would otherwise leave the shop staring at a
+   *    permanently blocked screen. LOADER_MAX_MS force-hides it. The request
+   *    itself is left alone -- if it eventually lands, the board updates as
+   *    usual; this only stops the overlay from outliving its usefulness.
+   */
+  var LOADER_DELAY_MS = 320;    // rule 1 -- quick calls never paint
+  var LOADER_MAX_MS = 15000;    // rule 3 -- hard ceiling, never block forever
+  var _fgInFlight = 0;          // foreground requests currently outstanding
+  var _bgDepth = 0;             // >0 while a background poll is being started
+  var _showTimer = null, _maxTimer = null, _loaderEl = null, _loaderShown = false;
+
+  // The mark is the header logo: seven horizontal bars whose widths taper to
+  // a circle. "Filling in the lines" is a top-to-bottom sweep of those same
+  // bars -- so the thing that spins is recognisably the Culture Apparel logo
+  // rather than a generic ring. Widths/positions are copied verbatim from the
+  // <svg> in each page's header; if that mark ever changes, change it here too.
+  var LOADER_BARS = [
+    { x:12, y:9,  w:24 }, { x:8, y:14, w:32 }, { x:5, y:19, w:38 },
+    { x:5,  y:24, w:38 }, { x:6, y:29, w:36 }, { x:9, y:34, w:30 },
+    { x:13, y:39, w:22 }
+  ];
+
+  function loaderCss(){
+    var rules = [
+      '@keyframes ca-loader-bar{0%,100%{opacity:.13}18%{opacity:1}45%{opacity:.13}}',
+      '@keyframes ca-loader-in{from{opacity:0}to{opacity:1}}',
+      '@keyframes ca-loader-breathe{0%,100%{opacity:.35}50%{opacity:1}}',
+      '.ca-loader{position:fixed;inset:0;z-index:2000;display:flex;flex-direction:column;' +
+        'align-items:center;justify-content:center;gap:18px;background:rgba(6,6,7,.78);' +
+        '-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);animation:ca-loader-in .16s ease-out}',
+      '.ca-loader-label{font:600 11px/1 Oswald,Arial,sans-serif;letter-spacing:.28em;' +
+        'text-transform:uppercase;color:#9C978C}',
+      '.ca-loader-bar{animation:ca-loader-bar 1.45s ease-in-out infinite}'
+    ];
+    for (var i = 0; i < LOADER_BARS.length; i++) {
+      rules.push('.ca-loader-bar-' + i + '{animation-delay:' + (i * 0.11).toFixed(2) + 's}');
+    }
+    // Respect the OS setting: a sweeping stagger is exactly the kind of
+    // repeating motion prefers-reduced-motion exists to suppress. Fall back
+    // to one slow breath of the whole mark -- still obviously "working",
+    // without seven independently blinking elements.
+    rules.push('@media (prefers-reduced-motion:reduce){' +
+      '.ca-loader{animation:none}' +
+      '.ca-loader-bar{animation:ca-loader-breathe 1.8s ease-in-out infinite;animation-delay:0s!important}}');
+    return rules.join('');
+  }
+
+  function loaderNode(){
+    if (_loaderEl) return _loaderEl;
+    if (typeof document === 'undefined' || !document.body) return null;
+    if (!document.getElementById('ca-loader-style')) {
+      var st = document.createElement('style');
+      st.id = 'ca-loader-style';
+      st.textContent = loaderCss();
+      document.head.appendChild(st);
+    }
+    var el = document.createElement('div');
+    el.className = 'ca-loader';
+    // role=status + aria-live announces it without stealing focus; aria-busy
+    // marks the blocked region. Built with createElementNS because SVG in a
+    // plain innerHTML string on a div lands in the wrong namespace and
+    // renders as nothing.
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
+    el.setAttribute('aria-busy', 'true');
+    var NS = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('width', '84'); svg.setAttribute('height', '84');
+    svg.setAttribute('viewBox', '0 0 48 48'); svg.setAttribute('aria-hidden', 'true');
+    var g = document.createElementNS(NS, 'g');
+    g.setAttribute('fill', '#C6372B');
+    for (var i = 0; i < LOADER_BARS.length; i++) {
+      var b = LOADER_BARS[i];
+      var r = document.createElementNS(NS, 'rect');
+      r.setAttribute('x', b.x); r.setAttribute('y', b.y);
+      r.setAttribute('width', b.w); r.setAttribute('height', '3.1');
+      r.setAttribute('rx', '1.5');
+      r.setAttribute('class', 'ca-loader-bar ca-loader-bar-' + i);
+      g.appendChild(r);
+    }
+    svg.appendChild(g);
+    el.appendChild(svg);
+    var label = document.createElement('div');
+    label.className = 'ca-loader-label';
+    label.textContent = 'Loading';
+    el.appendChild(label);
+    _loaderEl = el;
+    return el;
+  }
+
+  function paintLoader(on){
+    if (on === _loaderShown) return;
+    var el = loaderNode();
+    if (!el) return;
+    if (on) { document.body.appendChild(el); _loaderShown = true; }
+    else if (el.parentNode) { el.parentNode.removeChild(el); _loaderShown = false; }
+    else { _loaderShown = false; }
+  }
+
+  function clearLoaderTimers(){
+    if (_showTimer) { clearTimeout(_showTimer); _showTimer = null; }
+    if (_maxTimer) { clearTimeout(_maxTimer); _maxTimer = null; }
+  }
+
+  function loaderBegin(){
+    // A request is background if it was STARTED inside backgroundLoad(). The
+    // check happens here, at call time, not when the promise settles.
+    var silent = _bgDepth > 0;
+    if (silent) return true;
+    _fgInFlight++;
+    if (_fgInFlight === 1 && !_showTimer && !_loaderShown) {
+      _showTimer = setTimeout(function () {
+        _showTimer = null;
+        paintLoader(true);
+        _maxTimer = setTimeout(function () {
+          _maxTimer = null;
+          console.warn('[ca-loader] still waiting after ' + LOADER_MAX_MS +
+            'ms -- hiding the overlay so the board stays usable. ' +
+            _fgInFlight + ' request(s) never settled.');
+          paintLoader(false);
+        }, LOADER_MAX_MS);
+      }, LOADER_DELAY_MS);
+    }
+    return false;
+  }
+
+  function loaderEnd(silent){
+    if (silent) return;
+    _fgInFlight = _fgInFlight > 0 ? _fgInFlight - 1 : 0;
+    if (_fgInFlight === 0) { clearLoaderTimers(); paintLoader(false); }
+  }
+
+  /**
+   * Run fn() with any requests it starts marked as background -- no overlay.
+   * For auto-refresh intervals and pollers. fn is called synchronously, and
+   * only requests kicked off before its first await are covered; that is
+   * exactly the shape of every load() in this app (the fetch is started, then
+   * awaited), so in practice it covers the whole refresh.
+   */
+  function backgroundLoad(fn){
+    _bgDepth++;
+    try { return fn(); } finally { _bgDepth--; }
+  }
+
+  /**
+   * Count a promise from a fetch this module didn't make. calendar.html talks
+   * to /api/calendar directly (that endpoint has no CAApi wrapper), so it
+   * would otherwise be the one board with no overlay.
+   */
+  function trackRequest(promise){
+    var silent = loaderBegin();
+    var done = function () { loaderEnd(silent); };
+    if (!promise || typeof promise.then !== 'function') { done(); return promise; }
+    return promise.then(
+      function (v) { done(); return v; },
+      function (e) { done(); throw e; }
+    );
+  }
+
+  /** Escape hatch: force the overlay down (e.g. before window.print()). */
+  function hideLoader(){ _fgInFlight = 0; clearLoaderTimers(); paintLoader(false); }
+
   /* ── low-level fetch ── */
   function jget(url){
-    return fetch(url, { headers: { Accept:'application/json' } }).then(function (r) {
+    return trackRequest(fetch(url, { headers: { Accept:'application/json' } }).then(function (r) {
       if (!r.ok) throw new Error('GET ' + url + ' -> ' + r.status);
       return r.json();
-    });
+    }));
   }
   function jsend(url, method, body){
-    return fetch(url, { method: method, headers: { 'Content-Type':'application/json' }, body: JSON.stringify(body || {}) }).then(function (r) {
+    return trackRequest(fetch(url, { method: method, headers: { 'Content-Type':'application/json' }, body: JSON.stringify(body || {}) }).then(function (r) {
       if (!r.ok && r.status !== 204) {
         // FIXED 2026-07-28: this used to throw a bare "POST /api/x -> 502"
         // Error and never touch the response body, so callers (e.g.
@@ -335,13 +526,13 @@
         });
       }
       return r.status === 204 ? null : r.json().catch(function () { return null; });
-    });
+    }));
   }
   function jdel(url){
-    return fetch(url, { method: 'DELETE' }).then(function (r) {
+    return trackRequest(fetch(url, { method: 'DELETE' }).then(function (r) {
       if (!r.ok && r.status !== 204) throw new Error('DELETE ' + url + ' -> ' + r.status);
       return r.status === 204 ? null : r.json().catch(function () { return null; });
-    });
+    }));
   }
 
   /* ── orders ── */
@@ -779,6 +970,7 @@
     getStationItems: getStationItems, updateItemStatus: updateItemStatus, updateOrderReceiving: updateOrderReceiving,
     getInventory: getInventory, postInventory: postInventory, stationLogin: stationLogin,
     SIZE_ORDER: SIZE_ORDER, text: text, initials: initials, colorForName: colorForName, methodOf: methodOf, dueInfo: dueInfo, parseSfDate: parseSfDate, pivotItems: pivotItems, runQtyHint: runQtyHint,
+    backgroundLoad: backgroundLoad, trackRequest: trackRequest, hideLoader: hideLoader,
     prepBufferStats: prepBufferStats, PREP_STATUS_META: PREP_STATUS_META,
     URG_ICON: URG_ICON, urgCardStyle: urgCardStyle
   };
