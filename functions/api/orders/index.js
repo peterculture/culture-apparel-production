@@ -29,6 +29,7 @@
  * Dashboard/Garment station. They're deliberately non-overlapping.
  */
 import { runQuery, jsonError } from "../_sf.js";
+import { runQueryOptionalField } from "../_placements.js";
 import { fetchMockupsByOpportunity } from "../_mockup.js";
 
 // Production_Method__c fields every card needs -- same set the old
@@ -92,17 +93,25 @@ const ORDER_FIELDS = [
   "Order__r.Special_Notes__c",
   "Order__r.Specifications_for_Printing__c",
 ];
+/* Kept OUT of ORDER_FIELDS on purpose. This endpoint is the pre-production
+   board's ONLY query -- a missing or FLS-hidden field here is a parse error
+   that returns zero rows, so naming it unconditionally would empty the whole
+   board in any org that doesn't have it yet (staging and production, until
+   each is built by hand). Threaded through runQueryOptionalField instead: the
+   flag is simply absent there, and Create Another Method stays hidden, which
+   is exactly the right degraded behaviour. */
+const MULTI_METHOD_FIELD = "Order__r.Multiple_Production_Methods__c";
 
 export async function onRequestGet({ env }) {
   try {
-    const soql =
-      `SELECT ${PM_FIELDS.join(", ")}, ${ORDER_FIELDS.join(", ")} ` +
+    const buildSoql = (withMulti) =>
+      `SELECT ${PM_FIELDS.join(", ")}, ${ORDER_FIELDS.concat(withMulti ? [MULTI_METHOD_FIELD] : []).join(", ")} ` +
       `FROM Production_Method__c ` +
       `WHERE Status__c = 'Pre-Production' AND Order__c != null`;
     // runQuery follows Salesforce's nextRecordsUrl pagination so a result
     // bigger than one batch (2000 records, org-dependent) doesn't silently
     // get truncated to just the first page -- see _sf.js.
-    const { ok, status, records } = await runQuery(env, soql);
+    const { ok, status, records } = await runQueryOptionalField(env, buildSoql, MULTI_METHOD_FIELD);
     if (!ok) {
       console.error("Salesforce query failed", status);
       return jsonError("query_failed", status);
@@ -133,6 +142,9 @@ export async function onRequestGet({ env }) {
           Printer__r: o.Printer__r,
           Status: o.Status,
           Order_Substatus__c: o.Order_Substatus__c,
+          // false both when the CAM didn't tick it and when the org has no
+          // such field -- the board treats the two identically.
+          Multiple_Production_Methods__c: o.Multiple_Production_Methods__c === true,
           Receiving_Status__c: o.Receiving_Status__c,
           Partial_Check_in_Missing_Items__c: o.Partial_Check_in_Missing_Items__c,
           // Live SUM across sibling Production_Method__c rows -- see
