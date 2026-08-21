@@ -62,7 +62,7 @@
  */
 import { sfFetch, apiVersion, jsonError, runQuery } from "../_sf.js";
 import { rollupPrintDateToOrder, orderIdForMethod } from "../_print-date-rollup.js";
-import { RUN_PLANNED } from "../_run-schedule-status.js";
+import { RUN_PLANNED, RUN_CONFIRMED } from "../_run-schedule-status.js";
 import { requireCap } from "../_session.js";
 import { parsePlacement, runQueryOptionalField } from "../_placements.js";
 
@@ -101,8 +101,10 @@ export async function onRequestGet({ env, request }) {
     // else changed the run more recently (see ifUnmodifiedSince in
     // production-runs/[id].js).
     // Auto_Scheduling_Status__c added 2026-08-19 so the pre-production card
-    // drawer can show whether a run is Planned or Confirmed, and offer the
-    // Confirm action there rather than only on the calendar board.
+    // drawer could show Planned vs Confirmed and offer the Confirm action.
+    // The Confirm action is gone (2026-08-21) but the field is still selected:
+    // every board reads it to tell a published run from an auto-scheduler
+    // suggestion, and to warn when a run never made it onto the calendar.
     //
     // Print_Location__c is threaded through runQueryOptionalField because it
     // may not exist in the active org yet -- naming a missing/FLS-hidden
@@ -136,6 +138,41 @@ export async function onRequestGet({ env, request }) {
   } catch (err) {
     console.error(err);
     return jsonError("internal_error", 500);
+  }
+}
+
+/**
+ * Move a freshly created run from Planned to Confirmed -- which is what puts
+ * it on the shop's Event calendar (and, in production, on Google) via the
+ * ProductionEventPublisher Apex trigger.
+ *
+ * Returns true if the run is published, false if it is stranded on Planned.
+ * Never throws: the caller has already created the run, and losing the whole
+ * response over a failed follow-up write would be a worse outcome than an
+ * unpublished run the UI can warn about.
+ */
+async function publishRun(env, runId) {
+  try {
+    const path = `/services/data/${apiVersion(env)}/sobjects/${PR_OBJECT}/${encodeURIComponent(runId)}`;
+    const resp = await sfFetch(env, path, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ Auto_Scheduling_Status__c: RUN_CONFIRMED }),
+    });
+    if (resp.ok) return true;
+    // Loud on purpose. Since the Confirm button is gone, nobody can fix this
+    // from the dashboard -- it needs to show up in the Pages logs.
+    const detail = await resp.text().catch(() => "");
+    console.error(
+      "Run created but NOT published -- still Planned, and no Confirm UI exists to recover it.",
+      runId,
+      resp.status,
+      detail.slice(0, 500),
+    );
+    return false;
+  } catch (err) {
+    console.error("Run created but NOT published (threw)", runId, err);
+    return false;
   }
 }
 
@@ -198,9 +235,19 @@ export async function onRequestPost({ env, request }) {
     // Google. Creating a run would therefore have announced it to everyone the
     // instant it was saved, with no chance to lay out a week first.
     //
-    // 'Planned' gives identical protection from the auto-scheduler while
-    // staying private. Publishing is now a separate, deliberate act: the
-    // Confirm action in the calendar dashboard. See _run-schedule-status.js.
+    // CHANGED 2026-08-21: creating a run now publishes it after all -- the
+    // separate Confirm step is gone from every dashboard. But this line still
+    // writes 'Planned', deliberately. See publishRun() below: the run is
+    // INSERTED Planned and then PATCHED to Confirmed a moment later, rather
+    // than being born Confirmed.
+    //
+    // WHY THE TWO STEPS. ProductionEventPublisher keys off Trigger.oldMap to
+    // decide what changed. On an INSERT oldMap is null, so a run created
+    // already-Confirmed may publish nothing at all (or throw, depending on how
+    // the class guards it) -- and the failure is silent: the run looks
+    // published in the UI while no Event exists. Planned-then-Confirmed
+    // reproduces the exact update transition the Apex has always handled, so
+    // no Apex change is needed and no behaviour is being guessed at.
     Auto_Scheduling_Status__c: RUN_PLANNED,
   };
   // Only ever ADD the key when there's a real value. Sending
@@ -226,14 +273,24 @@ export async function onRequestPost({ env, request }) {
       );
     }
 
+    // Step two of the create: publish it. See the comment on
+    // Auto_Scheduling_Status__c above for why this is a second write and not
+    // just a different value in the insert.
+    const published = await publishRun(env, data.id);
+
     // A brand new run almost always IS the order's print date -- creating one
     // is how an unscheduled order gets scheduled at all. Resolved from the
     // method because that is what the caller gave us. See _print-date-rollup.js.
     const orderId = await orderIdForMethod(env, printMethodId);
     if (orderId) await rollupPrintDateToOrder(env, orderId);
 
+    // `published` is reported, never thrown. The run EXISTS -- refusing the
+    // whole request because the second write failed would leave the caller
+    // believing nothing was created while a Planned run sits in Salesforce,
+    // and there is no Confirm button left anywhere to rescue it with. The
+    // dashboards surface this as a warning on the run instead.
     return Response.json(
-      { ok: true, id: data.id },
+      { ok: true, id: data.id, published },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (err) {
