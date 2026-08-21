@@ -632,7 +632,13 @@
 
           <sc-if value="{{mgrHasErr}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:8px;font:600 11px/1.3 'Oswald';letter-spacing:.03em;text-transform:uppercase;color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:9px;padding:12px 14px"><i class="ti ti-alert-triangle"></i>{{mgrErr}}</div></sc-if>
 
-          <button onClick="{{ onSubmitMethod }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:9px;font:700 13px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#fff;background:#C6372B;border:none;border-radius:11px;padding:16px;cursor:pointer" style-hover="filter:brightness(1.1)"><i class="ti ti-file-plus"></i>Create Production Plan &amp; Send</button>
+          <sc-if value="{{mgrHasMsg}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:7px;font:600 11px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:#BBD382;background:#18230D;border:1px solid #3D5418;border-radius:9px;padding:10px 13px"><i class="ti ti-check"></i>{{mgrMsg}}</div></sc-if>
+
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button onClick="{{ onSubmitMethod }}" style="flex:1;min-width:230px;display:inline-flex;align-items:center;justify-content:center;gap:9px;font:700 13px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#fff;background:#C6372B;border:none;border-radius:11px;padding:16px;cursor:pointer" style-hover="filter:brightness(1.1)"><i class="ti ti-file-plus"></i>Create Production Plan &amp; Send</button>
+            <button onClick="{{ onSubmitMethodNew }}" style="flex:1;min-width:200px;display:inline-flex;align-items:center;justify-content:center;gap:9px;font:700 13px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#ECEAE4;background:transparent;border:1px solid #3a3a40;border-radius:11px;padding:16px;cursor:pointer" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-layers-plus"></i>Save and New</button>
+          </div>
+          <div style="font:400 11px/1.5 'Archivo';color:#4d483f;margin-top:-12px">Save and New creates this method and clears the form for the next one on the same order — print specs and special notes carry over.</div>
         </div>
       </sc-if>
 
@@ -691,6 +697,8 @@
           </div>
 
           <button onClick="{{ onOpenRunModal }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:9px;font:700 13px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#fff;background:#C6372B;border:none;border-radius:11px;padding:16px;cursor:pointer" style-hover="filter:brightness(1.1)"><i class="ti ti-tools"></i>Create Production Run</button>
+          <button onClick="{{ onCreateAnotherMethod }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:9px;font:700 13px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#ECEAE4;background:transparent;border:1px solid #3a3a40;border-radius:11px;padding:16px;cursor:pointer;margin-top:-12px" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-layers-plus"></i>Create Another Method</button>
+          <div style="font:400 11px/1.5 'Archivo';color:#4d483f;margin-top:-14px">For an order printed more than one way — screen print on the front, embroidery on the back. Specs and notes carry over; the runs above stay on this method.</div>
         </div>
       </sc-if>
     </div>
@@ -1177,7 +1185,12 @@ class Component extends DCLogic {
   // manager can add a second (or third) placement/method to it -- e.g. an
   // order that already has "Front - Screen Print" gets a "Tag - Heat Press"
   // added without ever needing to touch the inbox.
-  openMgrForOrder(orderId){
+  /* `seed` (optional) supplies specs/notes directly. Without it this reads
+     them off the board's own cards -- which is right for the deep links from
+     index.html and the drawer, but wrong immediately after creating a method,
+     when load() may not have put the order on the board yet. Passing them in
+     removes that race rather than hoping it doesn't bite. */
+  openMgrForOrder(orderId, seed){
     if(!this.canOpenMgr()) return;
     // FIXED 2026-07-27: this compared orderId (an Order Id) against o.id
     // (each card's Production_Method__c Id) -- never a match, so `src` was
@@ -1191,12 +1204,23 @@ class Component extends DCLogic {
     // o.orderId instead, matching referenceForOrder() (line ~879) and the
     // mgrOrder lookup (line ~955), which both already do this correctly.
     const src=(this.state.orders||[]).find(o=>o.orderId===orderId);
-    const form=Object.assign(this.defaultForm(),{ specs:(src&&src.printSpecs)||'', notes:(src&&src.specialNotes)||'' });
+    const ref=this.referenceForOrder(orderId);
+    const form=Object.assign(this.defaultForm(),{
+      specs: (seed && seed.specs != null) ? seed.specs : ((src&&src.printSpecs) || ref.printSpecs || ''),
+      notes: (seed && seed.notes != null) ? seed.notes : ((src&&src.specialNotes) || ref.specialNotes || ''),
+    });
     // Persist the Management view for this entry point too, so refreshing
     // after arriving via index.html's "Add another method" keeps the form up
     // rather than dropping back to the board.
     { const b=window.CAApi; if(b&&b.writeParams) b.writeParams({view:'mgr'}); }
-    this.setState({view:'mgr', mgrId:orderId, mgrSource:'order', form, vendorResults:[], planResults:[], mgrErr:'', mgrMsg:'', openId:null});
+    // createdPanel MUST be cleared here. mgrShowForm is (mgrView && hasOrder &&
+    // !cpRaw), so arriving with a stale panel left the manager staring at the
+    // previous method's confirmation screen instead of the intake form. That
+    // was reachable before this change too -- via index.html's "Add another
+    // method" deep link straight after creating something -- it just had no
+    // obvious trigger until "Create another method" made it the normal path.
+    this.setState({view:'mgr', mgrId:orderId, mgrSource:'order', form, vendorResults:[], planResults:[], mgrErr:'', mgrMsg:'', openId:null,
+      createdPanel:null, runModalOpen:false, runForm:this.defaultRunForm(), runPressResults:[], runErr:'', runMsg:''});
   }
   // FIXED 2026-07-22: these only ever pushed to Salesforce and updated the
   // isolated manager-form state (this.state.form) -- never
@@ -1503,7 +1527,14 @@ class Component extends DCLogic {
   addItem(type){ this.setState(st=>{ const f=Object.assign({},st.form||this.defaultForm()); f.items=(f.items||[]).concat([{type:type}]); return {form:f}; }); }
   removeItem(i){ this.setState(st=>{ const f=Object.assign({},st.form); f.items=(f.items||[]).filter((_,ix)=>ix!==i); return {form:f}; }); }
   setItem(i,field,val){ this.setState(st=>{ const f=Object.assign({},st.form); f.items=(f.items||[]).map((it,ix)=>ix===i?Object.assign({},it,{[field]:val}):it); return {form:f}; }); }
-  async submitMethod(){
+  /* mode: undefined/'panel' -> land on the "Method Created" confirmation panel
+     (the original behaviour, and still what the main button does).
+     'new' -> create it and go straight back to an empty intake form for the
+     SAME order, for an order that needs several methods (screen print front,
+     embroidery on the back, a heat-pressed tag). Before this, a second method
+     meant creating the first, then hunting for the order again through the
+     board drawer's "Add another method". */
+  async submitMethod(mode){
     const st=this.state, f=st.form; if(!f) return; const oid=st.mgrId;
     if(!f.method){ this.setState({mgrErr:'Pick a print method'}); return; }
     if(!f.placements || !f.placements.length){ this.setState({mgrErr:'Pick at least one placement (where this method prints)'}); return; }
@@ -1549,9 +1580,28 @@ class Component extends DCLogic {
         inbox:(s2.inbox||[]).filter(o=>o.Id!==oid),
         // placements ride along so the Create Production Run modal can scope
         // its Print Location picker to this method's own locations.
-        createdPanel:{ pmId, orderId:oid, methodLabel, placements:(f.placements||[]).slice() },
+        // specs/notes ride along so "Create Another Method" can seed the next
+        // form without waiting for load() to put this order on the board. They
+        // are ORDER-level, shared by every method on it.
+        createdPanel:{ pmId, orderId:oid, methodLabel, placements:(f.placements||[]).slice(), specs:f.specs, notes:f.notes },
         runModalOpen:false, runForm:this.defaultRunForm(), runPressResults:[], runErr:'', runMsg:'',
       }));
+      if(mode==='new'){
+        /* Straight back to a blank intake form for the same order. specs and
+           notes are carried over deliberately -- they live on the ORDER, not
+           the method, so every method on this order shares them and re-typing
+           them would be wrong as well as tedious. mgrId stays put so the form
+           knows which order it is still filling in. */
+        this.setState(s2=>({
+          submitting:false, mgrSource:'order',
+          form:Object.assign(this.defaultForm(),{ specs:f.specs, notes:f.notes }),
+          vendorResults:[], planResults:[], mgrErr:'',
+          mgrMsg:methodLabel+' created. Add the next method for this order.',
+          createdPanel:null, runModalOpen:false,
+        }));
+        this.load();
+        return;
+      }
       // Prime the panel's Production Runs list. A brand-new method has none, so
       // this normally resolves empty and the panel shows its "no runs yet"
       // state -- but it makes the section authoritative rather than only
@@ -2020,7 +2070,12 @@ class Component extends DCLogic {
       planExBg:(f&&f.planMode==='existing')?'#2a1210':'#121215', planExBorder:(f&&f.planMode==='existing')?'#C6372B':'#242428', planExColor:(f&&f.planMode==='existing')?'#ECEAE4':'#8a8378',
       planQ:f?f.planQ:'', onPlanSearch:(e)=>this.planSearch(e.target.value), planResults, planPicked:!!(f&&f.planId), planName:f?f.planName:'',
       itemsView, itemTypeButtons, itemsEmpty:!f||!(f.items&&f.items.length),
-      onSubmitMethod:()=>this.submitMethod(), submitting:st.submitting, mgrErr:st.mgrErr, mgrMsg:st.mgrMsg, mgrHasMsg:!!st.mgrMsg, mgrHasErr:!!st.mgrErr,
+      onSubmitMethod:()=>this.submitMethod(),
+      onSubmitMethodNew:()=>this.submitMethod('new'),
+      // Reuses openMgrForOrder() -- the same path index.html's "Add another
+      // method" deep link and the board drawer's own button already take, so
+      // there is one way into the intake form rather than three.
+      onCreateAnotherMethod:()=>{ const cp=st.createdPanel; if(cp&&cp.orderId) this.openMgrForOrder(cp.orderId, {specs:cp.specs, notes:cp.notes}); }, submitting:st.submitting, mgrErr:st.mgrErr, mgrMsg:st.mgrMsg, mgrHasMsg:!!st.mgrMsg, mgrHasErr:!!st.mgrErr,
       // Created panel
       createdPanel, onOpenRunModal:()=>this.openRunModal(),
       // Create Production Run modal
