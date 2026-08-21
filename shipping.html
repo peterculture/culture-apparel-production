@@ -444,9 +444,14 @@ class Component extends DCLogic {
   // See ca-api.js's overlay notes -- timer work is silent, the first load()
   // and every user-initiated call are not.
   bg(fn){ const a=window.CAApi; return (a&&a.backgroundLoad) ? a.backgroundLoad(fn) : fn(); }
+  // fg() is the opposite of bg(): it DOES show the centre-screen overlay.
+  // Reserved for a board's first load -- the far half of "switching
+  // dashboards". Every later refresh, save and drawer-open stays silent.
+  // See the header comment in ca-api.js.
+  fg(fn){ const a=window.CAApi; return (a&&a.foregroundLoad) ? a.foregroundLoad(fn) : fn(); }
   componentDidMount(){
     this._t=setInterval(()=>this.setState({now:new Date()}),1000);
-    this.load(); this.bg(()=>this.loadSfEnv());
+    this.fg(()=>this.load()); this.bg(()=>this.loadSfEnv());
     this._ar=setInterval(()=>{ if(this.state.connection==='live' && !this.state.modalId) this.bg(()=>this.load()); },20000);
   }
   componentWillUnmount(){ clearInterval(this._t); clearInterval(this._ar); this.clearPoll(); }
