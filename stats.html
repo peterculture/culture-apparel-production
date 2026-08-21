@@ -197,9 +197,14 @@ class Component extends DCLogic {
   // background especially important -- otherwise it would dim the screen every
   // 20 seconds forever on a wall display nobody is touching.
   bg(fn){ const a=window.CAApi; return (a&&a.backgroundLoad) ? a.backgroundLoad(fn) : fn(); }
+  // fg() is the opposite of bg(): it DOES show the centre-screen overlay.
+  // Reserved for a board's first load -- the far half of "switching
+  // dashboards". Every later refresh, save and drawer-open stays silent.
+  // See the header comment in ca-api.js.
+  fg(fn){ const a=window.CAApi; return (a&&a.foregroundLoad) ? a.foregroundLoad(fn) : fn(); }
   componentDidMount(){
     this._t = setInterval(()=>this.setState({ now:new Date() }), 1000);
-    this.load();
+    this.fg(()=>this.load());
     this._ar = setInterval(()=>this.bg(()=>this.load()), 20000);
     this.renderChart();
   }
