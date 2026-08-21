@@ -636,9 +636,13 @@
 
           <div style="display:flex;gap:10px;flex-wrap:wrap">
             <button onClick="{{ onSubmitMethod }}" style="flex:1;min-width:230px;display:inline-flex;align-items:center;justify-content:center;gap:9px;font:700 13px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#fff;background:#C6372B;border:none;border-radius:11px;padding:16px;cursor:pointer" style-hover="filter:brightness(1.1)"><i class="ti ti-file-plus"></i>Create Production Plan &amp; Send</button>
-            <button onClick="{{ onSubmitMethodNew }}" style="flex:1;min-width:200px;display:inline-flex;align-items:center;justify-content:center;gap:9px;font:700 13px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#ECEAE4;background:transparent;border:1px solid #3a3a40;border-radius:11px;padding:16px;cursor:pointer" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-layers-plus"></i>Save and New</button>
+            <sc-if value="{{mgrCanSaveNew}}" hint-placeholder-val="{{ true }}">
+              <button onClick="{{ onSubmitMethodNew }}" style="flex:1;min-width:200px;display:inline-flex;align-items:center;justify-content:center;gap:9px;font:700 13px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#ECEAE4;background:transparent;border:1px solid #3a3a40;border-radius:11px;padding:16px;cursor:pointer" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-layers-plus"></i>Save and New</button>
+            </sc-if>
           </div>
-          <div style="font:400 11px/1.5 'Archivo';color:#4d483f;margin-top:-12px">Save and New creates this method and clears the form for the next one on the same order — print specs and special notes carry over.</div>
+          <sc-if value="{{mgrCanSaveNew}}" hint-placeholder-val="{{ true }}">
+            <div style="font:400 11px/1.5 'Archivo';color:#4d483f;margin-top:-12px">Save and New creates this method and clears the form for the next one on the same order — print specs and special notes carry over.</div>
+          </sc-if>
         </div>
       </sc-if>
 
@@ -697,8 +701,10 @@
           </div>
 
           <button onClick="{{ onOpenRunModal }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:9px;font:700 13px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#fff;background:#C6372B;border:none;border-radius:11px;padding:16px;cursor:pointer" style-hover="filter:brightness(1.1)"><i class="ti ti-tools"></i>Create Production Run</button>
-          <button onClick="{{ onCreateAnotherMethod }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:9px;font:700 13px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#ECEAE4;background:transparent;border:1px solid #3a3a40;border-radius:11px;padding:16px;cursor:pointer;margin-top:-12px" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-layers-plus"></i>Create Another Method</button>
-          <div style="font:400 11px/1.5 'Archivo';color:#4d483f;margin-top:-14px">For an order printed more than one way — screen print on the front, embroidery on the back. Specs and notes carry over; the runs above stay on this method.</div>
+          <sc-if value="{{createdPanel.canAddAnotherMethod}}" hint-placeholder-val="{{ true }}">
+            <button onClick="{{ onCreateAnotherMethod }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:9px;font:700 13px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#ECEAE4;background:transparent;border:1px solid #3a3a40;border-radius:11px;padding:16px;cursor:pointer;margin-top:-12px" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-layers-plus"></i>Create Another Method</button>
+            <div style="font:400 11px/1.5 'Archivo';color:#4d483f;margin-top:-14px">For an order printed more than one way — screen print on the front, embroidery on the back. Specs and notes carry over; the runs above stay on this method.</div>
+          </sc-if>
         </div>
       </sc-if>
     </div>
@@ -867,7 +873,7 @@ class Component extends DCLogic {
       // requires that person's real PIN via POST /api/worker-login first.
       gatePin:'', gateErr:'', gateSubmitting:false, gateShake:false,
       orders:[], connection:'loading', q:'', openId:null, ppItemsById:{}, weekMode:'all', pickDate:'',
-      view:'board', inbox:[], inboxLoaded:false, mgrId:null, mgrSource:null, form:null, vendorResults:[], planResults:[], submitting:false, mgrErr:'', mgrMsg:'',
+      view:'board', inbox:[], inboxLoaded:false, mgrId:null, mgrSource:null, mgrMultiMethod:false, form:null, vendorResults:[], planResults:[], submitting:false, mgrErr:'', mgrMsg:'',
       // Order name / order number search for the Management inbox list
       // (separate from the board's own `q` above -- different view, own
       // box). See openMgr()/mgrVals() below.
@@ -1011,6 +1017,11 @@ class Component extends DCLogic {
           const placements=(pm.Placements&&pm.Placements.length)?pm.Placements:(pm.Placement__c?[pm.Placement__c]:[]);
           cards.push({
             id:pm.Id, orderId:r.Id, meth:meta.key, placements:placements,
+            // Ticked by the CAM on the Opportunity, copied to the Order by the
+            // Close and Create Order flow. Gates "Create Another Method" -- the
+            // shop has no other way to know a job needs a second method, since
+            // the second method doesn't exist until someone makes it.
+            multiMethod: r.Multiple_Production_Methods__c === true,
             num:api.text(r.GOA_Order_Number__c)||r.OrderNumber||r.Id, customer:api.text(r.Customer_Order_Name__c)||api.text(r.Account&&r.Account.Name)||'—', account:api.text(r.Account&&r.Account.Name)||'',
             isReprint: !!r.Misprint__c,
             qty:piv.qty, garment:piv.garment, sizes:piv.sizes, dueLabel:due.label, urg:due.urg,
@@ -1170,13 +1181,19 @@ class Component extends DCLogic {
   // lands cleanly back on the board regardless of where the manager was.
   // Drops ?view=mgr (and the one-shot addMethodForOrder deep-link param, so
   // a refresh after backing out doesn't re-open the form for that order).
-  closeMgr(){ this.setState({view:'board', mgrId:null, createdPanel:null, runModalOpen:false}); const a=window.CAApi; if(a&&a.writeParams) a.writeParams({view:null, addMethodForOrder:null}); }
+  closeMgr(){ this.setState({view:'board', mgrId:null, mgrMultiMethod:false, createdPanel:null, runModalOpen:false}); const a=window.CAApi; if(a&&a.writeParams) a.writeParams({view:null, addMethodForOrder:null}); }
   async loadInbox(){ if(!this._api) this._api=window.CAApi; if(!this._api || this.state.connection!=='live'){ this.setState({inbox:[], inboxLoaded:true}); return; } try{ const recs=await this._api.getInbox(); this.setState({inbox:recs, inboxLoaded:true}); }catch(_){ this.setState({inbox:[], inboxLoaded:true}); } }
   pickInbox(id){
     const rec=(this.state.inbox||[]).find(r=>r.Id===id)||{};
     const api=this._api||window.CAApi; const t=(v)=>(api&&api.text?api.text(v):(v||''));
     const form=Object.assign(this.defaultForm(),{ specs:t(rec.Specifications_for_Printing__c)||'', notes:t(rec.Special_Notes__c)||'' });
-    this.setState({mgrId:id, mgrSource:'inbox', form, vendorResults:[], planResults:[], mgrErr:'', mgrMsg:''});
+    /* Captured HERE, off the raw inbox record, because this is the last moment
+       the order is guaranteed to be resolvable. submitMethod() strips it from
+       st.inbox the instant a method exists, and load() may not have put it on
+       the board yet -- so a live read a moment later returns false and "Save
+       and New" would vanish exactly when the manager needs it for method #2.
+       Same race the multiMethod capture in submitMethod() guards against. */
+    this.setState({mgrId:id, mgrSource:'inbox', mgrMultiMethod: rec.Multiple_Production_Methods__c === true, form, vendorResults:[], planResults:[], mgrErr:'', mgrMsg:''});
   }
   // Entry point for an order that's already staffed with at least one
   // production method (so it won't be in /api/inbox any more -- that list
@@ -1185,11 +1202,15 @@ class Component extends DCLogic {
   // manager can add a second (or third) placement/method to it -- e.g. an
   // order that already has "Front - Screen Print" gets a "Tag - Heat Press"
   // added without ever needing to touch the inbox.
-  /* `seed` (optional) supplies specs/notes directly. Without it this reads
-     them off the board's own cards -- which is right for the deep links from
-     index.html and the drawer, but wrong immediately after creating a method,
-     when load() may not have put the order on the board yet. Passing them in
-     removes that race rather than hoping it doesn't bite. */
+  /* `seed` (optional) supplies specs/notes -- and multiMethod -- directly.
+     Without it this reads them off the board's own cards, which is right for
+     the deep links from index.html and the drawer, but wrong immediately after
+     creating a method, when load() may not have put the order on the board yet.
+     Passing them in removes that race rather than hoping it doesn't bite.
+
+     multiMethod is seeded rather than inherited from state on purpose: this is
+     also the entry point for a deep link to a DIFFERENT order, and that order's
+     flag has nothing to do with whatever the manager was last looking at. */
   openMgrForOrder(orderId, seed){
     if(!this.canOpenMgr()) return;
     // FIXED 2026-07-27: this compared orderId (an Order Id) against o.id
@@ -1219,7 +1240,7 @@ class Component extends DCLogic {
     // was reachable before this change too -- via index.html's "Add another
     // method" deep link straight after creating something -- it just had no
     // obvious trigger until "Create another method" made it the normal path.
-    this.setState({view:'mgr', mgrId:orderId, mgrSource:'order', form, vendorResults:[], planResults:[], mgrErr:'', mgrMsg:'', openId:null,
+    this.setState({view:'mgr', mgrId:orderId, mgrSource:'order', mgrMultiMethod: (seed && seed.multiMethod === true) || ref.multiMethod === true, form, vendorResults:[], planResults:[], mgrErr:'', mgrMsg:'', openId:null,
       createdPanel:null, runModalOpen:false, runForm:this.defaultRunForm(), runPressResults:[], runErr:'', runMsg:''});
   }
   // FIXED 2026-07-22: these only ever pushed to Salesforce and updated the
@@ -1233,7 +1254,7 @@ class Component extends DCLogic {
   // .map() if mgrId isn't actually an order id with cards yet).
   setMgrSpecs(v){ const oid=this.state.mgrId; this.setForm({specs:v}); if(!oid) return; this.updateOrderFieldLocally(oid,{printSpecs:v}); clearTimeout(this._mgrSpecsT); this._mgrSpecsT=setTimeout(()=>{ if(this._api && this.state.connection==='live') this._api.patchOrder(oid,{Specifications_for_Printing__c:v}).catch(()=>{}); },600); }
   setMgrSpecial(v){ const oid=this.state.mgrId; this.setForm({notes:v}); if(!oid) return; this.updateOrderFieldLocally(oid,{specialNotes:v}); clearTimeout(this._mgrSpecialT); this._mgrSpecialT=setTimeout(()=>{ if(this._api && this.state.connection==='live') this._api.patchOrder(oid,{Special_Notes__c:v}).catch(()=>{}); },600); }
-  backToInbox(){ this.setState({mgrId:null, mgrErr:'', mgrMsg:''}); }
+  backToInbox(){ this.setState({mgrId:null, mgrMultiMethod:false, mgrErr:'', mgrMsg:''}); }
   // Pre_Production_Item__c records come back per ORDER (one fetch covers
   // every sibling method's items), cached under ppItemsById[orderId] and
   // filtered down to just this card's own method at render time.
@@ -1569,6 +1590,18 @@ class Component extends DCLogic {
       // any time via the mgr header's "Back to Board" (closeMgr(), which
       // now also clears this panel/modal -- see above).
       const pmId = res && res.productionMethodId;
+      /* Read the multi-method flag NOW, while the order is still in st.inbox.
+         The setState below removes it (it has a method, so it leaves the
+         inbox), after which referenceForOrder() can no longer find it and the
+         flag would read false -- the same race that dropped specs/notes.
+
+         st.mgrMultiMethod FIRST, because on the second and later trips through
+         this method (via "Save and New") the order left st.inbox on the FIRST
+         trip and never came back, so the live read below is already false by
+         the time we get here. Without the state copy, "Create Another Method"
+         silently disappeared from method #2's confirmation screen -- the one
+         place a manager building three methods actually needs it. */
+      const multiMethod = st.mgrMultiMethod === true || this.referenceForOrder(oid).multiMethod === true;
       const methodLabel = f.method + ((f.placements && f.placements.length) ? (' – '+f.placements.join(' + ')) : '');
       // Only the transient identifiers live in state here -- customer/qty/
       // garment/sizeCells/printSpecs/specialNotes are derived FRESH from
@@ -1583,7 +1616,7 @@ class Component extends DCLogic {
         // specs/notes ride along so "Create Another Method" can seed the next
         // form without waiting for load() to put this order on the board. They
         // are ORDER-level, shared by every method on it.
-        createdPanel:{ pmId, orderId:oid, methodLabel, placements:(f.placements||[]).slice(), specs:f.specs, notes:f.notes },
+        createdPanel:{ pmId, orderId:oid, methodLabel, placements:(f.placements||[]).slice(), specs:f.specs, notes:f.notes, multiMethod },
         runModalOpen:false, runForm:this.defaultRunForm(), runPressResults:[], runErr:'', runMsg:'',
       }));
       if(mode==='new'){
@@ -1594,6 +1627,11 @@ class Component extends DCLogic {
            knows which order it is still filling in. */
         this.setState(s2=>({
           submitting:false, mgrSource:'order',
+          /* Carried forward from the capture above, NOT re-read. The order has
+             just left st.inbox and load() below hasn't returned yet, so a live
+             read here is exactly the false negative this whole path exists to
+             avoid -- it would hide "Save and New" on method #2 onwards. */
+          mgrMultiMethod: multiMethod,
           form:Object.assign(this.defaultForm(),{ specs:f.specs, notes:f.notes }),
           vendorResults:[], planResults:[], mgrErr:'',
           mgrMsg:methodLabel+' created. Add the next method for this order.',
@@ -1636,14 +1674,14 @@ class Component extends DCLogic {
     const boardCard=(this.state.orders||[]).find(o=>o.orderId===oid);
     if(boardCard){
       const sizeCells=String(boardCard.sizes||'').split('·').map(t=>t.trim()).filter(Boolean).map(tok=>{ const mm=tok.match(/^([A-Za-z0-9]+?)(\d+)$/); return mm?{label:mm[1],qty:mm[2]}:{label:tok,qty:''}; });
-      return { customer:boardCard.customer||'', num:boardCard.num||'', qty:boardCard.qty||'', garment:boardCard.garment||'', sizeCells, printSpecs:boardCard.printSpecs||'', specialNotes:boardCard.specialNotes||'', printDateISO:boardCard.printDateISO||null, printEndDateTimeISO:boardCard.printEndDateTimeISO||null };
+      return { customer:boardCard.customer||'', num:boardCard.num||'', qty:boardCard.qty||'', garment:boardCard.garment||'', sizeCells, printSpecs:boardCard.printSpecs||'', specialNotes:boardCard.specialNotes||'', printDateISO:boardCard.printDateISO||null, printEndDateTimeISO:boardCard.printEndDateTimeISO||null, multiMethod: boardCard.multiMethod === true };
     }
     const inboxRec=(this.state.inbox||[]).find(r=>r.Id===oid);
     if(inboxRec && api && api.pivotItems){
       const piv=api.pivotItems(inboxRec), t=(v)=>(api.text?api.text(v):(v||''));
-      return { customer:t(inboxRec.Customer_Order_Name__c)||t(inboxRec.Account&&inboxRec.Account.Name)||'—', num:t(inboxRec.GOA_Order_Number__c)||inboxRec.OrderNumber||inboxRec.Id, qty:piv.qty, garment:piv.garment, sizeCells:piv.sizeCells, printSpecs:t(inboxRec.Specifications_for_Printing__c), specialNotes:t(inboxRec.Special_Notes__c), printDateISO:inboxRec.Print_Date__c||null, printEndDateTimeISO:inboxRec.Print_End_Date_Time__c||null };
+      return { customer:t(inboxRec.Customer_Order_Name__c)||t(inboxRec.Account&&inboxRec.Account.Name)||'—', num:t(inboxRec.GOA_Order_Number__c)||inboxRec.OrderNumber||inboxRec.Id, qty:piv.qty, garment:piv.garment, sizeCells:piv.sizeCells, printSpecs:t(inboxRec.Specifications_for_Printing__c), specialNotes:t(inboxRec.Special_Notes__c), printDateISO:inboxRec.Print_Date__c||null, printEndDateTimeISO:inboxRec.Print_End_Date_Time__c||null, multiMethod: inboxRec.Multiple_Production_Methods__c === true };
     }
-    return { customer:'', num:'', qty:'', garment:'', sizeCells:[], printSpecs:'', specialNotes:'', printDateISO:null, printEndDateTimeISO:null };
+    return { customer:'', num:'', qty:'', garment:'', sizeCells:[], printSpecs:'', specialNotes:'', printDateISO:null, printEndDateTimeISO:null, multiMethod:false };
   }
 
   /* ── Create Production Run modal ── */
@@ -1894,7 +1932,7 @@ class Component extends DCLogic {
   openRunModalForCard(pmId, orderId, methodLabel, placements){
     const ref=this.referenceForOrder(orderId);
     this.setState({
-      createdPanel:{ pmId, orderId, methodLabel, placements:(placements||[]).slice() },
+      createdPanel:{ pmId, orderId, methodLabel, placements:(placements||[]).slice(), multiMethod: this.referenceForOrder(orderId).multiMethod === true },
       runModalOpen:true, runForm:this.defaultRunForm(ref.printDateISO, ref.printEndDateTimeISO), runPressResults:[], runErr:'', runMsg:'',
       proposals:[], proposalUsedId:null,
     });
@@ -1937,8 +1975,21 @@ class Component extends DCLogic {
     const mgrQ=(st.mgrQ||'').trim().toLowerCase();
     const inbox = mgrQ ? inboxAll.filter(o=>(o.customer+' '+o.num+' '+o.account).toLowerCase().includes(mgrQ)) : inboxAll;
     const f=st.form, hasOrder=!!st.mgrId && !!f, mgrView=st.view==='mgr';
-    let mgrOrder={num:'',customer:'',account:'',qty:'',mockupUrl:null,hasThumb:false,noThumb:true,onThumbErr:null}, methodOptions=[], placementOptions=[], statusOptions=[], vendorResults=[], planResults=[], itemsView=[], itemTypeButtons=[];
+    let mgrOrder={num:'',customer:'',account:'',qty:'',mockupUrl:null,hasThumb:false,noThumb:true,onThumbErr:null}, methodOptions=[], placementOptions=[], statusOptions=[], vendorResults=[], planResults=[], itemsView=[], itemTypeButtons=[], mgrCanSaveNew=false;
     if(hasOrder){
+      /* "Save and New" is the intake-form twin of the confirmation screen's
+         "Create Another Method": both appear ONLY when the Order says a second
+         method is coming (Multiple_Production_Methods__c, ticked by the CAM on
+         the Close and Create Order flow). A normal single-method job gets one
+         button and one clean path through the form.
+
+         State copy OR live read, whichever is true. The state copy is what
+         survives the inbox-strip race (see pickInbox/submitMethod); the live
+         read is what makes a box ticked on the Order AFTER the manager opened
+         the form show up once load() refreshes. Erring toward showing it: an
+         extra optional button costs nothing, a missing one strands the manager
+         on an order that genuinely needs two methods. */
+      mgrCanSaveNew = st.mgrMultiMethod === true || this.referenceForOrder(st.mgrId).multiMethod === true;
       // The order might be a brand-new inbox pick, OR an already-staffed
       // order a manager is adding a second method/placement to (see
       // openMgrForOrder) -- that second case won't be in `inbox` any more
@@ -2001,6 +2052,17 @@ class Component extends DCLogic {
       // the inverse of sizesEmpty rather than an independent check, so the
       // "No size breakdown on file" message and the Total can never both show.
       hasSizes: !!(cpRef && cpRef.sizeCells && cpRef.sizeCells.length),
+      /* "Create Another Method" is shown ONLY when the Order says a second one
+         is coming -- Multiple_Production_Methods__c, ticked by the CAM on the
+         Opportunity and copied down by the flow. Hidden otherwise, so a normal
+         single-method job gets a clean confirmation screen.
+
+         Panel copy wins when present (captured while the order was still
+         resolvable); otherwise a live read, which is what makes a box ticked on
+         the Order AFTER creation show up on the next load. If the flag is wrong
+         or the org has no such field, the drawer's own "Add another method" is
+         still the escape hatch. */
+      canAddAnotherMethod: !!(cpRaw && cpRaw.multiMethod != null ? cpRaw.multiMethod : (cpRef && cpRef.multiMethod)),
       /* Runs created under THIS method, with the Confirm action (added
          2026-08-20). Before this, Management could create runs but not publish
          them -- every run starts life as `Planned`, so the manager had to build
@@ -2071,11 +2133,11 @@ class Component extends DCLogic {
       planQ:f?f.planQ:'', onPlanSearch:(e)=>this.planSearch(e.target.value), planResults, planPicked:!!(f&&f.planId), planName:f?f.planName:'',
       itemsView, itemTypeButtons, itemsEmpty:!f||!(f.items&&f.items.length),
       onSubmitMethod:()=>this.submitMethod(),
-      onSubmitMethodNew:()=>this.submitMethod('new'),
+      onSubmitMethodNew:()=>this.submitMethod('new'), mgrCanSaveNew,
       // Reuses openMgrForOrder() -- the same path index.html's "Add another
       // method" deep link and the board drawer's own button already take, so
       // there is one way into the intake form rather than three.
-      onCreateAnotherMethod:()=>{ const cp=st.createdPanel; if(cp&&cp.orderId) this.openMgrForOrder(cp.orderId, {specs:cp.specs, notes:cp.notes}); }, submitting:st.submitting, mgrErr:st.mgrErr, mgrMsg:st.mgrMsg, mgrHasMsg:!!st.mgrMsg, mgrHasErr:!!st.mgrErr,
+      onCreateAnotherMethod:()=>{ const cp=st.createdPanel; if(cp&&cp.orderId) this.openMgrForOrder(cp.orderId, {specs:cp.specs, notes:cp.notes, multiMethod:cp.multiMethod===true}); }, submitting:st.submitting, mgrErr:st.mgrErr, mgrMsg:st.mgrMsg, mgrHasMsg:!!st.mgrMsg, mgrHasErr:!!st.mgrErr,
       // Created panel
       createdPanel, onOpenRunModal:()=>this.openRunModal(),
       // Create Production Run modal
