@@ -771,7 +771,12 @@ class Component extends DCLogic {
   // waiting on and should see. Every timer-driven refresh after it is, or the
   // board would dim itself every 15 seconds while someone is reading it.
   bg(fn){ const a=window.CAApi; return (a&&a.backgroundLoad) ? a.backgroundLoad(fn) : fn(); }
-  componentDidMount(){ this._t = setInterval(()=>this.setState({ now:new Date() }), 1000); this.load(); this.bg(()=>this.loadSfEnv()); this.bg(()=>this.loadPrep()); this._ar = setInterval(()=>{ if(this.state.connection==='live' && !this.state.openId && !this.state.dragId) this.bg(()=>this.load()); }, 15000); this._pr = setInterval(()=>this.bg(()=>this.loadPrep()), 30000); }
+  // fg() is the opposite of bg(): it DOES show the centre-screen overlay.
+  // Reserved for a board's first load -- the far half of "switching
+  // dashboards". Every later refresh, save and drawer-open stays silent.
+  // See the header comment in ca-api.js.
+  fg(fn){ const a=window.CAApi; return (a&&a.foregroundLoad) ? a.foregroundLoad(fn) : fn(); }
+  componentDidMount(){ this._t = setInterval(()=>this.setState({ now:new Date() }), 1000); this.fg(()=>this.load()); this.bg(()=>this.loadSfEnv()); this.bg(()=>this.loadPrep()); this._ar = setInterval(()=>{ if(this.state.connection==='live' && !this.state.openId && !this.state.dragId) this.bg(()=>this.load()); }, 15000); this._pr = setInterval(()=>this.bg(()=>this.loadPrep()), 30000); }
   componentWillUnmount(){ clearInterval(this._t); clearInterval(this._ar); clearInterval(this._pr); this.clearPoll(); }
   // Independent fetch/failure path from load() -- a hiccup fetching the
   // Pre-Production queue shouldn't flip this board's own "Live · Salesforce"
