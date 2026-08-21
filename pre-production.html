@@ -705,6 +705,8 @@
             <button onClick="{{ onCreateAnotherMethod }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:9px;font:700 13px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#ECEAE4;background:transparent;border:1px solid #3a3a40;border-radius:11px;padding:16px;cursor:pointer;margin-top:-12px" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-layers-plus"></i>Create Another Method</button>
             <div style="font:400 11px/1.5 'Archivo';color:#4d483f;margin-top:-14px">For an order printed more than one way — screen print on the front, embroidery on the back. Specs and notes carry over; the runs above stay on this method.</div>
           </sc-if>
+          <button onClick="{{ onExitToBoard }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:9px;font:700 13px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#9C978C;background:transparent;border:1px solid #2a2a2f;border-radius:11px;padding:16px;cursor:pointer;margin-top:-12px" style-hover="border-color:#5E9B9A;color:#5E9B9A"><i class="ti ti-arrow-left"></i>Exit to Pre-Production</button>
+          <div style="font:400 11px/1.5 'Archivo';color:#4d483f;margin-top:-14px">Done with this order — back to the pre-production board. Everything above is already saved.</div>
         </div>
       </sc-if>
     </div>
@@ -2140,6 +2142,17 @@ class Component extends DCLogic {
       onCreateAnotherMethod:()=>{ const cp=st.createdPanel; if(cp&&cp.orderId) this.openMgrForOrder(cp.orderId, {specs:cp.specs, notes:cp.notes, multiMethod:cp.multiMethod===true}); }, submitting:st.submitting, mgrErr:st.mgrErr, mgrMsg:st.mgrMsg, mgrHasMsg:!!st.mgrMsg, mgrHasErr:!!st.mgrErr,
       // Created panel
       createdPanel, onOpenRunModal:()=>this.openRunModal(),
+      /* The third and last way off this panel: done with this order entirely.
+         Reuses closeMgr() -- the same exit the Management header's "Back to
+         Board" takes -- so there is one teardown path (clears mgrId, the
+         created panel, the run modal and the ?view=mgr / addMethodForOrder
+         params) rather than a second one that can drift out of step with it.
+
+         load() runs after, because the whole point of exiting HERE rather than
+         via the header is to go look at the work just created: the new method
+         is a card the board has never fetched. closeMgr() alone would land the
+         manager on a board that doesn't show it yet. */
+      onExitToBoard:()=>{ this.closeMgr(); this.load(); },
       // Create Production Run modal
       runModalOpen:st.runModalOpen, onCloseRunModal:()=>this.closeRunModal(),
       // The AM's suggestions -- only the ones still awaiting a decision. A row
