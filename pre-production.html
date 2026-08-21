@@ -342,7 +342,7 @@
               <div style="background:#121215;border:1px solid #232327;border-radius:10px;padding:13px 14px;display:flex;flex-direction:column;gap:11px">
                 <div style="font:600 11px/1 'Oswald';letter-spacing:.06em;color:#5E9B9A">{{run.name}}</div>
                 <div style="font:400 11px/1.3 'Archivo';color:{{run.statusColor}};margin-top:-5px">{{run.statusLabel}}</div>
-                <button onClick="{{ run.onToggleConfirm }}" disabled="{{run.saving}}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;font:700 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:{{run.confirmFg}};background:{{run.confirmBg}};border:1px solid {{run.confirmBorder}};border-radius:8px;padding:10px;cursor:pointer" style-hover="filter:brightness(1.12)"><i class="ti {{run.confirmIcon}}"></i>{{run.confirmLabel}}</button>
+                <sc-if value="{{run.notPublished}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:flex-start;gap:7px;font:400 10px/1.35 'Archivo';color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:8px;padding:9px 11px"><i class="ti ti-alert-triangle" style="margin-top:1px"></i><span>Not on the shop calendar. Runs publish when they’re created, so this one’s publish failed — save any change to it to retry.</span></div></sc-if>
 
                 <div>
                   <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Press</div>
@@ -676,10 +676,10 @@
           <div>
             <div style="display:flex;align-items:center;gap:9px;margin-bottom:11px;flex-wrap:wrap">
               <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378">Production Runs</div>
-              <sc-if value="{{hasCreatedRuns}}" hint-placeholder-val="{{ false }}"><span style="font:400 11px/1 'Archivo';color:#6C665C">Confirm each one to put it on the shop calendar.</span></sc-if>
+              <sc-if value="{{hasCreatedRuns}}" hint-placeholder-val="{{ false }}"><span style="font:400 11px/1 'Archivo';color:#6C665C">Already on the shop calendar.</span></sc-if>
             </div>
             <sc-if value="{{createdRunsEmpty}}" hint-placeholder-val="{{ true }}">
-              <div style="border:1px dashed #2a2a2f;border-radius:10px;padding:18px 14px;text-align:center;font:400 12px/1.5 'Archivo';color:#4d483f">No runs on this method yet. Create one below — it will appear here so you can confirm it without leaving.</div>
+              <div style="border:1px dashed #2a2a2f;border-radius:10px;padding:18px 14px;text-align:center;font:400 12px/1.5 'Archivo';color:#4d483f">No runs on this method yet. Create one below — it goes straight onto the shop calendar and will appear here.</div>
             </sc-if>
             <div style="display:flex;flex-direction:column;gap:10px">
               <sc-for list="{{createdPanel.runsView}}" as="run" hint-placeholder-count="0">
@@ -692,8 +692,7 @@
                   </div>
                   <div style="font:400 11px/1.3 'Archivo';color:#8a8378">{{run.when}}</div>
                   <div style="font:400 11px/1.3 'Archivo';color:{{run.statusColor}}">{{run.statusLabel}}</div>
-                  <button onClick="{{ run.onToggleConfirm }}" disabled="{{run.saving}}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;font:700 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:{{run.confirmFg}};background:{{run.confirmBg}};border:1px solid {{run.confirmBorder}};border-radius:8px;padding:10px;cursor:pointer" style-hover="filter:brightness(1.1)"><i class="ti {{run.confirmIcon}}"></i>{{run.confirmLabel}}</button>
-                  <div style="font:400 10px/1.4 'Archivo';color:#4d483f">{{run.confirmHint}}</div>
+                  <sc-if value="{{run.notPublished}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:flex-start;gap:7px;font:400 10px/1.35 'Archivo';color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:8px;padding:9px 11px"><i class="ti ti-alert-triangle" style="margin-top:1px"></i><span>Not on the shop calendar. Runs publish when they’re created, so this one’s publish failed — save any change to it to retry.</span></div></sc-if>
                   <sc-if value="{{run.hasErr}}" hint-placeholder-val="{{ false }}"><div style="font:600 10px/1.3 'Oswald';letter-spacing:.03em;text-transform:uppercase;color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:8px;padding:9px 11px">{{run.err}}</div></sc-if>
                 </div>
               </sc-for>
@@ -1755,22 +1754,6 @@ class Component extends DCLogic {
      go find the job again on another board to make it real. Sends only
      {confirm} -- never the schedule fields -- so confirming can only ever mean
      "publish what is already saved", not "publish whatever is in this form". */
-  async toggleRunConfirm(runId, methodId, publish){
-    const api=this._api;
-    if(!runId || !api || this.state.connection!=='live') return;
-    if(api.confirmManager && !api.confirmManager(publish ? 'Putting this run on the shop calendar' : 'Taking this run off the shop calendar')) return;
-    this.setState(st=>({runRowSaving:Object.assign({}, st.runRowSaving, {[runId]:true})}));
-    try{
-      await api.patchProductionRun(runId, {confirm: !!publish});
-      this.loadRunsForCard(methodId);
-    }catch(e){
-      console.error('confirm failed', e);
-      this.setState(st=>({runRowErr:Object.assign({}, st.runRowErr, {[runId]:'Could not '+(publish?'confirm':'unconfirm')+' that run.'})}));
-    }finally{
-      this.setState(st=>({runRowSaving:Object.assign({}, st.runRowSaving, {[runId]:false})}));
-    }
-  }
-
   /* Copy one suggestion into the form. End time comes from Proposed Hours when
      the AM gave one; with no hours we leave the end alone rather than inventing
      a duration -- a wrong end time that looks deliberate is worse than a blank
@@ -1901,25 +1884,24 @@ class Component extends DCLogic {
       this.loadRunsForCard(cp.pmId);
       if(mode==='shopfloor'){
         // CHANGED 2026-08-20: this used to closeMgr() straight back to the
-        // board. That made confirming from Management impossible -- runs are
-        // created as `Planned`, so leaving immediately meant the manager had
-        // built press time nobody else could see, then had to hunt down the
-        // same card elsewhere to publish it.
+        // board, which made confirming from Management impossible.
         //
-        // Now it closes the MODAL only and lands on the "Method Created"
-        // panel, where the run is listed with its Confirm button. Leaving is
-        // still one click away -- "Back to Board" in the Management header is
-        // always there -- but it is a decision now, not something that happens
-        // to you mid-task.
+        // The confirming is gone (2026-08-21) but the landing stays: closing
+        // the MODAL only and showing the "Method Created" panel means the
+        // manager sees the run they just made, listed under the method, on the
+        // screen where they made it -- and can add another without navigating.
+        // "Exit to Pre-Production" is right there when they're done. Bouncing
+        // straight to the board would take the work off screen the instant it
+        // was saved.
         this.setState({runSubmitting:false, runModalOpen:false, runPressResults:[], runErr:'',
-          runMsg:'Run created. Confirm it below to put it on the shop calendar.'});
+          runMsg:'Run created and added to the shop calendar.'});
         this.loadProposals(cp.orderId);
         this.load();
       } else {
         // proposalUsedId clears with the form. A second run under the same
         // method is a different run, and silently re-stamping the same
         // suggestion for it would make the accept trail lie.
-        this.setState({runSubmitting:false, runForm:this.defaultRunForm(), runPressResults:[], runErr:'', runMsg:'Run created — add another for this method, or close this window when done.', proposalUsedId:null});
+        this.setState({runSubmitting:false, runForm:this.defaultRunForm(), runPressResults:[], runErr:'', runMsg:'Run created and added to the shop calendar — add another for this method, or close this window when done.', proposalUsedId:null});
         this.loadProposals(cp.orderId);
       }
     }catch(e){ this.setState({runSubmitting:false, runErr:'Create failed — check press / schedule and try again'}); }
@@ -2065,19 +2047,13 @@ class Component extends DCLogic {
          or the org has no such field, the drawer's own "Add another method" is
          still the escape hatch. */
       canAddAnotherMethod: !!(cpRaw && cpRaw.multiMethod != null ? cpRaw.multiMethod : (cpRef && cpRef.multiMethod)),
-      /* Runs created under THIS method, with the Confirm action (added
-         2026-08-20). Before this, Management could create runs but not publish
-         them -- every run starts life as `Planned`, so the manager had to build
-         the plan here, leave, find the same card on the board or the calendar,
-         and confirm it there. Management could only ever produce work nobody
-         else could see.
-
-         Reuses toggleRunConfirm() and runsByMethod{} exactly as the drawer
-         does, so there is one confirm implementation rather than a second one
-         that can drift. submitRun() already calls loadRunsForCard(pmId) after
-         a successful create, so this list fills itself in. */
+      /* Runs created under THIS method. The Confirm action that lived here
+         (2026-08-20 to 2026-08-21) is gone: creating a run now publishes it,
+         so there is nothing left to confirm. The list stays -- seeing the runs
+         you just made, on the screen where you made them, is worth keeping on
+         its own. submitRun() calls loadRunsForCard(pmId) after a successful
+         create, so it fills itself in. */
       runsView: (st.runsByMethod[cpRaw.pmId] || []).map(r=>{
-        const saving = !!(st.runRowSaving && st.runRowSaving[r.id]);
         const pub = r.schedStatus === 'Confirmed';
         return {
           id:r.id, name:r.name,
@@ -2087,24 +2063,16 @@ class Component extends DCLogic {
             : 'No schedule set',
           qtyLabel: r.qty!=null ? (r.qty+' pcs') : '', hasQty: r.qty!=null,
           locationLabel: r.printLocation || '', hasLocation: !!r.printLocation,
-          /* Same three-tier vocabulary as the drawer and the calendar. The
-             label says what is TRUE of the run, the button says what will
-             HAPPEN -- naming a picklist value here would mean nothing to
-             whoever is standing at the press. */
+          /* Same vocabulary as the drawer and the calendar: the label says
+             what is TRUE of the run. 'Planned' now means the publish failed,
+             not that someone still has to act -- see _run-schedule-status.js.
+             notPublished drives a warning rather than a button, because there
+             is no longer anything a manager can click to fix it. */
           statusLabel: pub ? 'On the shop calendar'
-                     : r.schedStatus === 'Planned' ? 'Planned — not on the shop calendar yet'
+                     : r.schedStatus === 'Planned' ? 'Not on the shop calendar — publishing failed'
                      : 'Suggested by the auto-scheduler — it may move again',
-          statusColor: pub ? '#9878C0' : r.schedStatus === 'Planned' ? '#E0B870' : '#6C665C',
-          confirmLabel: saving ? 'Saving…' : (pub ? 'Unconfirm' : 'Confirm — add to calendar'),
-          confirmIcon: pub ? 'ti-calendar-off' : 'ti-calendar-check',
-          confirmFg: pub ? '#E8D5A8' : '#fff',
-          confirmBg: pub ? 'transparent' : '#7FA644',
-          confirmBorder: pub ? '#6B5A2E' : '#7FA644',
-          confirmHint: pub
-            ? 'Takes it off the shop calendar. The scheduled time stays as it is.'
-            : 'Puts this run on the shop calendar — and on Google, once this reaches production.',
-          saving,
-          onToggleConfirm:()=>this.toggleRunConfirm(r.id, cpRaw.pmId, !pub),
+          statusColor: pub ? '#9878C0' : '#6C665C',
+          notPublished: !pub,
           err:(st.runRowErr&&st.runRowErr[r.id])||'', hasErr:!!(st.runRowErr&&st.runRowErr[r.id]),
         };
       }),
@@ -2375,21 +2343,17 @@ class Component extends DCLogic {
              string when the order has no sized line items, and hasQtyHint
              hides the whole line rather than printing "of 0". */
           qtyHint, hasQtyHint: !!qtyHint,
-          /* Planned vs Confirmed, and the action that moves between them.
-             Confirmed is the only state that reaches the shop's Event
-             calendar -- and in production, Google -- so the label says what
-             happens rather than naming a picklist value. */
+          /* Confirmed is the only state that reaches the shop's Event calendar
+             -- and in production, Google. Every run created here is Confirmed
+             from birth (2026-08-21), so anything else is either the machine's
+             own suggestion or a publish that failed; neither is something a
+             manager can resolve from this row, so it reads as a warning rather
+             than an offer. */
           statusLabel: r.schedStatus==='Confirmed' ? 'On the shop calendar'
-                     : r.schedStatus==='Planned' ? 'Planned — not on the shop calendar yet'
+                     : r.schedStatus==='Planned' ? 'Not on the shop calendar — publishing failed'
                      : 'Suggested by the auto-scheduler — it may move again',
-          statusColor: r.schedStatus==='Confirmed' ? '#9878C0'
-                     : r.schedStatus==='Planned' ? '#E0B870' : '#6C665C',
-          confirmLabel: r.schedStatus==='Confirmed' ? 'Unconfirm' : 'Confirm Schedule',
-          confirmIcon: r.schedStatus==='Confirmed' ? 'ti-calendar-off' : 'ti-calendar-check',
-          confirmFg: r.schedStatus==='Confirmed' ? '#E8D5A8' : '#fff',
-          confirmBg: r.schedStatus==='Confirmed' ? 'transparent' : '#7FA644',
-          confirmBorder: r.schedStatus==='Confirmed' ? '#6B5A2E' : '#7FA644',
-          onToggleConfirm:()=>this.toggleRunConfirm(r.id, src.id, r.schedStatus!=='Confirmed'),
+          statusColor: r.schedStatus==='Confirmed' ? '#9878C0' : '#6C665C',
+          notPublished: r.schedStatus!=='Confirmed',
           onSave:()=>this.saveRunRow(r.id, src.id), saving, saveLabel: saving?'Saving…':'Save Changes',
           onRemove:()=>this.removeRun(r.id, src.id),
           err:(st.runRowErr&&st.runRowErr[r.id])||'', msg:(st.runRowMsg&&st.runRowMsg[r.id])||'',
