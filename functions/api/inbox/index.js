@@ -11,7 +11,8 @@
  * needs no child-relationship name. Same fixed-query, no-client-SOQL shape as
  * /api/orders — the browser can't run arbitrary queries.
  */
-import { runQuery, jsonError } from "../_sf.js";
+import { jsonError } from "../_sf.js";
+import { runQueryOptionalField } from "../_placements.js";
 import { fetchMockupsByOpportunity } from "../_mockup.js";
 const FIELDS = [
   "Id",
@@ -38,17 +39,29 @@ const FIELDS = [
   // already selects.
   "(SELECT Product2.Name, Color__c, Size__c, Quantity FROM OrderItems)",
 ];
+/* Ticked by the CAM on the Opportunity during Close and Create Order and copied
+   onto every Order the flow creates. It is the ONLY signal the shop has that a
+   job needs more than one production method -- the dashboard cannot infer it
+   from anything else, because a second method does not exist until someone
+   creates it. Pre-Production Management gates its "Create Another Method"
+   button on this.
+
+   Queried through runQueryOptionalField because it will not exist in every org
+   at once (dev2 first, then staging, then production). A field that is missing
+   or FLS-hidden is a PARSE error returning zero rows, which would empty the
+   Management inbox entirely rather than just losing this one flag. */
+const MULTI_METHOD_FIELD = "Multiple_Production_Methods__c";
 export async function onRequestGet({ env }) {
   try {
-    const soql =
-      `SELECT ${FIELDS.join(", ")} FROM Order ` +
+    const buildSoql = (withMulti) =>
+      `SELECT ${FIELDS.concat(withMulti ? [MULTI_METHOD_FIELD] : []).join(", ")} FROM Order ` +
       `WHERE Status = 'Pre-Production' ` +
       `AND Id NOT IN (SELECT Order__c FROM Production_Method__c) ` +
       `ORDER BY Print_Date__c ASC`;
     // runQuery follows Salesforce's nextRecordsUrl pagination so the inbox
     // doesn't silently truncate if it ever grows past one query batch. See
     // _sf.js.
-    const { ok, status, records } = await runQuery(env, soql);
+    const { ok, status, records } = await runQueryOptionalField(env, buildSoql, MULTI_METHOD_FIELD);
     if (!ok) {
       console.error("Inbox query failed", status);
       return jsonError("query_failed", status);
