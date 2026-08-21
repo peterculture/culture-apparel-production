@@ -200,7 +200,13 @@
      Throws (via jsend) on a non-2xx response -- login.html distinguishes
      err.status 401 ("wrong PIN") from 500 ("WORKER_PINS not configured")
      to show the right message. */
-  function workerLogin(pin){ return jsend('/api/worker-login', 'POST', { pin: pin }); }
+  // Overlay on: one of the three moments that earn it. Covers login.html AND
+  // the in-page PIN gate on every board, since both route through here.
+  function workerLogin(pin){
+    return foregroundLoad(function () {
+      return jsend('/api/worker-login', 'POST', { pin: pin });
+    });
+  }
 
   /* ── Order_Substatus__c: the "In Production" label is stored as "Production" ── */
   var SUBSTATUS_VALUE = { 'Pre-Production':'Pre-Production', 'Ready for Print':'Ready for Print', 'In Production':'Production', 'Post-Production':'Post-Production', 'Completed':'Completed' };
@@ -389,20 +395,41 @@
    *     is never part of the React tree, never re-rendered, and can't be
    *     clobbered when a board re-renders mid-request.
    *
-   * THREE RULES THAT KEEP IT FROM BEING ANNOYING -- do not remove casually:
+   * OPT-IN, NOT OPT-OUT (changed 2026-08-20, second pass)
+   * ------------------------------------------------------
+   * The first cut showed the overlay for EVERY call that wasn't explicitly
+   * marked background. In the shop that read as a full-screen flash after
+   * nearly every tap -- saving a run, opening a drawer, editing a time. The
+   * feedback stopped meaning anything.
    *
-   * 1. DELAY. Nothing is shown for the first LOADER_DELAY_MS. Most calls
-   *    against a warm Salesforce token return well inside that, and a
-   *    full-screen panel that flashes for 90ms reads as a glitch, not as
-   *    feedback.
+   * It is now the other way round: **a request is silent unless something
+   * deliberately asks for the overlay.** Exactly three things do, because
+   * these are the moments where the whole screen is genuinely about to
+   * change and a blank pause needs explaining:
    *
-   * 2. BACKGROUND WORK IS SILENT. Every board auto-refreshes on a 15-20s
-   *    timer, and the Zenkraft label poll runs every 6s for up to 4 minutes.
-   *    Those must never dim the screen -- a manager typing into the drawer
-   *    would be interrupted four times a minute. Pages wrap those callbacks
-   *    in CAApi.backgroundLoad(); anything started inside is not counted.
+   *   1. Switching dashboards  -- the document-level nav listener below
+   *   2. Logging in            -- workerLogin()
+   *   3. Switching environments -- setSfEnv()
    *
-   * 3. IT ALWAYS LETS GO. jget/jsend/jdel pass no AbortSignal and no timeout
+   * Plus each board's FIRST load() on mount, which is the far half of (1):
+   * the destination board fetching what it needs. Boards opt in with their
+   * own fg() helper.
+   *
+   * Everything else -- saves, drawer opens, per-row edits, searches, polls,
+   * auto-refresh -- stays silent and always will. If you find yourself
+   * wanting the overlay for one of those, the honest fix is almost always
+   * an inline spinner on the control that was clicked, not a screen-wide
+   * curtain.
+   *
+   * TWO RULES THAT STILL MATTER -- do not remove casually:
+   *
+   * 1. DELAY, for request-driven shows. Nothing paints for the first
+   *    LOADER_DELAY_MS. Most calls against a warm Salesforce token return
+   *    well inside that, and a full-screen panel that flashes for 90ms reads
+   *    as a glitch, not as feedback. Navigation skips the delay -- there the
+   *    page really is going away and immediate feedback is the point.
+   *
+   * 2. IT ALWAYS LETS GO. jget/jsend/jdel pass no AbortSignal and no timeout
    *    (see the note on connection state at the top of this file), so a hung
    *    request never settles and would otherwise leave the shop staring at a
    *    permanently blocked screen. LOADER_MAX_MS force-hides it. The request
@@ -410,9 +437,9 @@
    *    usual; this only stops the overlay from outliving its usefulness.
    */
   var LOADER_DELAY_MS = 320;    // rule 1 -- quick calls never paint
-  var LOADER_MAX_MS = 15000;    // rule 3 -- hard ceiling, never block forever
+  var LOADER_MAX_MS = 15000;    // rule 2 -- hard ceiling, never block forever
   var _fgInFlight = 0;          // foreground requests currently outstanding
-  var _bgDepth = 0;             // >0 while a background poll is being started
+  var _fgDepth = 0;             // >0 while a LOADER-WORTHY call is being started
   var _showTimer = null, _maxTimer = null, _loaderEl = null, _loaderShown = false;
 
   // The mark is the header logo: seven horizontal bars whose widths taper to
@@ -509,9 +536,13 @@
   }
 
   function loaderBegin(){
-    // A request is background if it was STARTED inside backgroundLoad(). The
-    // check happens here, at call time, not when the promise settles.
-    var silent = _bgDepth > 0;
+    // Silent unless this call was STARTED inside foregroundLoad(). The check
+    // happens here, at call time, not when the promise settles -- so a call
+    // fired synchronously inside fn() counts, and anything it kicks off later
+    // (after an await) does not. That is deliberate: it keeps the overlay tied
+    // to the one request the user is actually waiting on, not to whatever
+    // follow-up work the board does once it has the data.
+    var silent = _fgDepth === 0;
     if (silent) return true;
     _fgInFlight++;
     if (_fgInFlight === 1 && !_showTimer && !_loaderShown) {
@@ -537,15 +568,29 @@
   }
 
   /**
-   * Run fn() with any requests it starts marked as background -- no overlay.
-   * For auto-refresh intervals and pollers. fn is called synchronously, and
-   * only requests kicked off before its first await are covered; that is
-   * exactly the shape of every load() in this app (the fetch is started, then
-   * awaited), so in practice it covers the whole refresh.
+   * Run fn() and DO show the overlay for any request it starts.
+   *
+   * Use only for the three moments listed in the header comment plus a board's
+   * first load(). fn is called synchronously, and only requests kicked off
+   * before its first await are covered -- which is exactly the shape of every
+   * load() in this app (the fetch is started, then awaited).
+   */
+  function foregroundLoad(fn){
+    _fgDepth++;
+    try { return fn(); } finally { _fgDepth--; }
+  }
+
+  /**
+   * Legacy marker, kept deliberately.
+   *
+   * Silent is now the DEFAULT, so this is a plain passthrough and calling it
+   * changes nothing. It stays because all six boards wrap their auto-refresh
+   * and poll callbacks in it, and because those call sites still say something
+   * true and useful -- "this is background work" -- that would be lost if they
+   * were stripped out. If the policy ever flips back, they are already marked.
    */
   function backgroundLoad(fn){
-    _bgDepth++;
-    try { return fn(); } finally { _bgDepth--; }
+    return fn();
   }
 
   /**
@@ -565,6 +610,72 @@
 
   /** Escape hatch: force the overlay down (e.g. before window.print()). */
   function hideLoader(){ _fgInFlight = 0; clearLoaderTimers(); paintLoader(false); }
+
+  /**
+   * Show the overlay immediately, with no request behind it and no delay.
+   *
+   * For navigation: the browser is about to tear this document down and the
+   * gap before the next one paints is dead air. Skipping LOADER_DELAY_MS is
+   * right here -- unlike a request that might come back in 90ms, a page load
+   * is never that fast, so there is no flash to avoid.
+   *
+   * Still bounded by LOADER_MAX_MS, so a navigation that never happens (the
+   * user hits Escape, the target 404s and the browser stays put) can't leave
+   * the curtain down forever.
+   */
+  function showLoaderNow(){
+    if (_loaderShown || _showTimer) return;
+    paintLoader(true);
+    clearLoaderTimers();
+    _maxTimer = setTimeout(function () {
+      _maxTimer = null;
+      paintLoader(false);
+    }, LOADER_MAX_MS);
+  }
+
+  /**
+   * "Switching dashboards" -- one document-level listener instead of a handler
+   * on every nav link.
+   *
+   * The sidebar in every board renders plain <a href> links (see
+   * buildNavBoards), and so do the calendar's per-prep-item station links, the
+   * Order Sheet links and index's "add another method" deep link. All of them
+   * are a dashboard switch from the worker's point of view, so catching the
+   * click at the document level covers every one without touching a template.
+   *
+   * Deliberately NOT shown for: modified clicks (cmd/ctrl/shift -- those open
+   * a new tab and this one stays put), target=_blank, downloads, non-http
+   * schemes, and same-page anchors or querystring-only changes, which is what
+   * writeParams() does when a drawer opens.
+   */
+  function sameDocument(a){
+    return a.pathname === location.pathname && a.host === location.host;
+  }
+  function installNavLoader(){
+    if (typeof document === 'undefined' || document.__caNavLoader) return;
+    document.__caNavLoader = true;
+    document.addEventListener('click', function (e) {
+      try {
+        if (e.defaultPrevented || e.button !== 0) return;
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+        if (!a) return;
+        if (a.target && a.target !== '_self') return;
+        if (a.hasAttribute('download')) return;
+        var href = a.getAttribute('href') || '';
+        if (!href || href[0] === '#') return;
+        if (/^(mailto:|tel:|javascript:)/i.test(href)) return;
+        if (a.protocol !== 'http:' && a.protocol !== 'https:') return;
+        if (a.host !== location.host) return;   // leaving the app entirely
+        if (sameDocument(a)) return;            // ?tab=/?card= only -- no page change
+        showLoaderNow();
+      } catch (_) { /* never let the overlay break a navigation */ }
+    }, true);
+    // If the page is restored from bfcache (back button), the overlay would
+    // still be in the DOM from the click that left. Clear it on show.
+    window.addEventListener('pageshow', function () { hideLoader(); });
+  }
+  try { installNavLoader(); } catch (_) {}
 
   /* ── low-level fetch ── */
   function jget(url){
@@ -794,7 +905,14 @@
   /* ── active Salesforce environment (dev2 / staging / production) ──
      Global, shared across every user -- see functions/api/admin/sf-env.js */
   function getSfEnv(){ return jget('/api/admin/sf-env'); }
-  function setSfEnv(envKey, pin){ return jsend('/api/admin/sf-env', 'POST', { env: envKey, pin: pin }); }
+  // Overlay on. This one repoints EVERY user's next request at a different
+  // Salesforce org, so the pause deserves the most emphatic feedback the app
+  // has. getSfEnv() above stays silent -- it is just the header chip.
+  function setSfEnv(envKey, pin){
+    return foregroundLoad(function () {
+      return jsend('/api/admin/sf-env', 'POST', { env: envKey, pin: pin });
+    });
+  }
 
   /* ── station worker board ── */
   function getStationItems(station){ return jget('/api/station-items?station=' + encodeURIComponent(station)).then(function (d) { return d.records || []; }); }
@@ -1047,7 +1165,8 @@
     getStationItems: getStationItems, updateItemStatus: updateItemStatus, updateOrderReceiving: updateOrderReceiving,
     getInventory: getInventory, postInventory: postInventory, stationLogin: stationLogin,
     SIZE_ORDER: SIZE_ORDER, text: text, initials: initials, colorForName: colorForName, methodOf: methodOf, dueInfo: dueInfo, parseSfDate: parseSfDate, pivotItems: pivotItems, runQtyHint: runQtyHint,
-    backgroundLoad: backgroundLoad, trackRequest: trackRequest, hideLoader: hideLoader,
+    backgroundLoad: backgroundLoad, foregroundLoad: foregroundLoad,
+    trackRequest: trackRequest, hideLoader: hideLoader, showLoaderNow: showLoaderNow,
     STATUS_HELP: STATUS_HELP, statusHelp: statusHelp,
     locationAvailable: locationAvailable, locationsForMethod: locationsForMethod,
     prepBufferStats: prepBufferStats, PREP_STATUS_META: PREP_STATUS_META,
