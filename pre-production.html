@@ -663,6 +663,33 @@
             <div style="font:400 13px/1.55 'Archivo';color:#E0B870;white-space:pre-wrap;background:#241a09;border:1px solid #5E4214;border-radius:9px;padding:12px 14px;min-height:24px">{{createdPanel.specialNotesDisplay}}</div>
           </div>
 
+          <div>
+            <div style="display:flex;align-items:center;gap:9px;margin-bottom:11px;flex-wrap:wrap">
+              <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378">Production Runs</div>
+              <sc-if value="{{hasCreatedRuns}}" hint-placeholder-val="{{ false }}"><span style="font:400 11px/1 'Archivo';color:#6C665C">Confirm each one to put it on the shop calendar.</span></sc-if>
+            </div>
+            <sc-if value="{{createdRunsEmpty}}" hint-placeholder-val="{{ true }}">
+              <div style="border:1px dashed #2a2a2f;border-radius:10px;padding:18px 14px;text-align:center;font:400 12px/1.5 'Archivo';color:#4d483f">No runs on this method yet. Create one below — it will appear here so you can confirm it without leaving.</div>
+            </sc-if>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <sc-for list="{{createdPanel.runsView}}" as="run" hint-placeholder-count="0">
+                <div style="background:#121215;border:1px solid #232327;border-radius:10px;padding:13px 14px;display:flex;flex-direction:column;gap:9px">
+                  <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+                    <span style="font:600 11px/1 'Oswald';letter-spacing:.06em;color:#5E9B9A">{{run.name}}</span>
+                    <span style="font:400 11px/1 'Archivo';color:#9C978C">{{run.press}}</span>
+                    <sc-if value="{{run.hasLocation}}" hint-placeholder-val="{{ false }}"><span style="font:600 9px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#C9C6BF;background:#1e1e22;border-radius:5px;padding:4px 7px">{{run.locationLabel}}</span></sc-if>
+                    <sc-if value="{{run.hasQty}}" hint-placeholder-val="{{ false }}"><span style="margin-left:auto;font:600 11px/1 'Oswald';color:#ECEAE4;background:#1e1e22;border-radius:5px;padding:4px 8px">{{run.qtyLabel}}</span></sc-if>
+                  </div>
+                  <div style="font:400 11px/1.3 'Archivo';color:#8a8378">{{run.when}}</div>
+                  <div style="font:400 11px/1.3 'Archivo';color:{{run.statusColor}}">{{run.statusLabel}}</div>
+                  <button onClick="{{ run.onToggleConfirm }}" disabled="{{run.saving}}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;font:700 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:{{run.confirmFg}};background:{{run.confirmBg}};border:1px solid {{run.confirmBorder}};border-radius:8px;padding:10px;cursor:pointer" style-hover="filter:brightness(1.1)"><i class="ti {{run.confirmIcon}}"></i>{{run.confirmLabel}}</button>
+                  <div style="font:400 10px/1.4 'Archivo';color:#4d483f">{{run.confirmHint}}</div>
+                  <sc-if value="{{run.hasErr}}" hint-placeholder-val="{{ false }}"><div style="font:600 10px/1.3 'Oswald';letter-spacing:.03em;text-transform:uppercase;color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:8px;padding:9px 11px">{{run.err}}</div></sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
           <button onClick="{{ onOpenRunModal }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:9px;font:700 13px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#fff;background:#C6372B;border:none;border-radius:11px;padding:16px;cursor:pointer" style-hover="filter:brightness(1.1)"><i class="ti ti-tools"></i>Create Production Run</button>
         </div>
       </sc-if>
@@ -1525,6 +1552,11 @@ class Component extends DCLogic {
         createdPanel:{ pmId, orderId:oid, methodLabel, placements:(f.placements||[]).slice() },
         runModalOpen:false, runForm:this.defaultRunForm(), runPressResults:[], runErr:'', runMsg:'',
       }));
+      // Prime the panel's Production Runs list. A brand-new method has none, so
+      // this normally resolves empty and the panel shows its "no runs yet"
+      // state -- but it makes the section authoritative rather than only
+      // correct after the first create.
+      this.loadRunsForCard(pmId);
       // Best-effort refresh of the underlying board data in the background
       // (new method now exists; if a run gets sent to the shop floor before
       // the manager returns here, that should be reflected too).
@@ -1778,7 +1810,20 @@ class Component extends DCLogic {
       // up without requiring a close/reopen.
       this.loadRunsForCard(cp.pmId);
       if(mode==='shopfloor'){
-        this.closeMgr();
+        // CHANGED 2026-08-20: this used to closeMgr() straight back to the
+        // board. That made confirming from Management impossible -- runs are
+        // created as `Planned`, so leaving immediately meant the manager had
+        // built press time nobody else could see, then had to hunt down the
+        // same card elsewhere to publish it.
+        //
+        // Now it closes the MODAL only and lands on the "Method Created"
+        // panel, where the run is listed with its Confirm button. Leaving is
+        // still one click away -- "Back to Board" in the Management header is
+        // always there -- but it is a decision now, not something that happens
+        // to you mid-task.
+        this.setState({runSubmitting:false, runModalOpen:false, runPressResults:[], runErr:'',
+          runMsg:'Run created. Confirm it below to put it on the shop calendar.'});
+        this.loadProposals(cp.orderId);
         this.load();
       } else {
         // proposalUsedId clears with the form. A second run under the same
@@ -1804,6 +1849,10 @@ class Component extends DCLogic {
       proposals:[], proposalUsedId:null,
     });
     this.loadProposals(orderId);
+    // The drawer that opened this modal has usually loaded these already, but
+    // this path also fires from a proposal's "Use this", so don't assume --
+    // the created panel behind the modal renders from exactly this state.
+    this.loadRunsForCard(pmId);
   }
   mgrVals(){
     const st=this.state, api=this._api||window.CAApi;
@@ -1902,11 +1951,56 @@ class Component extends DCLogic {
       // the inverse of sizesEmpty rather than an independent check, so the
       // "No size breakdown on file" message and the Total can never both show.
       hasSizes: !!(cpRef && cpRef.sizeCells && cpRef.sizeCells.length),
-    }) : { customer:'', num:'', qty:'', methodLabel:'', sizeCells:[], sizesEmpty:true, hasSizes:false, printSpecsDisplay:'', specialNotesDisplay:'' };
+      /* Runs created under THIS method, with the Confirm action (added
+         2026-08-20). Before this, Management could create runs but not publish
+         them -- every run starts life as `Planned`, so the manager had to build
+         the plan here, leave, find the same card on the board or the calendar,
+         and confirm it there. Management could only ever produce work nobody
+         else could see.
+
+         Reuses toggleRunConfirm() and runsByMethod{} exactly as the drawer
+         does, so there is one confirm implementation rather than a second one
+         that can drift. submitRun() already calls loadRunsForCard(pmId) after
+         a successful create, so this list fills itself in. */
+      runsView: (st.runsByMethod[cpRaw.pmId] || []).map(r=>{
+        const saving = !!(st.runRowSaving && st.runRowSaving[r.id]);
+        const pub = r.schedStatus === 'Confirmed';
+        return {
+          id:r.id, name:r.name,
+          press: r.pressName || 'No press set',
+          when: r.scheduledStart
+            ? new Date(r.scheduledStart).toLocaleString([], {weekday:'short', month:'numeric', day:'numeric', hour:'numeric', minute:'2-digit'})
+            : 'No schedule set',
+          qtyLabel: r.qty!=null ? (r.qty+' pcs') : '', hasQty: r.qty!=null,
+          locationLabel: r.printLocation || '', hasLocation: !!r.printLocation,
+          /* Same three-tier vocabulary as the drawer and the calendar. The
+             label says what is TRUE of the run, the button says what will
+             HAPPEN -- naming a picklist value here would mean nothing to
+             whoever is standing at the press. */
+          statusLabel: pub ? 'On the shop calendar'
+                     : r.schedStatus === 'Planned' ? 'Planned — not on the shop calendar yet'
+                     : 'Suggested by the auto-scheduler — it may move again',
+          statusColor: pub ? '#9878C0' : r.schedStatus === 'Planned' ? '#E0B870' : '#6C665C',
+          confirmLabel: saving ? 'Saving…' : (pub ? 'Unconfirm' : 'Confirm — add to calendar'),
+          confirmIcon: pub ? 'ti-calendar-off' : 'ti-calendar-check',
+          confirmFg: pub ? '#E8D5A8' : '#fff',
+          confirmBg: pub ? 'transparent' : '#7FA644',
+          confirmBorder: pub ? '#6B5A2E' : '#7FA644',
+          confirmHint: pub
+            ? 'Takes it off the shop calendar. The scheduled time stays as it is.'
+            : 'Puts this run on the shop calendar — and on Google, once this reaches production.',
+          saving,
+          onToggleConfirm:()=>this.toggleRunConfirm(r.id, cpRaw.pmId, !pub),
+          err:(st.runRowErr&&st.runRowErr[r.id])||'', hasErr:!!(st.runRowErr&&st.runRowErr[r.id]),
+        };
+      }),
+    }) : { customer:'', num:'', qty:'', methodLabel:'', sizeCells:[], sizesEmpty:true, hasSizes:false, printSpecsDisplay:'', specialNotesDisplay:'', runsView:[] };
     const rf = st.runForm || this.defaultRunForm();
     const runPressResultsView = (st.runPressResults||[]).map(p=>({ id:p.Id, name:p.Name, onPick:()=>this.pickRunPress(p.Id,p.Name) }));
 
     return {
+      createdRunsEmpty: !!cpRaw && !(st.runsByMethod[cpRaw.pmId] || []).length,
+      hasCreatedRuns: !!cpRaw && !!(st.runsByMethod[cpRaw.pmId] || []).length,
       mgrView, mgrShowInbox: mgrView && !hasOrder && !cpRaw, mgrShowForm: mgrView && hasOrder && !cpRaw, mgrShowCreated: mgrView && !!cpRaw,
       inbox, inboxEmpty:(st.inbox||[]).length===0 && st.inboxLoaded,
       // Distinct from inboxEmpty (genuinely nothing waiting) -- this is "there
