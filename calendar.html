@@ -778,7 +778,7 @@ class Component extends DCLogic {
   componentDidMount(){
     const api = this._api;
     this.setState({ nameOk: !!(api && api.anyWorkerName && api.anyWorkerName()) });
-    this.load();
+    this.fg(()=>this.load());
     this.bg(()=>this.loadEnv());
     this._t  = setInterval(()=>this.setState({now:new Date()}), 1000);
     this._ar = setInterval(()=>{
@@ -791,6 +791,11 @@ class Component extends DCLogic {
   // See ca-api.js's overlay notes. The first load() above stays unwrapped --
   // that is the one the user is actually waiting on.
   bg(fn){ const a=this._api||window.CAApi; return (a&&a.backgroundLoad) ? a.backgroundLoad(fn) : fn(); }
+  // fg() is the opposite of bg(): it DOES show the centre-screen overlay.
+  // Reserved for a board's first load -- the far half of "switching
+  // dashboards". Every later refresh, save and drawer-open stays silent.
+  // See the header comment in ca-api.js.
+  fg(fn){ const a=this._api||window.CAApi; return (a&&a.foregroundLoad) ? a.foregroundLoad(fn) : fn(); }
   componentWillUnmount(){ clearInterval(this._t); clearInterval(this._ar); }
 
   async load(){
