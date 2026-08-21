@@ -392,7 +392,12 @@ class Component extends DCLogic {
   // 15 seconds is worse than no feedback at all -- the worker's own taps still
   // get the overlay, because those go through the unwrapped path.
   bg(fn){ const a=window.CAApi; return (a&&a.backgroundLoad) ? a.backgroundLoad(fn) : fn(); }
-  componentDidMount(){ this._t=setInterval(()=>this.setState({now:new Date()}),1000); this.loadStation(this.state.station); this.bg(()=>this.loadSfEnv()); this._ar=setInterval(()=>{ if(this.state.connection==='live' && !this.state.modalId) this.bg(()=>this.loadStation(this.state.station)); },15000); }
+  // fg() is the opposite of bg(): it DOES show the centre-screen overlay.
+  // Reserved for a board's first load -- the far half of "switching
+  // dashboards". Every later refresh, save and drawer-open stays silent.
+  // See the header comment in ca-api.js.
+  fg(fn){ const a=window.CAApi; return (a&&a.foregroundLoad) ? a.foregroundLoad(fn) : fn(); }
+  componentDidMount(){ this._t=setInterval(()=>this.setState({now:new Date()}),1000); this.fg(()=>this.loadStation(this.state.station)); this.bg(()=>this.loadSfEnv()); this._ar=setInterval(()=>{ if(this.state.connection==='live' && !this.state.modalId) this.bg(()=>this.loadStation(this.state.station)); },15000); }
   componentWillUnmount(){ clearInterval(this._t); clearInterval(this._ar); }
   async loadStation(station){
     try {
