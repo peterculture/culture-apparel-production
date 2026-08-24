@@ -120,7 +120,7 @@
         <sc-for list="{{col.items}}" as="o" hint-placeholder-count="2">
           <div draggable="true" onDragStart="{{ o.onDragStart }}" onDragEnd="{{ o.onDragEnd }}" onClick="{{ o.onOpen }}" style="display:flex;background:{{o.cardBg}};border:1px solid {{o.cardBorder}};border-radius:11px;overflow:hidden;cursor:pointer;opacity:{{o.cardOpacity}};transition:border-color .12s,transform .12s" style-hover="border-color:#3a3a40;transform:translateY(-1px)">
             <div style="width:6px;background:{{o.urgColor}};flex-shrink:0"></div>
-            <sc-if value="{{o.hasThumb}}" hint-placeholder-val="{{ false }}"><img src="{{o.mockupUrl}}" alt="" onError="{{ o.onThumbErr }}" style="width:64px;height:auto;align-self:stretch;object-fit:cover;flex-shrink:0;background:#121215;border-right:1px solid #202024"></sc-if>
+            <sc-if value="{{o.hasThumb}}" hint-placeholder-val="{{ false }}"><img src="{{o.mockupUrl}}" alt="" onError="{{ o.onThumbErr }}" onClick="{{ o.onMockupOpen }}" style-hover="filter:brightness(1.12)" style="width:64px;height:auto;align-self:stretch;object-fit:cover;flex-shrink:0;background:#121215;border-right:1px solid #202024;cursor:zoom-in"></sc-if>
             <sc-if value="{{o.noThumb}}" hint-placeholder-val="{{ true }}"><div style="width:64px;flex-shrink:0;align-self:stretch;background:#1c1c20;border-right:1px solid #2a2a2f;display:flex;align-items:center;justify-content:center"><i class="ti ti-photo-off" style="color:#8a8378;font-size:24px"></i></div></sc-if>
             <div style="padding:13px 14px;flex:1;min-width:0;display:flex;flex-direction:column;gap:10px">
               <div style="display:flex;align-items:flex-start;gap:8px">
@@ -257,7 +257,6 @@
                   <span style="width:8px;height:8px;border-radius:50%;background:{{pm.color}};flex-shrink:0"></span>
                   <span style="font:500 12px/1 'Archivo';color:#ECEAE4">{{pm.label}}</span>
                   <span style="font:600 8px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#9C978C;background:#1a1a1e;border-radius:6px;padding:4px 7px">{{pm.status}}</span>
-                  <span style="margin-left:auto;font:400 11px/1 'Archivo';color:#6C665C;white-space:nowrap">{{pm.vendor}}</span>
                   <button onClick="{{ pm.onEdit }}" title="Edit method" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:transparent;border:1px solid #2a2a2f;color:#8a8378;cursor:pointer;flex-shrink:0"><i class="ti ti-pencil" style="font-size:12px"></i></button>
                   <button onClick="{{ pm.onRemove }}" title="Remove method" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:transparent;border:1px solid #2a2a2f;color:#8a8378;cursor:pointer;flex-shrink:0"><i class="ti ti-trash" style="font-size:12px"></i></button>
                 </div>
@@ -276,16 +275,6 @@
                       <div style="display:flex;gap:6px;flex-wrap:wrap">
                         <sc-for list="{{pm.mf.placementOptions}}" as="p" hint-placeholder-count="4">
                           <button onClick="{{ p.onPick }}" style="font:600 10px/1 'Oswald';letter-spacing:.03em;color:{{p.color}};background:{{p.bg}};border:1px solid {{p.border}};border-radius:7px;padding:7px 9px;cursor:pointer">{{p.label}}</button>
-                        </sc-for>
-                      </div>
-                    </div>
-                    <div>
-                      <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Vendor</div>
-                      <input value="{{pm.mf.vendorQ}}" onInput="{{ pm.mf.onVendorSearch }}" placeholder="Search vendors…" style="width:100%;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:12px;color:#ECEAE4;outline:none">
-                      <sc-if value="{{pm.mf.vendorPicked}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:5px;font:600 10px/1 'Oswald';letter-spacing:.03em;color:#BBD382;margin-top:6px"><i class="ti ti-check"></i>{{pm.mf.vendorName}}</div></sc-if>
-                      <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
-                        <sc-for list="{{pm.mf.vendorResultsView}}" as="v" hint-placeholder-count="0">
-                          <button onClick="{{ v.onPick }}" style="text-align:left;font:500 11px/1.2 'Archivo';color:#ECEAE4;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:8px 10px;cursor:pointer" style-hover="border-color:#C6372B">{{v.name}}</button>
                         </sc-for>
                       </div>
                     </div>
@@ -699,7 +688,7 @@ class Component extends DCLogic {
       // to pre-production.html's Management form to add another. See
       // loadMethodsForOrder()/openMethodEdit()/saveMethodEdit()/removeMethod().
       methodsByOrder:{}, methodsLoadingFor:null,
-      methodEditId:null, methodEditForm:null, methodEditVendorResults:[], methodSaving:false, methodErr:'',
+      methodEditId:null, methodEditForm:null, methodSaving:false, methodErr:'',
       // Inline "New Run" quick-create form in the Production Runs section --
       // this board never had a Create Production Run flow before (unlike
       // pre-production.html's post-creation modal), so add is done in place
@@ -1019,7 +1008,6 @@ class Component extends DCLogic {
   openMethodEdit(r){
     const api=this._api||window.CAApi;
     if(api && !api.confirmManager('Editing a production method')) return;
-    const vendorName=(r.Vendor__r && r.Vendor__r.Name) || '';
     this.setState({
       methodEditId: r.Id,
       // Captured at open time so saveMethodEdit can ask the server "reject
@@ -1030,24 +1018,20 @@ class Component extends DCLogic {
       methodEditForm: {
         type: r.Type__c,
         placements: (r.Placements__c||'').split(';').map(s=>s.trim()).filter(Boolean),
-        vendorId: r.Vendor__c||null, vendorName, vendorQ: vendorName,
         status: r.Status__c||'Pre-Production',
       },
-      methodEditVendorResults:[], methodErr:'',
+      methodErr:'',
     });
   }
-  closeMethodEdit(){ this.setState({methodEditId:null, methodEditForm:null, methodEditLoadedAt:null, methodEditVendorResults:[], methodErr:''}); }
+  closeMethodEdit(){ this.setState({methodEditId:null, methodEditForm:null, methodEditLoadedAt:null, methodErr:''}); }
   setMethodEditField(patch){ this.setState(st=>({methodEditForm:Object.assign({}, st.methodEditForm, patch)})); }
   toggleMethodEditPlacement(x){ this.setState(st=>{ const f=Object.assign({},st.methodEditForm); const cur=f.placements||[]; f.placements = cur.includes(x) ? cur.filter(v=>v!==x) : cur.concat([x]); return {methodEditForm:f}; }); }
-  methodEditVendorSearch(q){ this.setMethodEditField({vendorQ:q, vendorId:null, vendorName:''}); if(!this._api) return; clearTimeout(this._mevt); this._mevt=setTimeout(()=>{ this._api.searchVendors(q).then(r=>this.setState({methodEditVendorResults:r})).catch(()=>{}); },250); }
-  pickMethodEditVendor(id,name){ this.setMethodEditField({vendorId:id, vendorName:name, vendorQ:name}); this.setState({methodEditVendorResults:[]}); }
   async saveMethodEdit(orderId){
     const id=this.state.methodEditId, f=this.state.methodEditForm;
     if(!id || !f || !this._api) return;
     if(!f.placements || !f.placements.length){ this.setState({methodErr:'Pick at least one placement'}); return; }
     this.setState({methodSaving:true, methodErr:''});
     const fields={ Type__c:f.type, Placements__c:f.placements, Status__c:f.status };
-    if(f.vendorId) fields.Vendor__c=f.vendorId;
     // Include orderId alongside Status__c so the backend's Order_Substatus__c
     // rollup fires from THIS form too -- pushMethod()/patchMethodStatus() (the
     // board's Path stepper/CTA/drag-and-drop) already do this; this drawer
@@ -1095,12 +1079,11 @@ class Component extends DCLogic {
     const api=this._api||window.CAApi;
     const meta=(api && api.METHOD_META && api.METHOD_META[r.Type__c]) || { color:'#8a8378' };
     const placements=(r.Placements__c||'').split(';').map(s=>s.trim()).filter(Boolean);
-    const vendorName=(r.Vendor__r && r.Vendor__r.Name) || '';
     const editing = this.state.methodEditId===r.Id;
     const view = {
       id:r.Id, type:r.Type__c, placements, status:r.Status__c,
       label: r.Type__c + (placements.length ? (' – '+placements.join(' + ')) : ''),
-      color: meta.color, vendor: vendorName || 'No vendor set',
+      color: meta.color,
       editing, onEdit:()=> editing ? this.closeMethodEdit() : this.openMethodEdit(r),
       onRemove:()=> this.removeMethod(r, orderId),
     };
@@ -1117,9 +1100,6 @@ class Component extends DCLogic {
         // discovered after. Copy lives in ca-api.js.
         statusHelp: (api&&api.statusHelp) ? api.statusHelp(f.status) : '',
         status:f.status, onStatus:(e)=>this.setMethodEditField({status:e.target.value}),
-        vendorQ:f.vendorQ||'', onVendorSearch:(e)=>this.methodEditVendorSearch(e.target.value),
-        vendorPicked:!!f.vendorId, vendorName:f.vendorName||'',
-        vendorResultsView:(this.state.methodEditVendorResults||[]).map(v=>({ id:v.Id, name:v.Name, onPick:()=>this.pickMethodEditVendor(v.Id,v.Name) })),
         hasErr:!!this.state.methodErr, err:this.state.methodErr||'',
         onCancel:()=>this.closeMethodEdit(), onSave:()=>this.saveMethodEdit(orderId),
         saveLabel: this.state.methodSaving?'Saving…':'Save Changes',
@@ -1648,6 +1628,11 @@ class Component extends DCLogic {
         // exact cause, a broken fallback handler must never leave a card
         // stuck showing a dead <img> forever, so this can't throw past here.
         onThumbErr: ()=>{ try{ const cid=o.id; this.setState(s2=>({thumbErr:Object.assign({},s2.thumbErr,{[cid]:true})})); }catch(err){ console.error('onThumbErr failed for', o&&o.id, err); } },
+        /* Click the mockup to inspect it full size (2026-08-24). The card is
+           also a drag source, so mockupClick's stopPropagation matters twice
+           here: it keeps the click off onOpen, and the browser still treats a
+           press-and-move on the image as the card's drag. */
+        onMockupOpen: (window.CAApi&&window.CAApi.mockupClick)?window.CAApi.mockupClick(o.mockupUrl,(o.customer||'')+' - '+(o.num||'')):null,
         cardOpacity: st.dragId===o.id ? 0.35 : 1,
         onOpen: ()=>this.openCard(o.id),
         onDragStart: (e)=>{ if(e&&e.dataTransfer){ e.dataTransfer.effectAllowed='move'; try{e.dataTransfer.setData('text/plain',o.id);}catch(_){}} this.setState({dragId:o.id}); },
@@ -1814,7 +1799,7 @@ class Component extends DCLogic {
         runCreateOpen:!!rc, runCreate, onNewRun:()=> st.runCreateMethodId===src.id ? this.closeRunCreate() : this.openRunCreate(src.id, src.printDate, src.printEndDateTime),
         newRunLabel: rc?'Cancel':'New Run', newRunIcon: rc?'ti-x':'ti-plus',
         assignees, timers,
-        hasMockup:!!d.mockupUrl, noMockup:!d.mockupUrl, mockupNode: d.mockupUrl?React.createElement('img',{src:d.mockupUrl,alt:'Production mockup',style:{width:96,height:96,flexShrink:0,borderRadius:11,border:'1px solid #232327',objectFit:'cover',background:'#121215'}}):null, onZk:()=>this.openZk(src.orderId,src.num), zkErrMsg:(st.zkErr&&st.zkErr[src.orderId])||'', hasZkErr:!!(st.zkErr&&st.zkErr[src.orderId]),
+        hasMockup:!!d.mockupUrl, noMockup:!d.mockupUrl, mockupNode: d.mockupUrl?React.createElement('img',{src:d.mockupUrl,alt:'Production mockup',onClick:(window.CAApi&&window.CAApi.mockupClick)?window.CAApi.mockupClick(d.mockupUrl,(d.customer||'')+' - '+(d.num||'')):null, title:'Click to inspect', style:{cursor:'zoom-in',width:96,height:96,flexShrink:0,borderRadius:11,border:'1px solid #232327',objectFit:'cover',background:'#121215'}}):null, onZk:()=>this.openZk(src.orderId,src.num), zkErrMsg:(st.zkErr&&st.zkErr[src.orderId])||'', hasZkErr:!!(st.zkErr&&st.zkErr[src.orderId]),
         specs:d.printSpecs||'', onSpecs:(e)=>this.setSpecs(src.orderId,e.target.value), special:d.specialNotes||'', onSpecial:(e)=>this.setSpecial(src.orderId,e.target.value), orderSheetUrl:'order-sheet.html?orderId='+encodeURIComponent(src.orderId),
         delivery:d.shipDelivery||'', deliveryOptions:[{value:'',label:'— not set —'},{value:'Shipping',label:'Shipping'},{value:'Local Dropoff',label:'Local Dropoff'},{value:'Pickup',label:'Pickup'},{value:'Order Fulfillment',label:'Order Fulfillment'},{value:'Split Ship',label:'Split Ship'},{value:'Delivery',label:'Delivery'}], onDelivery:(e)=>this.setDelivery(src.orderId,e.target.value),
         labelPrinted:!!d.labelPrinted, onToggleLabel:()=>this.toggleLabel(src.orderId), labelBg:d.labelPrinted?'#18230D':'#16161a', labelBorder:d.labelPrinted?'#3D5418':'#2a2a2f', labelColor:d.labelPrinted?'#BBD382':'#9C978C', labelIcon:d.labelPrinted?'ti-checkbox':'ti-square',
