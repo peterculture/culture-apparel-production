@@ -592,7 +592,7 @@ class Component extends DCLogic {
       // buttons are how a worker actually changes the status now (see
       // setStage() -- advance()/canAdvance's forward-only flow is gone).
       const statusOptions = cfg.stages.map(label=>{ const active=label===src.stage; return { label, bg:active?accent:'#141417', color:active?'#08080A':'#ECEAE4', border:active?accent:'#2a2a2f', onPick:()=>this.setStage(src.id,label) }; });
-      modal=Object.assign({},mk(src),{ isGarment, isStepStation:!isGarment, stages, statusOptions, errorLabel:cfg.errorLabel, onError:()=>this.resetStage(src.id), hasMockup:!!src.mockupUrl, noMockup:!src.mockupUrl, mockupNode: src.mockupUrl?React.createElement('img',{src:src.mockupUrl,alt:'Mockup',style:{width:'100%',height:280,borderRadius:16,border:'1px solid #232327',objectFit:'cover',display:'block'}}):null, hasNotes:!!src.notes, notes:src.notes||'' });
+      modal=Object.assign({},mk(src),{ isGarment, isStepStation:!isGarment, stages, statusOptions, errorLabel:cfg.errorLabel, onError:()=>this.resetStage(src.id), hasMockup:!!src.mockupUrl, noMockup:!src.mockupUrl, mockupNode: src.mockupUrl?React.createElement('img',{src:src.mockupUrl,alt:'Mockup',onClick:(window.CAApi&&window.CAApi.mockupClick)?window.CAApi.mockupClick(src.mockupUrl,(src.customer||'')+' - '+(src.num||'')):null, title:'Click to inspect', style:{cursor:'zoom-in',width:'100%',height:280,borderRadius:16,border:'1px solid #232327',objectFit:'cover',display:'block'}}):null, hasNotes:!!src.notes, notes:src.notes||'' });
     }
 
     const clock=st.now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
