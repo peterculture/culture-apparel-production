@@ -303,6 +303,39 @@
   // splitDT() in index.html and pre-production.html already read and write,
   // so no other code needs to change. label is a 12-hour clock string for
   // display.
+  /**
+   * Round a time to the nearest 15 minutes and return it as an ISO string.
+   *
+   * The 15-minute grid is not cosmetic -- it is the only granularity the rest
+   * of this system deals in. TIME_OPTIONS below is a <select> of exactly the
+   * 96 legal quarter-hours, Salesforce's own time picker for Actual_Start__c /
+   * Scheduled_Start__c is configured the same way, and the calendar packs runs
+   * onto that grid. A timer stamping 10:37 would put a value on the record
+   * that no picker in the app can display or re-select, so the moment a press
+   * operator opened the row to check it, saving would silently move it.
+   *
+   * Rounds to NEAREST, not down: 10:37 -> 10:30, 10:38 -> 10:45. Seconds and
+   * milliseconds are cleared. Accepts a Date, an epoch number, an ISO string,
+   * or nothing (meaning now).
+   */
+  var QUARTER_MS = 15 * 60 * 1000;
+  function roundToQuarterHour(when) {
+    var ms;
+    if (when == null) ms = Date.now();
+    else if (when instanceof Date) ms = when.getTime();
+    else if (typeof when === 'number') ms = when;
+    else ms = Date.parse(when);
+    if (!isFinite(ms)) return null;
+    // Round on the LOCAL clock, not UTC. Some timezones sit at :30 or :45
+    // offsets (India, Nepal, Chatham), where rounding the UTC value lands on
+    // :07/:22/:37 locally -- off the grid every picker in the app uses.
+    var d = new Date(ms);
+    var mins = d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
+    var snapped = Math.round(mins / 15) * 15;
+    d.setHours(0, 0, 0, 0);
+    return new Date(d.getTime() + snapped * 60 * 1000).toISOString();
+  }
+
   var TIME_OPTIONS = (function () {
     var out = [];
     for (var m = 0; m < 24 * 60; m += 15) {
@@ -1347,6 +1380,7 @@
     STATUS_HELP: STATUS_HELP, statusHelp: statusHelp,
     locationAvailable: locationAvailable, locationsForMethod: locationsForMethod,
     openLightbox: openLightbox, closeLightbox: closeLightbox, mockupClick: mockupClick,
+    roundToQuarterHour: roundToQuarterHour,
     prepBufferStats: prepBufferStats, PREP_STATUS_META: PREP_STATUS_META,
     URG_ICON: URG_ICON, urgCardStyle: urgCardStyle
   };
