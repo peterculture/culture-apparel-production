@@ -2,7 +2,7 @@
  * PATCH /api/production-methods/:id
  *
  * Updates ONE Production_Method__c: its Status__c (the Production floor
- * board, index.html), its Type__c / Placements__c / Vendor__c (added
+ * board, index.html), its Type__c / Placements__c (added
  * 2026-07-29 so a card's drawer can edit a method in place instead of only
  * being able to create or delete one), and/or its own copy of the 7
  * pre-production checklist booleans (the pre-production worker board,
@@ -22,7 +22,6 @@
  *     "Type__c": "Screen Print",           // validated against ALLOWED_METHOD_TYPES
  *     "Placements__c": ["Front","Back"],   // validated against ALLOWED_PLACEMENTS,
  *                                           //   written as a ";"-joined string
- *     "Vendor__c": "001...",               // Account Id
  *     "orderId":   "801...",               // NOT written to Salesforce -- only used,
  *                                           //   when Status__c is also present, to roll
  *                                           //   the parent Order's Order_Substatus__c up
@@ -172,12 +171,6 @@ export async function onRequestPatch({ params, request, env }) {
         }
       }
       payload.Placements__c = Array.from(new Set(placements)).join(";");
-    }
-
-    if ("Vendor__c" in body) {
-      const vendorId = body.Vendor__c;
-      if (!vendorId || !SF_ID.test(vendorId)) return jsonError("bad_vendorId", 400);
-      payload.Vendor__c = vendorId;
     }
 
     for (const field of CHECKLIST_FIELDS) {
