@@ -23,7 +23,6 @@
  * Expected JSON body from the browser:
  *   {
  *     "orderId":  "801...",          // existing Order Id (required)
- *     "vendorId": "001...",          // Account Id for Vendor__c (required)
  *     "status":   "Pre-Production",  // Production_Method__c.Status__c (required, manager-set)
  *     "type":     "Screen Print",    // Production_Method__c.Type__c (required)
  *     "placements":["Front","Back"], // Production_Method__c.Placements__c (required,
@@ -63,7 +62,6 @@ const PLAN_REQ_FIELD    = "ProductionRequirement__c"; // master-detail: Plan -> 
 const PM_OBJECT         = "Production_Method__c";
 const PM_PLAN_FIELD     = "ProductionPlan__c";         // master-detail: Method -> Plan (required)
 const PM_ORDER_FIELD    = "Order__c";                  // also required on Method
-const PM_VENDOR_FIELD   = "Vendor__c";                 // lookup -> Account (required)
 const PM_STATUS_FIELD   = "Status__c";                 // picklist (required, manager-set)
 const PM_TYPE_FIELD     = "Type__c";                   // picklist (required)
 // DEPRECATED (2026-07-21): single-select Placement__c has been replaced by
@@ -142,7 +140,7 @@ export async function onRequestGet({ env, request }) {
     // ifUnmodifiedSince param documented in production-methods/[id].js).
     const soql =
       `SELECT Id, Name, ${PM_TYPE_FIELD}, ${PM_STATUS_FIELD}, ${PM_PLACEMENTS_FIELD}, ` +
-      `${PM_VENDOR_FIELD}, Vendor__r.Name, LastModifiedDate ` +
+      `LastModifiedDate ` +
       `FROM ${PM_OBJECT} WHERE ${PM_ORDER_FIELD} = '${orderId}' ORDER BY CreatedDate ASC`;
     // Naturally small (scoped to one order's own methods), but runQuery is
     // used everywhere a query runs now for consistency -- see _sf.js.
@@ -170,7 +168,7 @@ export async function onRequestPost({ env, request }) {
     return jsonError("invalid_json", 400);
   }
 
-  const { orderId, vendorId, status, type, placements, planId, items } = payload || {};
+  const { orderId, status, type, placements, planId, items } = payload || {};
   // Optional worker-name attribution -- who set this order's pre-production
   // up. Stamped onto each created item's Last_Updated_By__c (see
   // pre-production-items/[id].js for the field prerequisite).
@@ -178,7 +176,6 @@ export async function onRequestPost({ env, request }) {
 
   // --- validate before touching Salesforce ---
   if (!orderId || typeof orderId !== "string")   return jsonError("missing_orderId", 400);
-  if (!vendorId || typeof vendorId !== "string") return jsonError("missing_vendorId", 400);
   if (!status || typeof status !== "string")     return jsonError("missing_status", 400);
   if (!ALLOWED_STATUSES.has(status))             return jsonError("bad_status", 400);
   if (!type || typeof type !== "string")         return jsonError("missing_type", 400);
@@ -244,7 +241,6 @@ export async function onRequestPost({ env, request }) {
     body: {
       [PM_PLAN_FIELD]:   planRef,
       [PM_ORDER_FIELD]:  orderId,
-      [PM_VENDOR_FIELD]: vendorId,
       [PM_STATUS_FIELD]: status,
       [PM_TYPE_FIELD]:   type,
       [PM_PLACEMENTS_FIELD]: placementsValue,
