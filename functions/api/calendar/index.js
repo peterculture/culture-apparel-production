@@ -37,7 +37,6 @@ const PM_FIELDS = [
   "Type__c",
   "Status__c",
   "Placements__c",
-  "Vendor__r.Name",
   // The visible prep checklist -- the four inputs need these to compute
   // Pre-Production On Time. See PREREQ_BY_TYPE in _priority.js.
   "Screens_Completed__c",
@@ -234,7 +233,6 @@ export async function onRequestGet({ env, request }) {
         Type__c: pm.Type__c,
         Status__c: pm.Status__c,
         Placements: pm.Placements__c ? pm.Placements__c.split(";").filter(Boolean) : [],
-        Vendor: (pm.Vendor__r && pm.Vendor__r.Name) || null,
         Screens_Completed__c: !!pm.Screens_Completed__c,
         Mix_Inks__c: !!pm.Mix_Inks__c,
         Digitize_File__c: !!pm.Digitize_File__c,
