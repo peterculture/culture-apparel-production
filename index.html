@@ -1496,12 +1496,25 @@ class Component extends DCLogic {
         if(!run.actualStart) this.stampRunActual(cardId, run.id, 'actualStart');
         this.stampRunActual(cardId, run.id, 'actualEnd');
       }
-      /* Post-Production only when the LAST run is done -- moving the method on
-         while run 2 still has to print would take it off this board mid-job.
-         `run` is the one just stamped, so "last" means nothing after it. */
+      /* `run` is the one just stamped, so "remaining" means runs after it. */
       const remaining=this.runsInOrder(cardId).filter(r=>!r.actualEnd && (!run || r.id!==run.id));
-      if(!remaining.length && card && card.status!=='Post-Production' && card.status!=='Completed'){
-        this.advanceStatus(cardId,'Post-Production',card.orderId);
+      if(!remaining.length){
+        /* Last run done -- the method is finished printing. */
+        if(card && card.status!=='Post-Production' && card.status!=='Completed'){
+          this.advanceStatus(cardId,'Post-Production',card.orderId);
+        }
+      } else if(card && card.status!=='Ready for Print'){
+        /* Runs still to print, so the method goes BACK to Ready for Print and
+           the whole cycle repeats: set up the press for the next run, stop
+           set-up to return to In Production, print, stop production. Each run
+           gets its own set-up and its own print, which is what actually
+           happens at the press -- one long "In Production" spanning every run
+           would hide the teardown between them.
+
+           advanceStatus() rewinds as happily as it advances (see its comment),
+           and stageOfMethod maps Ready for Print back to the 'rfp' column, so
+           the card visibly returns there between runs. */
+        this.advanceStatus(cardId,'Ready for Print',card.orderId);
       }
     } else {
       /* Set-up stop means the press is ready and printing starts now, so this
@@ -1881,7 +1894,7 @@ class Component extends DCLogic {
              pressing the button once. */
           stopHint: key==='setup'
             ? 'Stop ends set-up and moves this method to In Production.'
-            : (runsLeft>1 ? 'Stop ends this run and stamps its actual times. The next run re-arms the timer.'
+            : (runsLeft>1 ? 'Stop ends this run, stamps its actual times, and sends the method back to Ready for Print for the next run.'
                           : 'Stop ends production, stamps the actual times, and moves this method to Post-Production.'),
           showOrderTotal:siblings.length>1, orderTotalDisplay:this.fmtDur(orderTotal) };
       });
