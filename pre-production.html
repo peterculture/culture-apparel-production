@@ -111,7 +111,7 @@
         <sc-for list="{{col.items}}" as="o" hint-placeholder-count="2">
           <div onClick="{{ o.onOpen }}" style="display:flex;background:{{o.cardBg}};border:1px solid {{o.cardBorder}};border-radius:11px;overflow:hidden;cursor:pointer;transition:border-color .12s,transform .12s" style-hover="border-color:#3a3a40;transform:translateY(-1px)">
             <div style="width:6px;background:{{o.urgColor}};flex-shrink:0"></div>
-            <sc-if value="{{o.hasThumb}}" hint-placeholder-val="{{ false }}"><img src="{{o.mockupUrl}}" alt="" onError="{{ o.onThumbErr }}" style="width:64px;height:auto;align-self:stretch;object-fit:cover;flex-shrink:0;background:#121215;border-right:1px solid #202024"></sc-if>
+            <sc-if value="{{o.hasThumb}}" hint-placeholder-val="{{ false }}"><img src="{{o.mockupUrl}}" alt="" onError="{{ o.onThumbErr }}" onClick="{{ o.onMockupOpen }}" style-hover="filter:brightness(1.12)" style="width:64px;height:auto;align-self:stretch;object-fit:cover;flex-shrink:0;background:#121215;border-right:1px solid #202024;cursor:zoom-in"></sc-if>
             <sc-if value="{{o.noThumb}}" hint-placeholder-val="{{ true }}"><div style="width:64px;flex-shrink:0;align-self:stretch;background:#1c1c20;border-right:1px solid #2a2a2f;display:flex;align-items:center;justify-content:center"><i class="ti ti-photo-off" style="color:#8a8378;font-size:24px"></i></div></sc-if>
             <div style="padding:13px 14px;flex:1;min-width:0;display:flex;flex-direction:column;gap:10px">
               <div style="display:flex;align-items:flex-start;gap:8px">
@@ -258,7 +258,6 @@
                   <span style="width:8px;height:8px;border-radius:50%;background:{{pm.color}};flex-shrink:0"></span>
                   <span style="font:500 12px/1 'Archivo';color:#ECEAE4">{{pm.label}}</span>
                   <span style="font:600 8px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#9C978C;background:#1a1a1e;border-radius:6px;padding:4px 7px">{{pm.status}}</span>
-                  <span style="margin-left:auto;font:400 11px/1 'Archivo';color:#6C665C;white-space:nowrap">{{pm.vendor}}</span>
                   <button onClick="{{ pm.onEdit }}" title="Edit method" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:transparent;border:1px solid #2a2a2f;color:#8a8378;cursor:pointer;flex-shrink:0"><i class="ti ti-pencil" style="font-size:12px"></i></button>
                   <button onClick="{{ pm.onRemove }}" title="Remove method" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:transparent;border:1px solid #2a2a2f;color:#8a8378;cursor:pointer;flex-shrink:0"><i class="ti ti-trash" style="font-size:12px"></i></button>
                 </div>
@@ -277,16 +276,6 @@
                       <div style="display:flex;gap:6px;flex-wrap:wrap">
                         <sc-for list="{{pm.mf.placementOptions}}" as="p" hint-placeholder-count="4">
                           <button onClick="{{ p.onPick }}" style="font:600 10px/1 'Oswald';letter-spacing:.03em;color:{{p.color}};background:{{p.bg}};border:1px solid {{p.border}};border-radius:7px;padding:7px 9px;cursor:pointer">{{p.label}}</button>
-                        </sc-for>
-                      </div>
-                    </div>
-                    <div>
-                      <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Vendor</div>
-                      <input value="{{pm.mf.vendorQ}}" onInput="{{ pm.mf.onVendorSearch }}" placeholder="Search vendors…" style="width:100%;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:12px;color:#ECEAE4;outline:none">
-                      <sc-if value="{{pm.mf.vendorPicked}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:5px;font:600 10px/1 'Oswald';letter-spacing:.03em;color:#BBD382;margin-top:6px"><i class="ti ti-check"></i>{{pm.mf.vendorName}}</div></sc-if>
-                      <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
-                        <sc-for list="{{pm.mf.vendorResultsView}}" as="v" hint-placeholder-count="0">
-                          <button onClick="{{ v.onPick }}" style="text-align:left;font:500 11px/1.2 'Archivo';color:#ECEAE4;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:8px 10px;cursor:pointer" style-hover="border-color:#C6372B">{{v.name}}</button>
                         </sc-for>
                       </div>
                     </div>
@@ -517,7 +506,7 @@
           <sc-for list="{{inbox}}" as="o" hint-placeholder-count="3">
             <div style="display:flex;background:{{o.cardBg}};border:1px solid {{o.cardBorder}};border-radius:12px;overflow:hidden">
               <div style="width:5px;background:{{o.urgColor}};flex-shrink:0"></div>
-              <sc-if value="{{o.hasThumb}}" hint-placeholder-val="{{ false }}"><img src="{{o.mockupUrl}}" alt="" onError="{{ o.onThumbErr }}" style="width:64px;height:auto;align-self:stretch;object-fit:cover;flex-shrink:0;background:#121215;border-right:1px solid #202024"></sc-if>
+              <sc-if value="{{o.hasThumb}}" hint-placeholder-val="{{ false }}"><img src="{{o.mockupUrl}}" alt="" onError="{{ o.onThumbErr }}" onClick="{{ o.onMockupOpen }}" style-hover="filter:brightness(1.12)" style="width:64px;height:auto;align-self:stretch;object-fit:cover;flex-shrink:0;background:#121215;border-right:1px solid #202024;cursor:zoom-in"></sc-if>
               <sc-if value="{{o.noThumb}}" hint-placeholder-val="{{ true }}"><div style="width:64px;flex-shrink:0;align-self:stretch;background:#1c1c20;border-right:1px solid #2a2a2f;display:flex;align-items:center;justify-content:center"><i class="ti ti-photo-off" style="color:#8a8378;font-size:24px"></i></div></sc-if>
               <div style="padding:15px 16px;flex:1;min-width:0;display:flex;flex-direction:column;gap:11px">
                 <div><div style="font:600 16px/1.1 'Oswald';color:#ECEAE4">{{o.customer}}</div><div style="font:400 10px/1 'Archivo';color:#6C665C;margin-top:5px">{{o.num}} · {{o.account}}</div></div>
@@ -534,7 +523,7 @@
       <sc-if value="{{mgrShowForm}}" hint-placeholder-val="{{ false }}">
         <button onClick="{{ onBackToInbox }}" style="display:inline-flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#8a8378;background:transparent;border:1px solid #242428;border-radius:8px;padding:8px 12px;cursor:pointer;margin-bottom:16px"><i class="ti ti-chevron-left"></i>All incoming</button>
         <div style="display:flex;align-items:center;gap:16px;background:#0D0D0F;border:1px solid #1f1f23;border-left:4px solid #C6372B;border-radius:12px;padding:16px 18px;margin-bottom:22px">
-          <sc-if value="{{mgrOrder.hasThumb}}" hint-placeholder-val="{{ false }}"><img src="{{mgrOrder.mockupUrl}}" alt="Mockup" onError="{{ mgrOrder.onThumbErr }}" style="width:96px;height:96px;flex-shrink:0;border-radius:11px;border:1px solid #232327;object-fit:cover;background:#121215"></sc-if>
+          <sc-if value="{{mgrOrder.hasThumb}}" hint-placeholder-val="{{ false }}"><img src="{{mgrOrder.mockupUrl}}" alt="Mockup" onError="{{ mgrOrder.onThumbErr }}" onClick="{{ mgrOrder.onMockupOpen }}" style-hover="filter:brightness(1.12)" style="width:96px;height:96px;flex-shrink:0;border-radius:11px;border:1px solid #232327;object-fit:cover;background:#121215;cursor:zoom-in"></sc-if>
           <sc-if value="{{mgrOrder.noThumb}}" hint-placeholder-val="{{ true }}"><div style="width:96px;height:96px;flex-shrink:0;border-radius:11px;background:#1c1c20;border:1px solid #2a2a2f;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px"><i class="ti ti-photo-off" style="color:#8a8378;font-size:26px"></i><span style="font:600 8px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#6C665C">No Mockup</span></div></sc-if>
           <div style="min-width:0">
             <div style="font:600 19px/1.1 'Oswald';color:#ECEAE4">{{mgrOrder.customer}}</div>
@@ -566,17 +555,6 @@
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <sc-for list="{{formPlacementOptions}}" as="p" hint-placeholder-count="4">
                 <button onClick="{{ p.onPick }}" style="font:600 12px/1 'Oswald';letter-spacing:.04em;color:{{p.color}};background:{{p.bg}};border:1px solid {{p.border}};border-radius:9px;padding:11px 15px;cursor:pointer">{{p.label}}</button>
-              </sc-for>
-            </div>
-          </div>
-
-          <div>
-            <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:11px">Vendor</div>
-            <input value="{{vendorQ}}" onInput="{{ onVendorSearch }}" placeholder="Search accounts…" style="width:100%;max-width:420px;background:#121215;border:1px solid #242428;border-radius:9px;padding:11px 13px;font-size:13px;color:#ECEAE4;outline:none">
-            <sc-if value="{{vendorPicked}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:6px;font:600 11px/1 'Oswald';letter-spacing:.04em;color:#BBD382;margin-top:9px"><i class="ti ti-check"></i>{{vendorName}}</div></sc-if>
-            <div style="display:flex;flex-direction:column;gap:5px;margin-top:9px;max-width:420px">
-              <sc-for list="{{vendorResults}}" as="v" hint-placeholder-count="0">
-                <button onClick="{{ v.onPick }}" style="text-align:left;font:500 12px/1.2 'Archivo';color:#ECEAE4;background:#141417;border:1px solid #232327;border-radius:8px;padding:10px 12px;cursor:pointer" style-hover="border-color:#C6372B">{{v.name}}</button>
               </sc-for>
             </div>
           </div>
@@ -845,13 +823,13 @@ class Component extends DCLogic {
   constructor(props){
     super(props);
     const seed = [
-      { id:'GOA-4842', meth:'sp', num:'GOA-4842', customer:'Summit Cycling Club', account:'Summit CC', qty:'96', garment:'Next Level 3600 · Black', sizes:'S12 · M28 · L34 · XL16 · 2XL6', dueLabel:'Jul 25 · 5d', urg:'ok', worker:'PR', recv:'partial', vendor:'In-house · Press 2', plan:'PP-2291 · new' },
-      { id:'GOA-4849', meth:'sp', num:'GOA-4849', customer:'Baker St. Diner', account:'Baker Street Group', qty:'60', garment:'Gildan 5000 · Red', sizes:'S10 · M20 · L20 · XL10', dueLabel:'Overdue · 1d', urg:'over', worker:null, recv:'none', vendor:'In-house · Press 1', plan:'—' },
-      { id:'GOA-4838', meth:'sp', num:'GOA-4838', customer:'Northgate Prep', account:'Northgate Academy', qty:'220', garment:'Port & Co PC61 · Gold', sizes:'YS20 · YM30 · S50 · M60 · L50 · XL30', dueLabel:'Jul 24 · 4d', urg:'soon', worker:'DK', recv:'staged', vendor:'In-house · Press 3', plan:'PP-2287 · new' },
-      { id:'GOA-4845', meth:'em', num:'GOA-4845', customer:'Vero Landscaping', account:'Vero Land Co.', qty:'48', garment:'Carhartt Beanie · Black', sizes:'OS48', dueLabel:'Jul 25 · 5d', urg:'ok', worker:'PR', recv:'staged', vendor:'Stitch Lab (ext.)', plan:'PP-2290 · attach' },
-      { id:'GOA-4851', meth:'em', num:'GOA-4851', customer:'Kestrel Aviation', account:'Kestrel Inc.', qty:'30', garment:'Nike Dri-FIT Polo · White', sizes:'S4 · M8 · L10 · XL6 · 2XL2', dueLabel:'Jul 27 · 7d', urg:'ok', worker:null, recv:'none', vendor:'—', plan:'—' },
-      { id:'GOA-4847', meth:'hp', num:'GOA-4847', customer:'Junior Rangers Camp', account:'City Parks Dept.', qty:'120', garment:'Bella+Canvas Youth · Green', sizes:'YS30 · YM40 · YL30 · YXL20', dueLabel:'Jul 26 · 6d', urg:'ok', worker:'MA', recv:'partial', vendor:'HeatCo Transfers', plan:'PP-2293 · new' },
-      { id:'GOA-4853', meth:'hp', num:'GOA-4853', customer:'Fiesta Foods', account:'Fiesta Markets', qty:'200', garment:'Gildan 5000 · White', sizes:'M50 · L70 · XL50 · 2XL30', dueLabel:'Jul 28 · 8d', urg:'ok', worker:null, recv:'none', vendor:'—', plan:'—' },
+      { id:'GOA-4842', meth:'sp', num:'GOA-4842', customer:'Summit Cycling Club', account:'Summit CC', qty:'96', garment:'Next Level 3600 · Black', sizes:'S12 · M28 · L34 · XL16 · 2XL6', dueLabel:'Jul 25 · 5d', urg:'ok', worker:'PR', recv:'partial', plan:'PP-2291 · new' },
+      { id:'GOA-4849', meth:'sp', num:'GOA-4849', customer:'Baker St. Diner', account:'Baker Street Group', qty:'60', garment:'Gildan 5000 · Red', sizes:'S10 · M20 · L20 · XL10', dueLabel:'Overdue · 1d', urg:'over', worker:null, recv:'none', plan:'—' },
+      { id:'GOA-4838', meth:'sp', num:'GOA-4838', customer:'Northgate Prep', account:'Northgate Academy', qty:'220', garment:'Port & Co PC61 · Gold', sizes:'YS20 · YM30 · S50 · M60 · L50 · XL30', dueLabel:'Jul 24 · 4d', urg:'soon', worker:'DK', recv:'staged', plan:'PP-2287 · new' },
+      { id:'GOA-4845', meth:'em', num:'GOA-4845', customer:'Vero Landscaping', account:'Vero Land Co.', qty:'48', garment:'Carhartt Beanie · Black', sizes:'OS48', dueLabel:'Jul 25 · 5d', urg:'ok', worker:'PR', recv:'staged', plan:'PP-2290 · attach' },
+      { id:'GOA-4851', meth:'em', num:'GOA-4851', customer:'Kestrel Aviation', account:'Kestrel Inc.', qty:'30', garment:'Nike Dri-FIT Polo · White', sizes:'S4 · M8 · L10 · XL6 · 2XL2', dueLabel:'Jul 27 · 7d', urg:'ok', worker:null, recv:'none', plan:'—' },
+      { id:'GOA-4847', meth:'hp', num:'GOA-4847', customer:'Junior Rangers Camp', account:'City Parks Dept.', qty:'120', garment:'Bella+Canvas Youth · Green', sizes:'YS30 · YM40 · YL30 · YXL20', dueLabel:'Jul 26 · 6d', urg:'ok', worker:'MA', recv:'partial', plan:'PP-2293 · new' },
+      { id:'GOA-4853', meth:'hp', num:'GOA-4853', customer:'Fiesta Foods', account:'Fiesta Markets', qty:'200', garment:'Gildan 5000 · White', sizes:'M50 · L70 · XL50 · 2XL30', dueLabel:'Jul 28 · 8d', urg:'ok', worker:null, recv:'none', plan:'—' },
     ];
     // Each demo card is one Production_Method__c's worth of pre-production
     // work (not a whole order); orderId matches id since demo data doesn't
@@ -874,7 +852,7 @@ class Component extends DCLogic {
       // requires that person's real PIN via POST /api/worker-login first.
       gatePin:'', gateErr:'', gateSubmitting:false, gateShake:false,
       orders:[], connection:'loading', q:'', openId:null, ppItemsById:{}, weekMode:'all', pickDate:'',
-      view:'board', inbox:[], inboxLoaded:false, mgrId:null, mgrSource:null, mgrMultiMethod:false, form:null, vendorResults:[], planResults:[], submitting:false, mgrErr:'', mgrMsg:'',
+      view:'board', inbox:[], inboxLoaded:false, mgrId:null, mgrSource:null, mgrMultiMethod:false, form:null, planResults:[], submitting:false, mgrErr:'', mgrMsg:'',
       // Order name / order number search for the Management inbox list
       // (separate from the board's own `q` above -- different view, own
       // box). See openMgr()/mgrVals() below.
@@ -919,7 +897,7 @@ class Component extends DCLogic {
       // only surfaces methods already past that stage). See
       // loadMethodsForOrder()/openMethodEdit()/saveMethodEdit()/removeMethod().
       methodsByOrder:{}, methodsLoadingFor:null,
-      methodEditId:null, methodEditForm:null, methodEditVendorResults:[], methodSaving:false, methodErr:'',
+      methodEditId:null, methodEditForm:null, methodSaving:false, methodErr:'',
       // Inline "Add Item" quick-create in the Production Items section --
       // for the case Management forgot to add one when the method was first
       // created. Scoped to whichever card's drawer is open (only one can be
@@ -937,7 +915,7 @@ class Component extends DCLogic {
   componentDidMount(){
     this._t=setInterval(()=>this.setState({now:new Date()}),1000);
     // Deep link from index.html's "Add another method" button (that board has
-    // no vendor/plan/items search UI of its own -- it hands off to this
+    // no plan/items search UI of its own -- it hands off to this
     // page's already-built Management form instead of duplicating it). Wait
     // for load() to resolve first so openMgrForOrder() can find this order's
     // existing specs/notes to prefill, same as clicking the button in-page.
@@ -1153,7 +1131,7 @@ class Component extends DCLogic {
     this._api.patchMethodStatus(cardId,'Ready for Print',card.orderId).catch(()=>{});
   }
 
-  defaultForm(){ return { method:'', placements:[], vendorId:null, vendorName:'', vendorQ:'', planMode:'new', planId:null, planName:'', planQ:'', status:'Pre-Production', items:[] }; }
+  defaultForm(){ return { method:'', placements:[], planMode:'new', planId:null, planName:'', planQ:'', status:'Pre-Production', items:[] }; }
   // Toggles one location in/out of the form's multi-select Placements list.
   togglePlacement(x){ this.setState(st=>{ const f=Object.assign({},st.form||this.defaultForm()); const cur=f.placements||[]; f.placements = cur.includes(x) ? cur.filter(v=>v!==x) : cur.concat([x]); return {form:f}; }); }
   // Gate: Pre-Production Management is admin (Anthony) / manager (Gian,
@@ -1194,7 +1172,7 @@ class Component extends DCLogic {
        the board yet -- so a live read a moment later returns false and "Save
        and New" would vanish exactly when the manager needs it for method #2.
        Same race the multiMethod capture in submitMethod() guards against. */
-    this.setState({mgrId:id, mgrSource:'inbox', mgrMultiMethod: rec.Multiple_Production_Methods__c === true, form, vendorResults:[], planResults:[], mgrErr:'', mgrMsg:''});
+    this.setState({mgrId:id, mgrSource:'inbox', mgrMultiMethod: rec.Multiple_Production_Methods__c === true, form, planResults:[], mgrErr:'', mgrMsg:''});
   }
   // Entry point for an order that's already staffed with at least one
   // production method (so it won't be in /api/inbox any more -- that list
@@ -1241,7 +1219,7 @@ class Component extends DCLogic {
     // was reachable before this change too -- via index.html's "Add another
     // method" deep link straight after creating something -- it just had no
     // obvious trigger until "Create another method" made it the normal path.
-    this.setState({view:'mgr', mgrId:orderId, mgrSource:'order', mgrMultiMethod: (seed && seed.multiMethod === true) || ref.multiMethod === true, form, vendorResults:[], planResults:[], mgrErr:'', mgrMsg:'', openId:null,
+    this.setState({view:'mgr', mgrId:orderId, mgrSource:'order', mgrMultiMethod: (seed && seed.multiMethod === true) || ref.multiMethod === true, form, planResults:[], mgrErr:'', mgrMsg:'', openId:null,
       createdPanel:null, runModalOpen:false, runForm:this.defaultRunForm(), runPressResults:[], runErr:'', runMsg:''});
   }
   // FIXED 2026-07-22: these only ever pushed to Salesforce and updated the
@@ -1281,7 +1259,6 @@ class Component extends DCLogic {
   openMethodEdit(r){
     const api=this._api||window.CAApi;
     if(api && !api.confirmManager('Editing a production method')) return;
-    const vendorName=(r.Vendor__r && r.Vendor__r.Name) || '';
     this.setState({
       methodEditId: r.Id,
       // Captured at open time so saveMethodEdit can ask the server "reject
@@ -1292,24 +1269,20 @@ class Component extends DCLogic {
       methodEditForm: {
         type: r.Type__c,
         placements: (r.Placements__c||'').split(';').map(s=>s.trim()).filter(Boolean),
-        vendorId: r.Vendor__c||null, vendorName, vendorQ: vendorName,
         status: r.Status__c||'Pre-Production',
       },
-      methodEditVendorResults:[], methodErr:'',
+      methodErr:'',
     });
   }
-  closeMethodEdit(){ this.setState({methodEditId:null, methodEditForm:null, methodEditLoadedAt:null, methodEditVendorResults:[], methodErr:''}); }
+  closeMethodEdit(){ this.setState({methodEditId:null, methodEditForm:null, methodEditLoadedAt:null, methodErr:''}); }
   setMethodEditField(patch){ this.setState(st=>({methodEditForm:Object.assign({}, st.methodEditForm, patch)})); }
   toggleMethodEditPlacement(x){ this.setState(st=>{ const f=Object.assign({},st.methodEditForm); const cur=f.placements||[]; f.placements = cur.includes(x) ? cur.filter(v=>v!==x) : cur.concat([x]); return {methodEditForm:f}; }); }
-  methodEditVendorSearch(q){ this.setMethodEditField({vendorQ:q, vendorId:null, vendorName:''}); if(!this._api) return; clearTimeout(this._mevt); this._mevt=setTimeout(()=>{ this._api.searchVendors(q).then(r=>this.setState({methodEditVendorResults:r})).catch(()=>{}); },250); }
-  pickMethodEditVendor(id,name){ this.setMethodEditField({vendorId:id, vendorName:name, vendorQ:name}); this.setState({methodEditVendorResults:[]}); }
   async saveMethodEdit(orderId){
     const id=this.state.methodEditId, f=this.state.methodEditForm;
     if(!id || !f || !this._api) return;
     if(!f.placements || !f.placements.length){ this.setState({methodErr:'Pick at least one placement'}); return; }
     this.setState({methodSaving:true, methodErr:''});
     const fields={ Type__c:f.type, Placements__c:f.placements, Status__c:f.status };
-    if(f.vendorId) fields.Vendor__c=f.vendorId;
     try {
       await this._api.patchMethodFields(id, fields, this.state.methodEditLoadedAt);
       this.setState({methodSaving:false, methodEditId:null, methodEditForm:null, methodEditLoadedAt:null});
@@ -1344,12 +1317,11 @@ class Component extends DCLogic {
     const api=this._api||window.CAApi;
     const meta=(api && api.METHOD_META && api.METHOD_META[r.Type__c]) || { color:'#8a8378' };
     const placements=(r.Placements__c||'').split(';').map(s=>s.trim()).filter(Boolean);
-    const vendorName=(r.Vendor__r && r.Vendor__r.Name) || '';
     const editing = this.state.methodEditId===r.Id;
     const view = {
       id:r.Id, type:r.Type__c, placements, status:r.Status__c,
       label: r.Type__c + (placements.length ? (' – '+placements.join(' + ')) : ''),
-      color: meta.color, vendor: vendorName || 'No vendor set',
+      color: meta.color,
       editing, onEdit:()=> editing ? this.closeMethodEdit() : this.openMethodEdit(r),
       onRemove:()=> this.removeMethod(r, orderId),
     };
@@ -1364,9 +1336,6 @@ class Component extends DCLogic {
         // field. Copy is shared from ca-api.js.
         statusHelp: (api&&api.statusHelp) ? api.statusHelp(f.status) : '',
         status:f.status, onStatus:(e)=>this.setMethodEditField({status:e.target.value}),
-        vendorQ:f.vendorQ||'', onVendorSearch:(e)=>this.methodEditVendorSearch(e.target.value),
-        vendorPicked:!!f.vendorId, vendorName:f.vendorName||'',
-        vendorResultsView:(this.state.methodEditVendorResults||[]).map(v=>({ id:v.Id, name:v.Name, onPick:()=>this.pickMethodEditVendor(v.Id,v.Name) })),
         hasErr:!!this.state.methodErr, err:this.state.methodErr||'',
         onCancel:()=>this.closeMethodEdit(), onSave:()=>this.saveMethodEdit(orderId),
         saveLabel: this.state.methodSaving?'Saving…':'Save Changes',
@@ -1542,8 +1511,6 @@ class Component extends DCLogic {
     };
   }
   setForm(patch){ this.setState(st=>({form:Object.assign({}, st.form||this.defaultForm(), patch)})); }
-  vendorSearch(q){ this.setForm({vendorQ:q, vendorId:null, vendorName:''}); if(!this._api) return; clearTimeout(this._vt); this._vt=setTimeout(()=>{ this._api.searchVendors(q).then(r=>this.setState({vendorResults:r})).catch(()=>{}); },250); }
-  pickVendor(id,name){ this.setForm({vendorId:id, vendorName:name, vendorQ:name}); this.setState({vendorResults:[]}); }
   planSearch(q){ this.setForm({planQ:q, planId:null, planName:''}); if(!this._api) return; clearTimeout(this._pt); this._pt=setTimeout(()=>{ this._api.searchPlans(q).then(r=>this.setState({planResults:r})).catch(()=>{}); },250); }
   pickPlan(id,name){ this.setForm({planId:id, planName:name, planQ:name}); this.setState({planResults:[]}); }
   addItem(type){ this.setState(st=>{ const f=Object.assign({},st.form||this.defaultForm()); f.items=(f.items||[]).concat([{type:type}]); return {form:f}; }); }
@@ -1560,7 +1527,6 @@ class Component extends DCLogic {
     const st=this.state, f=st.form; if(!f) return; const oid=st.mgrId;
     if(!f.method){ this.setState({mgrErr:'Pick a print method'}); return; }
     if(!f.placements || !f.placements.length){ this.setState({mgrErr:'Pick at least one placement (where this method prints)'}); return; }
-    if(!f.vendorId){ this.setState({mgrErr:'Pick a vendor'}); return; }
     if(f.planMode==='existing' && !f.planId){ this.setState({mgrErr:'Pick an existing plan'}); return; }
     if(!this._api || this.state.connection!=='live'){ this.setState({mgrErr:'Not connected to Salesforce (demo mode) — deploy to create plans'}); return; }
     this.setState({submitting:true, mgrErr:''});
@@ -1578,7 +1544,7 @@ class Component extends DCLogic {
       if(f.notes!=null) flushes.push(this._api.patchOrder(oid,{Special_Notes__c:f.notes}).catch(()=>{}));
       if(flushes.length) await Promise.all(flushes);
     }
-    const body={ orderId:oid, vendorId:f.vendorId, status:f.status, type:f.method, placements:f.placements, items:f.items||[] };
+    const body={ orderId:oid, status:f.status, type:f.method, placements:f.placements, items:f.items||[] };
     if(f.planMode==='existing' && f.planId) body.planId=f.planId;
     try{ const by=(this._api.workerName&&this._api.workerName())||''; if(by) body.by=by; }catch(_){}
     try{
@@ -1634,7 +1600,7 @@ class Component extends DCLogic {
              avoid -- it would hide "Save and New" on method #2 onwards. */
           mgrMultiMethod: multiMethod,
           form:Object.assign(this.defaultForm(),{ specs:f.specs, notes:f.notes }),
-          vendorResults:[], planResults:[], mgrErr:'',
+          planResults:[], mgrErr:'',
           mgrMsg:methodLabel+' created. Add the next method for this order.',
           createdPanel:null, runModalOpen:false,
         }));
@@ -1652,7 +1618,7 @@ class Component extends DCLogic {
       this.load();
     }catch(e){
       // FIXED 2026-07-28: this used to always show the same generic
-      // "Create failed — check vendor / plan and try again" no matter what
+      // "Create failed — check the plan and try again" no matter what
       // actually went wrong, which is why the real cause (an FLS gap on a
       // Pre_Production_Item__c field, then a restricted-picklist mismatch on
       // Mesh Count) stayed invisible. jsend() (ca-api.js) now attaches the
@@ -1661,7 +1627,7 @@ class Component extends DCLogic {
       // generic copy if the server didn't return anything useful.
       var detail = e && e.data && (e.data.detail || e.data.all);
       var sfMsg = Array.isArray(detail) && detail[0] && detail[0].message;
-      this.setState({submitting:false, mgrErr: sfMsg ? ('Create failed — '+sfMsg) : 'Create failed — check vendor / plan and try again'});
+      this.setState({submitting:false, mgrErr: sfMsg ? ('Create failed — '+sfMsg) : 'Create failed — check the plan and try again'});
     }
   }
   // Best-effort reference data (garment breakdown, print specs, special
@@ -1951,6 +1917,7 @@ class Component extends DCLogic {
         // try/catch mirrors the board's copy -- a throwing fallback handler
         // must never leave a card stuck showing a dead <img> forever.
         onThumbErr: ()=>{ try{ this.setState(s2=>({thumbErr:Object.assign({},s2.thumbErr,{[id]:true})})); }catch(err){ console.error('onThumbErr failed for inbox order', id, err); } },
+        onMockupOpen: (window.CAApi&&window.CAApi.mockupClick)?window.CAApi.mockupClick(mockupUrl,(t(r.Customer_Order_Name__c)||'')+' - '+(t(r.GOA_Order_Number__c)||r.OrderNumber||'')):null,
         onPick:()=>this.pickInbox(id) };
     });
     // Order name / order number search, scoped to this Management inbox
@@ -1959,7 +1926,7 @@ class Component extends DCLogic {
     const mgrQ=(st.mgrQ||'').trim().toLowerCase();
     const inbox = mgrQ ? inboxAll.filter(o=>(o.customer+' '+o.num+' '+o.account).toLowerCase().includes(mgrQ)) : inboxAll;
     const f=st.form, hasOrder=!!st.mgrId && !!f, mgrView=st.view==='mgr';
-    let mgrOrder={num:'',customer:'',account:'',qty:'',mockupUrl:null,hasThumb:false,noThumb:true,onThumbErr:null}, methodOptions=[], placementOptions=[], statusOptions=[], vendorResults=[], planResults=[], itemsView=[], itemTypeButtons=[], mgrCanSaveNew=false;
+    let mgrOrder={num:'',customer:'',account:'',qty:'',mockupUrl:null,hasThumb:false,noThumb:true,onThumbErr:null,onMockupOpen:null}, methodOptions=[], placementOptions=[], statusOptions=[], vendorResults=[], planResults=[], itemsView=[], itemTypeButtons=[], mgrCanSaveNew=false;
     if(hasOrder){
       /* "Save and New" is the intake-form twin of the confirmation screen's
          "Create Another Method": both appear ONLY when the Order says a second
@@ -1999,12 +1966,12 @@ class Component extends DCLogic {
         const mu=ord.mockupUrl||null;
         mgrOrder={num:ord.num,customer:ord.customer,account:ord.account,qty:ord.qty,
           mockupUrl:mu, hasThumb: !!mu && !st.thumbErr[st.mgrId], noThumb: !mu || !!st.thumbErr[st.mgrId],
-          onThumbErr: ()=>{ try{ const oid=st.mgrId; this.setState(s2=>({thumbErr:Object.assign({},s2.thumbErr,{[oid]:true})})); }catch(err){ console.error('onThumbErr failed for set-up header', st.mgrId, err); } } };
+          onThumbErr: ()=>{ try{ const oid=st.mgrId; this.setState(s2=>({thumbErr:Object.assign({},s2.thumbErr,{[oid]:true})})); }catch(err){ console.error('onThumbErr failed for set-up header', st.mgrId, err); } },
+          onMockupOpen: (window.CAApi&&window.CAApi.mockupClick)?window.CAApi.mockupClick(mu,(ord.customer||'')+' - '+(ord.num||'')):null };
       }
       methodOptions=['Screen Print','Embroidery','Heat Press','Promotional Items'].map(x=>({ label:x, onPick:()=>this.setForm({method:x}), bg:f.method===x?'#2a1210':'#121215', border:f.method===x?'#C6372B':'#242428', color:f.method===x?'#ECEAE4':'#8a8378' }));
       placementOptions=(api&&api.PLACEMENTS?api.PLACEMENTS:['Front','Back','Left Sleeve','Right Sleeve','Left Chest','Right Chest','Full Front','Full Back','Tag','Hood','Pocket']).map(x=>{ const on=(f.placements||[]).includes(x); return { label:x, onPick:()=>this.togglePlacement(x), bg:on?'#2a1210':'#121215', border:on?'#C6372B':'#242428', color:on?'#ECEAE4':'#8a8378' }; });
       statusOptions=['Pre-Production','Ready for Print','In Production','Post-Production','Completed','Cancelled','On Hold'].map(s=>({ value:s, label:s }));
-      vendorResults=(st.vendorResults||[]).map(v=>({ id:v.Id, name:v.Name, onPick:()=>this.pickVendor(v.Id,v.Name) }));
       planResults=(st.planResults||[]).map(p=>({ id:p.Id, name:p.Name, onPick:()=>this.pickPlan(p.Id,p.Name) }));
       const MESH=['110','125','156','180','196','230','305'], TT=['Screen Transfer','Digital Transfer','Sublimation','Vinyl'];
       itemsView=(f.items||[]).map((it,i)=>({
@@ -2096,7 +2063,6 @@ class Component extends DCLogic {
       // starts in, which is the moment the meaning matters most. Shared copy
       // from ca-api.js.
       formStatusHelp: (api&&api.statusHelp) ? api.statusHelp(f?f.status:'Pre-Production') : '', onStatus:(e)=>this.setForm({status:e.target.value}),
-      vendorQ:f?f.vendorQ:'', onVendorSearch:(e)=>this.vendorSearch(e.target.value), vendorResults, vendorPicked:!!(f&&f.vendorId), vendorName:f?f.vendorName:'',
       planIsNew:!f||f.planMode==='new', planIsExisting:!!(f&&f.planMode==='existing'), onPlanNew:()=>this.setForm({planMode:'new'}), onPlanExisting:()=>this.setForm({planMode:'existing'}),
       planNewBg:(!f||f.planMode==='new')?'#2a1210':'#121215', planNewBorder:(!f||f.planMode==='new')?'#C6372B':'#242428', planNewColor:(!f||f.planMode==='new')?'#ECEAE4':'#8a8378',
       planExBg:(f&&f.planMode==='existing')?'#2a1210':'#121215', planExBorder:(f&&f.planMode==='existing')?'#C6372B':'#242428', planExColor:(f&&f.planMode==='existing')?'#ECEAE4':'#8a8378',
@@ -2255,6 +2221,11 @@ class Component extends DCLogic {
         // fix for why: a broken fallback handler must never leave a card
         // stuck showing a dead <img> forever.
         onThumbErr: ()=>{ try{ const cid=o.id; this.setState(s2=>({thumbErr:Object.assign({},s2.thumbErr,{[cid]:true})})); }catch(err){ console.error('onThumbErr failed for', o&&o.id, err); } },
+        /* Click the mockup to inspect it full size (2026-08-24). stopPropagation
+           lives inside CAApi.mockupClick, so opening the image never also
+           opens the card's drawer -- the <img> sits inside the card's own
+           onOpen click target. */
+        onMockupOpen: (window.CAApi&&window.CAApi.mockupClick)?window.CAApi.mockupClick(o.mockupUrl,(o.customer||'')+' - '+(o.num||'')):null,
         onOpen:()=>this.openOrder(o.id),
       });
     };
@@ -2384,7 +2355,7 @@ class Component extends DCLogic {
         // d.methLabel (already computed by mk() above) so this doesn't need
         // its own copy of the method-type/placement label logic.
         onCreateRun:()=>this.openRunModalForCard(src.id, src.orderId, d.methLabel, src.placements),
-        ready, notReady:!ready, notReadyLabel:'Blocked — '+missing.join(' · '), onSend:()=>this.send(src.id), hasMockup:!!d.mockupUrl, noMockup:!d.mockupUrl, mockupNode:d.mockupUrl?React.createElement('img',{src:d.mockupUrl,alt:'Mockup',style:{width:96,height:96,flexShrink:0,borderRadius:11,border:'1px solid #232327',objectFit:'cover',background:'#121215'}}):null, orderSheetUrl:'order-sheet.html?orderId='+encodeURIComponent(src.orderId),
+        ready, notReady:!ready, notReadyLabel:'Blocked — '+missing.join(' · '), onSend:()=>this.send(src.id), hasMockup:!!d.mockupUrl, noMockup:!d.mockupUrl, mockupNode:d.mockupUrl?React.createElement('img',{src:d.mockupUrl,alt:'Mockup',onClick:(window.CAApi&&window.CAApi.mockupClick)?window.CAApi.mockupClick(d.mockupUrl,(d.customer||'')+' - '+(d.num||'')):null, title:'Click to inspect', style:{cursor:'zoom-in',width:96,height:96,flexShrink:0,borderRadius:11,border:'1px solid #232327',objectFit:'cover',background:'#121215'}}):null, orderSheetUrl:'order-sheet.html?orderId='+encodeURIComponent(src.orderId),
         specs:d.printSpecs||'', onSpecs:(e)=>this.setSpecs(src.orderId,e.target.value), special:d.specialNotes||'', onSpecial:(e)=>this.setSpecial(src.orderId,e.target.value),
         // Items come back per ORDER (all sibling methods' items together);
         // filter down to just this card's own Production_Method__c.
