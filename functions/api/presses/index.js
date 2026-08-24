@@ -9,7 +9,7 @@
  * equipment accounts created that day: Press 1, Press 2, Embroidery Machine,
  * Hat Press, Shirt Press.
  *
- * Same fixed-shape-query pattern as ../vendors/index.js (no client SOQL) --
+ * Same fixed-shape-query pattern as ../plans/index.js (no client SOQL) --
  * this just adds the Type filter so the picker only ever shows actual
  * press/machine accounts, not every Account in the org.
  *
