@@ -724,10 +724,187 @@
   // created. item: { type, mesh, pantone, threadColor, threadNumber,
   // stitchCount, transferType } -- only the fields matching `type` matter.
   function createItem(methodId, item){ var b = Object.assign({ methodId: methodId }, item || {}); var by = workerName(); if (by) b.by = by; return jsend('/api/pre-production-items', 'POST', b); }
-  function searchVendors(q){ return jget('/api/vendors?q=' + encodeURIComponent(q || '')).then(function (d) { return d.records || []; }); }
+  /* ── Mockup lightbox ───────────────────────────────────────────────────
+     Click any mockup on any board to open it big, with zoom and pan.
+
+     Built as a plain DOM overlay appended to <body> rather than as markup in
+     each page's dc template. Three reasons:
+       - one implementation instead of five near-copies to keep in step;
+       - the boards re-render constantly (20s auto-refresh), and a template
+         modal would be torn down and rebuilt mid-zoom, losing the transform;
+       - it sits above everything without joining the z-index ladder each page
+         maintains (40 header ... 96 sfEnv), which a template modal would have
+         to thread through.
+
+     openLightbox(url, alt) is the whole public surface. Pages pass the SAME
+     url they already render -- DesignMockupUrl is already a same-origin
+     /api/mockup-proxy link by the time the browser sees it (see
+     functions/api/_mockup.js), so it must never be re-wrapped. The proxy
+     serves one resolution only, so this is the thumbnail at full size, which
+     is exactly what "see it clearer" means here. */
+  var MIN_ZOOM = 1, MAX_ZOOM = 6, ZOOM_STEP = 0.25;
+  var _lb = null;   // the live overlay, or null
+
+  function closeLightbox(){
+    if (!_lb) return;
+    try { document.removeEventListener('keydown', _lb.onKey, true); } catch (e) {}
+    try { if (_lb.el && _lb.el.parentNode) _lb.el.parentNode.removeChild(_lb.el); } catch (e) {}
+    try { document.body.style.overflow = _lb.prevOverflow || ''; } catch (e) {}
+    _lb = null;
+  }
+
+  /* ca-fade is defined in some pages' <style> blocks but not others (index,
+     pre-production and calendar don't have it). Inject it once so the overlay
+     looks the same everywhere instead of animating on three boards and
+     snapping on the rest. */
+  function ensureLightboxCss(){
+    if (document.getElementById('ca-lightbox-css')) return;
+    var s = document.createElement('style');
+    s.id = 'ca-lightbox-css';
+    s.textContent = '@keyframes ca-fade{from{opacity:0}to{opacity:1}}' +
+      '[data-ca-lightbox] button:hover{border-color:#3a3a40 !important;color:#fff !important}';
+    document.head.appendChild(s);
+  }
+
+  function openLightbox(url, alt){
+    if (!url) return;
+    closeLightbox();                       // never stack two
+    ensureLightboxCss();
+
+    var zoom = 1, panX = 0, panY = 0, drag = null;
+
+    var el = document.createElement('div');
+    el.setAttribute('data-ca-lightbox', '');
+    el.style.cssText = 'position:fixed;inset:0;z-index:99;background:rgba(6,6,7,.9);' +
+      'backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;' +
+      'padding:32px;overflow:hidden;animation:ca-fade .16s ease';
+
+    var img = document.createElement('img');
+    img.src = url;
+    img.alt = alt || 'Mockup';
+    img.draggable = false;
+    img.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;' +
+      'user-select:none;-webkit-user-drag:none;transition:transform .08s linear;' +
+      'transform-origin:center center;cursor:zoom-in';
+
+    function paint(){
+      img.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + zoom + ')';
+      img.style.cursor = zoom > 1 ? (drag ? 'grabbing' : 'grab') : 'zoom-in';
+      if (pct) pct.textContent = Math.round(zoom * 100) + '%';
+    }
+    function setZoom(next){
+      var z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, next));
+      if (z === zoom) return;
+      zoom = z;
+      // Snapping back to 1 must also recentre, or the image stays parked
+      // off-screen where the last pan left it with no way to find it again.
+      if (zoom === MIN_ZOOM) { panX = 0; panY = 0; }
+      paint();
+    }
+
+    // --- chrome: zoom out / % / zoom in / close -------------------------
+    var bar = document.createElement('div');
+    bar.style.cssText = 'position:absolute;top:18px;right:18px;display:flex;align-items:center;' +
+      'gap:8px;background:rgba(13,13,15,.94);border:1px solid #2a2a2f;border-radius:11px;padding:7px 9px';
+    function btn(icon, title, fn){
+      var b = document.createElement('button');
+      b.type = 'button'; b.title = title; b.setAttribute('aria-label', title);
+      b.style.cssText = 'width:32px;height:32px;border-radius:8px;background:#16161a;border:1px solid #2a2a2f;' +
+        "color:#ECEAE4;cursor:pointer;font-size:14px;display:inline-flex;align-items:center;justify-content:center";
+      b.innerHTML = '<i class="ti ' + icon + '"></i>';
+      b.addEventListener('click', function (ev) { ev.stopPropagation(); fn(); });
+      return b;
+    }
+    var pct = document.createElement('span');
+    pct.style.cssText = "min-width:46px;text-align:center;font:600 11px/1 'Oswald';letter-spacing:.06em;color:#9C978C";
+
+    bar.appendChild(btn('ti-minus', 'Zoom out', function(){ setZoom(zoom - ZOOM_STEP); }));
+    bar.appendChild(pct);
+    bar.appendChild(btn('ti-plus', 'Zoom in', function(){ setZoom(zoom + ZOOM_STEP); }));
+    bar.appendChild(btn('ti-x', 'Close', closeLightbox));
+
+    var hint = document.createElement('div');
+    hint.style.cssText = 'position:absolute;bottom:20px;left:0;right:0;text-align:center;' +
+      "font:400 11px/1.4 'Archivo';color:#6C665C;pointer-events:none";
+    hint.textContent = 'Scroll to zoom · drag to pan · Esc to close';
+
+    // --- interaction ----------------------------------------------------
+    // Backdrop click closes; clicks on the image or the toolbar do not.
+    el.addEventListener('click', function (ev) { if (ev.target === el) closeLightbox(); });
+
+    img.addEventListener('click', function (ev) { ev.stopPropagation(); });
+    img.addEventListener('dblclick', function (ev) {
+      ev.preventDefault();
+      setZoom(zoom > 1 ? MIN_ZOOM : 2);
+    });
+
+    el.addEventListener('wheel', function (ev) {
+      ev.preventDefault();                 // don't scroll the board underneath
+      setZoom(zoom + (ev.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP));
+    }, { passive: false });
+
+    img.addEventListener('pointerdown', function (ev) {
+      if (zoom <= 1) return;               // nothing to pan while it fits
+      drag = { x: ev.clientX - panX, y: ev.clientY - panY };
+      try { img.setPointerCapture(ev.pointerId); } catch (e) {}
+      paint();
+    });
+    img.addEventListener('pointermove', function (ev) {
+      if (!drag) return;
+      panX = ev.clientX - drag.x; panY = ev.clientY - drag.y;
+      paint();
+    });
+    function endDrag(ev){
+      if (!drag) return;
+      drag = null;
+      try { img.releasePointerCapture(ev.pointerId); } catch (e) {}
+      paint();
+    }
+    img.addEventListener('pointerup', endDrag);
+    img.addEventListener('pointercancel', endDrag);
+
+    // A dead proxy URL should say so rather than leave an empty black square.
+    img.addEventListener('error', function () {
+      img.style.display = 'none';
+      var msg = document.createElement('div');
+      msg.style.cssText = "font:400 13px/1.5 'Archivo';color:#9C978C;text-align:center;max-width:320px";
+      msg.innerHTML = '<i class="ti ti-photo-off" style="font-size:26px;display:block;margin-bottom:10px"></i>' +
+        "This mockup didn't load. The design file may have been removed or renamed in Salesforce.";
+      el.appendChild(msg);
+    });
+
+    // Capture phase, so this wins over any page-level key handling.
+    function onKey(ev){
+      if (ev.key === 'Escape') { ev.stopPropagation(); closeLightbox(); }
+      else if (ev.key === '+' || ev.key === '=') setZoom(zoom + ZOOM_STEP);
+      else if (ev.key === '-' || ev.key === '_') setZoom(zoom - ZOOM_STEP);
+      else if (ev.key === '0') setZoom(MIN_ZOOM);
+    }
+    document.addEventListener('keydown', onKey, true);
+
+    el.appendChild(img); el.appendChild(bar); el.appendChild(hint);
+    var prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.body.appendChild(el);
+    _lb = { el: el, onKey: onKey, prevOverflow: prevOverflow };
+    paint();
+  }
+
+  /* Convenience for the templates: one call that is safe to wire to any
+     mockup, including ones that may not have a URL. Returns a handler that
+     also stops the click bubbling, so opening a card's mockup never also
+     opens the card's drawer. */
+  function mockupClick(url, alt){
+    return function (ev) {
+      if (ev && ev.stopPropagation) ev.stopPropagation();
+      if (ev && ev.preventDefault) ev.preventDefault();
+      openLightbox(url, alt);
+    };
+  }
+
   function searchPlans(q){ return jget('/api/plans?q=' + encodeURIComponent(q || '')).then(function (d) { return d.records || []; }); }
   // Account.Type = 'Press' only -- the shop's press/machine equipment
-  // records, not every vendor Account. Powers the Press picker on the
+  // records, not every Account. Powers the Press picker on the
   // Create Production Run modal.
   function searchPresses(q){ return jget('/api/presses?q=' + encodeURIComponent(q || '')).then(function (d) { return d.records || []; }); }
   function createMethod(body){ return jsend('/api/production-methods', 'POST', body); }
@@ -802,7 +979,7 @@
   function getMethodsForOrder(orderId){ return jget('/api/production-methods?orderId=' + encodeURIComponent(orderId)).then(function (d) { return d.records || []; }); }
   // Generic per-method write -- same endpoint/shape as patchMethodStatus and
   // patchMethodChecklist above, just named for its newer use: editing a
-  // method's Type__c/Placements__c/Vendor__c in place from the drawer.
+  // method's Type__c/Placements__c in place from the drawer.
   // ifUnmodifiedSince (optional): the method's LastModifiedDate at the moment
   // the drawer loaded it into the edit form. When passed, the server rejects
   // the write with a 409 (err.status===409, err.data.error==='conflict') if
@@ -1068,7 +1245,7 @@
         id: pm.Id, type: pm.Type__c, key: meta.key, color: meta.color,
         placements: placements, placement: placements[0] || null,
         label: placements.length ? (pm.Type__c + ' – ' + placementLabel) : (pm.Type__c || 'Method'),
-        vendor: pm.Vendor || null, status: pm.Status__c || null
+        status: pm.Status__c || null
       };
     });
   }
@@ -1157,7 +1334,7 @@
     getShippingOrders: getShippingOrders, completeOrder: completeOrder, getStatsTrend: getStatsTrend,
     CHECK_FIELD: CHECK_FIELD, RECV_FROM_SF: RECV_FROM_SF, RECV_TO_SF: RECV_TO_SF, TIME_OPTIONS: TIME_OPTIONS,
     PLACEMENTS: PLACEMENTS, methodsList: methodsList, METHOD_META: METHOD_META,
-    getOrders: getOrders, getProductionOrders: getProductionOrders, getInbox: getInbox, getPreProductionItems: getPreProductionItems, patchItem: patchItem, deleteItem: deleteItem, createItem: createItem, searchVendors: searchVendors, searchPlans: searchPlans, searchPresses: searchPresses, createMethod: createMethod, createProductionRun: createProductionRun, getProductionRuns: getProductionRuns, patchProductionRun: patchProductionRun, deleteProductionRun: deleteProductionRun, getProposedRuns: getProposedRuns, patchProposedRun: patchProposedRun, patchMethodStatus: patchMethodStatus, patchMethodChecklist: patchMethodChecklist, getMethodsForOrder: getMethodsForOrder, patchMethodFields: patchMethodFields, deleteMethod: deleteMethod, patchOrder: patchOrder, getOrderSizes: getOrderSizes, createReprintOrder: createReprintOrder,
+    getOrders: getOrders, getProductionOrders: getProductionOrders, getInbox: getInbox, getPreProductionItems: getPreProductionItems, patchItem: patchItem, deleteItem: deleteItem, createItem: createItem, searchPlans: searchPlans, searchPresses: searchPresses, createMethod: createMethod, createProductionRun: createProductionRun, getProductionRuns: getProductionRuns, patchProductionRun: patchProductionRun, deleteProductionRun: deleteProductionRun, getProposedRuns: getProposedRuns, patchProposedRun: patchProposedRun, patchMethodStatus: patchMethodStatus, patchMethodChecklist: patchMethodChecklist, getMethodsForOrder: getMethodsForOrder, patchMethodFields: patchMethodFields, deleteMethod: deleteMethod, patchOrder: patchOrder, getOrderSizes: getOrderSizes, createReprintOrder: createReprintOrder,
     getPackaging: getPackaging, postPackaging: postPackaging, deletePackaging: deletePackaging,
     getShipments: getShipments, postShipment: postShipment, deleteShipment: deleteShipment, getZkWizardUrl: getZkWizardUrl,
     splitShipment: splitShipment, combineShipment: combineShipment,
@@ -1169,6 +1346,7 @@
     trackRequest: trackRequest, hideLoader: hideLoader, showLoaderNow: showLoaderNow,
     STATUS_HELP: STATUS_HELP, statusHelp: statusHelp,
     locationAvailable: locationAvailable, locationsForMethod: locationsForMethod,
+    openLightbox: openLightbox, closeLightbox: closeLightbox, mockupClick: mockupClick,
     prepBufferStats: prepBufferStats, PREP_STATUS_META: PREP_STATUS_META,
     URG_ICON: URG_ICON, urgCardStyle: urgCardStyle
   };
