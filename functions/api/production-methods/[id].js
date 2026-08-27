@@ -77,6 +77,7 @@
 import { sfFetch, apiVersion, jsonError, checkNotModifiedSince } from "../_sf.js";
 import { rollupOrderSubstatus, rollupChecklistToOrder, rollupTimerToOrder } from "../_pm-rollup.js";
 import { cascadeChecklistToItems } from "../_ppi-checklist.js";
+import { createReworkIfNeeded } from "../_rework.js";
 
 const PM_OBJECT = "Production_Method__c";
 
@@ -254,8 +255,34 @@ export async function onRequestPatch({ params, request, env }) {
       });
     }
 
+    // Best-effort: when that roll-up just landed on 'Completed', every method on
+    // the order is done -- which is the moment damaged + misprinted garments
+    // become a reprint. See ../_rework.js for the full reasoning; it re-checks
+    // its own preconditions (all runs Submitted, nothing reworked yet, actual
+    // damage recorded) and returns a reason rather than throwing when there is
+    // nothing to do, so the common "clean order finished" case is silent.
+    //
+    // Deliberately NOT awaited into the response contract: a manager marking
+    // the last method complete must never see that action fail because a
+    // downstream reprint could not be built. A failure here logs loudly and the
+    // reprint can be created by hand; a failure that rolled back the status
+    // change would leave the board lying about where the order is.
+    let rework = null;
+    if (rolledUpSubstatus === "Completed") {
+      rework = await createReworkIfNeeded(env, orderId, payload.Last_Updated_By__c).catch((e) => {
+        console.error("rework creation failed", orderId, e);
+        return null;
+      });
+      if (rework && rework.created) {
+        console.log(
+          `rework: created order ${rework.orderId} from ${orderId} -- ` +
+            `${rework.methodCount} method(s), ${rework.itemCount} product(s), ${rework.totalQty} garment(s)`,
+        );
+      }
+    }
+
     return Response.json(
-      { ok: true, id, updated: Object.keys(payload), rolledUpSubstatus },
+      { ok: true, id, updated: Object.keys(payload), rolledUpSubstatus, rework },
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (err) {
