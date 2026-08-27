@@ -195,14 +195,41 @@ export async function createReworkIfNeeded(env, orderId, by) {
     }
 
     // ---------------------------------------------------------------------
-    // 3. What was ruined, and on which method.
+    // 3. Every method must be finished, and what was ruined on each.
+    //
+    // THE COMPLETION CHECK LIVES HERE, NOT IN THE CALLER. It used to be
+    // implicit: there was one call site, the method-status PATCH, and it only
+    // called this function when the substatus roll-up returned 'Completed', so
+    // "all methods done" was already established by the time we got here.
+    //
+    // That stopped being true when the counting screen became a second caller.
+    // Counting happens per RUN, and a run can be counted while sibling methods
+    // are still on the press -- so without this check, counting the first of
+    // two methods would order replacement garments for a job that is still
+    // half-printed, and the idempotency guard would then block the real reprint
+    // when the order genuinely finished. A precondition that only holds because
+    // of who calls you is not a precondition; it is a coincidence.
+    //
+    // Cancelled methods are excluded throughout, matching _pm-rollup.js: a
+    // cancelled method must not hold the order back, and must not be mirrored
+    // onto the reprint either.
     // ---------------------------------------------------------------------
-    const methods = await runQuery(
+    const methodsRes = await runQuery(
       env,
-      `SELECT Id, Type__c, Placements__c, Vendor__c FROM Production_Method__c WHERE Order__c = ${q(orderId)}`,
+      `SELECT Id, Type__c, Status__c, Placements__c, Vendor__c ` +
+        `FROM Production_Method__c WHERE Order__c = ${q(orderId)}`,
     );
-    if (!methods.ok) return fail("methods_query_failed", orderId);
+    if (!methodsRes.ok) return fail("methods_query_failed", orderId);
+
+    const methods = {
+      records: methodsRes.records.filter((m) => m.Status__c !== "Cancelled"),
+    };
     if (!methods.records.length) return { created: false, reason: "no_methods" };
+
+    const unfinished = methods.records.filter((m) => m.Status__c !== "Completed");
+    if (unfinished.length) {
+      return { created: false, reason: "methods_not_complete", pending: unfinished.length };
+    }
 
     const methodIds = methods.records.map((m) => m.Id);
 
