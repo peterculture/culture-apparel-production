@@ -239,6 +239,15 @@
     // behind confirmManager() instead of hiding the board.
     { key:'calendar', label:'Production Calendar', sub:'Priority · press schedule · print dates', href:'calendar.html', color:'#9878C0', icon:'ti-calendar-time' },
     { key:'station', label:'Station Board', sub:'Ink · screens · transfers', href:'station.html', color:'#5E9B9A', icon:'ti-device-tablet' },
+    // Run Counts (2026-08-27). The press-side tablet board -- the first surface
+    // in this app that lives at the press rather than before or after it. Not
+    // folded into station.html because that board is pre-production only (ink,
+    // screens, transfers, receiving) and counting is the opposite end of the
+    // job. Deliberately visible to everyone: the press operator who ran the job
+    // is the person who should be counting it, and gating this behind a manager
+    // role is exactly how the numbers end up being typed second-hand off a run
+    // sheet the next morning, which is what the whole model exists to stop.
+    { key:'counting', label:'Run Counts', sub:'Record results · misprints · shortfalls', href:'counting.html', color:'#C9923A', icon:'ti-clipboard-list' },
     { key:'shipping', label:'Shipping/Receiving', sub:'Post-production · ship · complete', href:'shipping.html', color:'#3E7CB1', icon:'ti-truck-delivery' },
     { key:'stats', label:'Stats', sub:'Prep-time buffer · team status · board totals', href:'stats.html', color:'#7FA644', icon:'ti-chart-bar' },
   ];
@@ -1053,6 +1062,42 @@
     });
   }
 
+  /* ── run results (Production_Run_Line_Items__c + Result_Status__c) ──
+     The counting screen's data path, and the ONLY place in this app that
+     writes the four production-result quantities. Everything downstream --
+     the reprint automation, the shortfall reschedule -- reads what these
+     write, so before counting.html existed the whole model was inert.
+
+     Note what is NOT here: a setter for Planned_Qty__c. That number is
+     generated with the line-item skeleton when a run is confirmed and is the
+     yardstick the counts are measured against; letting the person reporting a
+     loss also edit the target would quietly erase the discrepancy. Correcting
+     a wrong Planned Qty is a Salesforce job, on purpose. */
+
+  // Every run on a method that has actually been printed, counted or not --
+  // the tablet splits them into To Count / Counted itself. Returns the whole
+  // envelope rather than unwrapping .records, because `available:false` (the
+  // org has not had the production-result fields deployed yet) is a state the
+  // page has to render differently, not an empty list.
+  function getCountableRuns(){ return jget('/api/run-results'); }
+
+  // One run plus the rows to count. Same envelope shape as above.
+  function getRunResults(runId){ return jget('/api/run-results?runId=' + encodeURIComponent(runId)); }
+
+  // Records the counts AND submits the run in one call -- deliberately not two.
+  // Result_Status__c = 'Submitted' is the only evidence a human counted (a
+  // clean run and an untouched run are both all-blanks), so it must land in the
+  // same request as the numbers it vouches for. lines:
+  //   [{ id, misprintQty, damagedQty, incompleteQty }, ...]
+  // Send '' or null for a quantity to CLEAR it; omit the key to leave it alone.
+  // Rows with nothing set are fine to send and are skipped server-side.
+  // Response carries { totals, incompleteTotal, needsReschedule, rework } --
+  // `needsReschedule` is the cue to route the counter to run creation on the
+  // SAME method, and `rework` reports whether a reprint order was built.
+  function submitRunResults(runId, lines){
+    return jsend('/api/run-results', 'POST', { runId: runId, lines: lines, by: workerName() });
+  }
+
   /* ── packaging (Order_Packaging__c) ── */
   function getPackaging(orderId){ return jget('/api/packaging?orderId=' + encodeURIComponent(orderId)).then(function (d) { return d.records || []; }); }
   function postPackaging(orderId, type, qty){ return jsend('/api/packaging', 'POST', { orderId: orderId, Packaging_Type__c: type, Quantity__c: qty }); }
@@ -1368,6 +1413,7 @@
     CHECK_FIELD: CHECK_FIELD, RECV_FROM_SF: RECV_FROM_SF, RECV_TO_SF: RECV_TO_SF, TIME_OPTIONS: TIME_OPTIONS,
     PLACEMENTS: PLACEMENTS, methodsList: methodsList, METHOD_META: METHOD_META,
     getOrders: getOrders, getProductionOrders: getProductionOrders, getInbox: getInbox, getPreProductionItems: getPreProductionItems, patchItem: patchItem, deleteItem: deleteItem, createItem: createItem, searchPlans: searchPlans, searchPresses: searchPresses, createMethod: createMethod, createProductionRun: createProductionRun, getProductionRuns: getProductionRuns, patchProductionRun: patchProductionRun, deleteProductionRun: deleteProductionRun, getProposedRuns: getProposedRuns, patchProposedRun: patchProposedRun, patchMethodStatus: patchMethodStatus, patchMethodChecklist: patchMethodChecklist, getMethodsForOrder: getMethodsForOrder, patchMethodFields: patchMethodFields, deleteMethod: deleteMethod, patchOrder: patchOrder, getOrderSizes: getOrderSizes, createReprintOrder: createReprintOrder,
+    getCountableRuns: getCountableRuns, getRunResults: getRunResults, submitRunResults: submitRunResults,
     getPackaging: getPackaging, postPackaging: postPackaging, deletePackaging: deletePackaging,
     getShipments: getShipments, postShipment: postShipment, deleteShipment: deleteShipment, getZkWizardUrl: getZkWizardUrl,
     splitShipment: splitShipment, combineShipment: combineShipment,
