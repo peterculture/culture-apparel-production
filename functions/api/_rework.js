@@ -112,6 +112,20 @@ const q = (id) => `'${String(id).replace(/'/g, "")}'`;
 const quoteList = (ids) => ids.map(q).join(",");
 
 /**
+ * A query failed. Log it and say which one.
+ *
+ * This exists because the first version returned a bare null on every query
+ * failure, which is indistinguishable in the API response from "there was
+ * nothing to rework" -- the single most common healthy outcome. A silently
+ * mistyped relationship name therefore looked exactly like a clean order, and
+ * cost an afternoon to find. Never collapse a failure into the success shape.
+ */
+function fail(reason, orderId) {
+  console.error(`rework: ${reason} for order ${orderId}`);
+  return { created: false, reason, failed: true };
+}
+
+/**
  * Create the reprint order for one finished production order, if it needs one.
  *
  * Returns { created: false, reason } when no reprint is warranted -- that is the
@@ -139,7 +153,7 @@ export async function createReworkIfNeeded(env, orderId, by) {
       env,
       `SELECT Id FROM Order WHERE Original_Production_Order__c = ${q(orderId)} LIMIT 1`,
     );
-    if (!existing.ok) return null;
+    if (!existing.ok) return fail("idempotency_query_failed", orderId);
     if (existing.records.length) {
       return { created: false, reason: "already_reworked", orderId: existing.records[0].Id };
     }
@@ -149,11 +163,18 @@ export async function createReworkIfNeeded(env, orderId, by) {
     //    ambiguous, so "no numbers yet" and "went perfectly" are the same
     //    shape and only Result_Status__c can tell them apart.
     // ---------------------------------------------------------------------
+    // Semi-join, NOT PrintMethod__r.Order__c. A custom lookup's relationship
+    // name is whatever was typed when the field was created and is not
+    // guaranteed to be the field name minus __c -- guessing it wrong makes the
+    // whole SELECT a parse error, which surfaces as zero rows rather than an
+    // exception. _print-date-rollup.js walks Order -> runs the same way for the
+    // same reason; match it rather than inventing a second idiom.
     const runs = await runQuery(
       env,
-      `SELECT Id, Result_Status__c FROM Production_Run__c WHERE PrintMethod__r.Order__c = ${q(orderId)}`,
+      `SELECT Id, Result_Status__c FROM Production_Run__c ` +
+        `WHERE PrintMethod__c IN (SELECT Id FROM Production_Method__c WHERE Order__c = ${q(orderId)})`,
     );
-    if (!runs.ok) return null;
+    if (!runs.ok) return fail("runs_query_failed", orderId);
     if (!runs.records.length) return { created: false, reason: "no_runs" };
 
     const unsubmitted = runs.records.filter((r) => r.Result_Status__c !== "Submitted");
@@ -168,7 +189,7 @@ export async function createReworkIfNeeded(env, orderId, by) {
       env,
       `SELECT Id, Type__c, Placements__c, Vendor__c FROM Production_Method__c WHERE Order__c = ${q(orderId)}`,
     );
-    if (!methods.ok) return null;
+    if (!methods.ok) return fail("methods_query_failed", orderId);
     if (!methods.records.length) return { created: false, reason: "no_methods" };
 
     const methodIds = methods.records.map((m) => m.Id);
@@ -181,7 +202,7 @@ export async function createReworkIfNeeded(env, orderId, by) {
       `SELECT Id, Method__c, Order_Product__c, Damaged_Qty__c, Misprint_Qty__c ` +
         `FROM Production_Run_Line_Items__c WHERE Method__c IN (${quoteList(methodIds)})`,
     );
-    if (!lines.ok) return null;
+    if (!lines.ok) return fail("line_items_query_failed", orderId);
 
     // Damaged + Misprint are the same kind of loss: the garment is spent and
     // needs a fresh blank and a fresh print. Incomplete is deliberately absent.
@@ -225,8 +246,10 @@ export async function createReworkIfNeeded(env, orderId, by) {
           `FROM Pre_Production_Item__c WHERE Production_Method__c IN (${quoteList(affectedMethodIds)})`,
       ),
     ]);
-    if (!orderRes.ok || !itemsRes.ok || !ppiRes.ok) return null;
-    if (!orderRes.records.length) return null;
+    if (!orderRes.ok) return fail("order_query_failed", orderId);
+    if (!itemsRes.ok) return fail("order_products_query_failed", orderId);
+    if (!ppiRes.ok) return fail("pre_production_items_query_failed", orderId);
+    if (!orderRes.records.length) return fail("original_order_not_found", orderId);
 
     const original = orderRes.records[0];
 
