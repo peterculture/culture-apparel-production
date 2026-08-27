@@ -185,7 +185,7 @@
             </div>
           </sc-for>
           <sc-if value="{{rowsEmpty}}" hint-placeholder-val="{{ false }}">
-            <div style="padding:34px 20px;text-align:center;font:400 12px/1.6 'Archivo';color:#8a8378">This run has no line items yet. They're generated when the run is confirmed — if this run was confirmed before that automation existed, the rows have to be created in Salesforce first.</div>
+            <div style="padding:30px 20px;text-align:center;font:400 12px/1.6 'Archivo';color:#8a8378">This run has no rows to count — it was created before the app started generating them.<br><strong style="color:#ECEAE4">Submit it anyway.</strong> That marks it counted so the rest of the order can finish; nothing is recorded against it.</div>
           </sc-if>
         </div>
 
@@ -404,7 +404,15 @@ class Component extends DCLogic {
     if(this.state.submitting) return;
     if(this.state.connection!=='live'){ this.setState({err:'Not connected to Salesforce (demo mode) — counts would not be saved.'}); return; }
     const rows=this.state.rows;
-    if(!rows.length){ this.setState({err:'This run has no line items to count.'}); return; }
+    // A run with NO rows is submittable, deliberately. Runs created before the
+    // skeleton Flow existed have no line items at all, and blocking them here
+    // meant they could never reach Submitted -- which meant their order could
+    // never satisfy the rework gate ("every run on this order Submitted") and
+    // could never produce a reprint, permanently and silently. Found while
+    // testing a multi-method reprint on order 00013467: three legacy runs had
+    // to be submitted through the API by hand before the test could even start.
+    // Submitting an empty run is a manager saying "there was nothing to record
+    // on this one", which is exactly what it means.
 
     // Losses exceeding the plan is a typo far more often than it is real, and
     // it silently inflates the reprint. Warn, but do NOT block: a run really
@@ -606,14 +614,18 @@ class Component extends DCLogic {
       tallyIncomplete:String(t.incomplete), tallyIncompleteColor: t.incomplete?'#E0B23C':'#3a3a40',
       hasErr: !!st.err, err: st.err,
       onSubmit:()=>this.submit(), onBack:()=>this.back(),
-      submitDisabled: st.submitting || rows.length===0,
-      submitLabel: st.submitting ? 'Saving…' : (anything ? 'Submit Counts' : 'Submit — Clean Run'),
+      submitDisabled: st.submitting,
+      submitLabel: st.submitting ? 'Saving…'
+        : (rows.length===0 ? 'Submit — Nothing To Count'
+        : (anything ? 'Submit Counts' : 'Submit — Clean Run')),
       submitIcon: anything ? 'ti-clipboard-check' : 'ti-circle-check',
-      submitBg: rows.length===0 ? '#1a1a1e' : (anything ? '#C6372B' : '#3D5418'),
-      submitFg: rows.length===0 ? '#5b564e' : '#fff',
+      submitBg: anything ? '#C6372B' : '#3D5418',
+      submitFg: '#fff',
       submitHint: anything
         ? 'Submitting marks this run counted and starts the reprint automatically if the whole order is finished.'
-        : 'Nothing recorded means the run went perfectly — submit to confirm someone actually checked.',
+        : (rows.length===0
+          ? 'This run has no rows. Submitting still marks it counted, which is what lets the rest of the order finish.'
+          : 'Nothing recorded means the run went perfectly — submit to confirm someone actually checked.'),
       res: resVals,
     };
   }
