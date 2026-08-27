@@ -239,7 +239,7 @@
     // behind confirmManager() instead of hiding the board.
     { key:'calendar', label:'Production Calendar', sub:'Priority · press schedule · print dates', href:'calendar.html', color:'#9878C0', icon:'ti-calendar-time' },
     { key:'station', label:'Station Board', sub:'Ink · screens · transfers', href:'station.html', color:'#5E9B9A', icon:'ti-device-tablet' },
-    // Run Counts (2026-08-27). The press-side tablet board -- the first surface
+    // Run Results (2026-08-27). The press-side tablet board -- the first surface
     // in this app that lives at the press rather than before or after it. Not
     // folded into station.html because that board is pre-production only (ink,
     // screens, transfers, receiving) and counting is the opposite end of the
@@ -247,7 +247,7 @@
     // is the person who should be counting it, and gating this behind a manager
     // role is exactly how the numbers end up being typed second-hand off a run
     // sheet the next morning, which is what the whole model exists to stop.
-    { key:'counting', label:'Run Counts', sub:'Record results · misprints · shortfalls', href:'counting.html', color:'#C9923A', icon:'ti-clipboard-list' },
+    { key:'counting', label:'Run Results', sub:'Record results · misprints · shortfalls', href:'counting.html', color:'#C9923A', icon:'ti-clipboard-list' },
     { key:'shipping', label:'Shipping/Receiving', sub:'Post-production · ship · complete', href:'shipping.html', color:'#3E7CB1', icon:'ti-truck-delivery' },
     { key:'stats', label:'Stats', sub:'Prep-time buffer · team status · board totals', href:'stats.html', color:'#7FA644', icon:'ti-chart-bar' },
   ];
