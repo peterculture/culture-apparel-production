@@ -114,6 +114,7 @@
             <span><i class="ti ti-printer" style="font-size:12px;margin-right:5px"></i>{{c.runName}}</span>
             <span>{{c.methodType}}</span>
             <sc-if value="{{c.hasPress}}" hint-placeholder-val="{{ false }}"><span>{{c.pressName}}</span></sc-if>
+            <sc-if value="{{c.hasDate}}" hint-placeholder-val="{{ false }}"><span><i class="ti ti-calendar" style="font-size:12px;margin-right:5px"></i>{{c.printDate}}</span></sc-if>
           </div>
           <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid #1b1b1e;padding-top:10px">
             <span style="font:500 10px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#6C665C">{{c.qtyLabel}}</span>
@@ -154,6 +155,7 @@
             <span>{{d.methodType}}</span>
             <span>{{d.placements}}</span>
             <span>Planned {{d.plannedTotal}}</span>
+            <sc-if value="{{d.hasDate}}" hint-placeholder-val="{{ false }}"><span><i class="ti ti-calendar" style="font-size:12px;margin-right:5px"></i>{{d.printDate}}</span></sc-if>
           </div>
           <sc-if value="{{d.wasCounted}}" hint-placeholder-val="{{ false }}">
             <div style="margin-top:12px;font:400 11px/1.4 'Archivo';color:#6C665C;border-top:1px solid #1b1b1e;padding-top:11px">Counted by {{d.recordedBy}} · {{d.recordedAt}}. Submitting again overwrites those numbers.</div>
@@ -467,6 +469,12 @@ class Component extends DCLogic {
     const st=this.state, api=window.CAApi;
     const txt=(v)=> (api&&api.text)?api.text(v):(v==null?'':String(v));
     const clock=st.now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    /* The run's own scheduled slot. Two runs of the same job on the same day
+       are told apart by the time, so the time is part of the identifier, not
+       decoration. */
+    const fmtRunDate=(iso)=>{ if(!iso) return ''; try{ const d=new Date(iso);
+      return d.toLocaleDateString([],{month:'short',day:'numeric'})+' · '+d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+    }catch(_){ return ''; } };
     let wn=''; try{ wn=(api&&api.anyWorkerName)?api.anyWorkerName():''; }catch(_){}
     const live=st.connection==='live';
 
@@ -487,7 +495,8 @@ class Component extends DCLogic {
     const q=st.q.trim().toLowerCase();
     const pool=(st.tab==='done'?done:todo).filter(r=>{
       if(!q) return true;
-      return String(r.orderNumber||'').toLowerCase().includes(q)
+      return String(r.goaNumber||'').toLowerCase().includes(q)
+        || String(r.orderNumber||'').toLowerCase().includes(q)
         || String(r.customer||'').toLowerCase().includes(q)
         || String(r.orderName||'').toLowerCase().includes(q)
         || String(r.name||'').toLowerCase().includes(q);
@@ -499,10 +508,13 @@ class Component extends DCLogic {
       return {
         onOpen:()=>this.openRun(r.id),
         accent: r.needsReschedule?'#E0B23C':(counted?'#7FA644':ACCENT),
-        orderNumber: txt(r.orderNumber)||txt(r.name)||'—',
+        // GOA number leads: it is what the shop calls the job. Falls back to
+        // the Salesforce OrderNumber, then the run name, so a card is never blank.
+        orderNumber: txt(r.goaNumber)||txt(r.orderNumber)||txt(r.name)||'—',
         customer: txt(r.customer)||txt(r.orderName)||'—',
         runName: txt(r.name), methodType: txt(r.methodType)||'—',
         hasPress: !!r.pressName, pressName: txt(r.pressName),
+        hasDate: !!r.scheduledStart, printDate: fmtRunDate(r.scheduledStart),
         statusLabel: counted?'Counted':'To Count',
         statusColor: counted?'#BBD382':ACCENT,
         statusBg: counted?'#18230D':'#241C0A',
@@ -603,7 +615,8 @@ class Component extends DCLogic {
       runReady: !!d && !st.runLoading && !st.result,
       showResult: !!st.result,
       d: {
-        orderNumber: d?(txt(d.orderNumber)||txt(d.name)):'',
+        orderNumber: d?(txt(d.goaNumber)||txt(d.orderNumber)||txt(d.name)):'',
+        hasDate: !!(d&&d.scheduledStart), printDate: d?fmtRunDate(d.scheduledStart):'',
         customer: d?(txt(d.customer)||txt(d.orderName)||'—'):'',
         runName: d?txt(d.name):'', methodType: d?(txt(d.methodType)||'—'):'',
         placements: d?(txt(d.placements)||'').split(';').join(' · '):'',
