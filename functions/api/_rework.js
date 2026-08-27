@@ -358,7 +358,15 @@ export async function createReworkIfNeeded(env, orderId, by) {
       };
       if (m.Vendor__c) body.Vendor__c = m.Vendor__c;
       if (m.Placements__c) body.Placements__c = m.Placements__c;
-      if (by) body.Last_Updated_By__c = by;
+      // NO Last_Updated_By__c HERE. That field exists on Order (see
+      // orders/[id].js ALLOWED_FIELDS) and is stamped there. Nothing in this
+      // codebase ever writes it to Production_Method__c, and adding it made the
+      // entire head composite fail with PROCESSING_HALTED -- which is worse than
+      // a normal failure, because it only happened when `by` was present. The
+      // first successful test ran from the method-status PATCH, where `by` is
+      // undefined, so the field was silently omitted and everything passed. The
+      // counting screen sends a real worker name, so the bug appeared the moment
+      // a human path exercised it. Attribution for the method is CreatedBy.
       head.push({ method: "POST", url: `${base}/Production_Method__c`, referenceId: `pm${i}`, body });
     });
 
@@ -389,7 +397,7 @@ export async function createReworkIfNeeded(env, orderId, by) {
       for (const f of ITEM_FIELDS_BY_TYPE[p.Type__c] || []) {
         if (p[f] != null) body[f] = p[f];
       }
-      if (by) body.Last_Updated_By__c = by;
+      // No Last_Updated_By__c here either -- same reason as the method above.
       tail.push({ method: "POST", url: `${base}/Pre_Production_Item__c`, body });
     });
 
@@ -460,13 +468,32 @@ async function composite(env, compositeRequest) {
 
   const subs = Array.isArray(data.compositeResponse) ? data.compositeResponse : [];
   const ids = {};
+  const failures = [];
   for (const s of subs) {
     if (s.httpStatusCode >= 400) {
       const b = s.body;
-      const detail = Array.isArray(b) && b[0] ? `${b[0].errorCode}: ${b[0].message}` : JSON.stringify(b);
-      return { ok: false, detail };
+      const first = Array.isArray(b) && b[0] ? b[0] : null;
+      failures.push({
+        referenceId: s.referenceId,
+        code: first ? first.errorCode : "UNKNOWN",
+        message: first ? first.message : JSON.stringify(b),
+      });
+      continue;
     }
     if (s.body && s.body.id) ids[s.referenceId] = s.body.id;
+  }
+
+  if (failures.length) {
+    // With allOrNone:true, EVERY sub-request that was not itself at fault comes
+    // back as PROCESSING_HALTED ("the transaction was rolled back since another
+    // operation in the same transaction failed"). Reporting the first failure in
+    // array order therefore usually reports a bystander, and the real cause --
+    // the one sub-request with an actual errorCode -- never reaches the caller.
+    // That cost a full test cycle: the screen said PROCESSING_HALTED, which
+    // names no field, no object and no reason. Prefer a genuine error, and say
+    // WHICH sub-request it came from.
+    const real = failures.find((f) => f.code !== "PROCESSING_HALTED") || failures[0];
+    return { ok: false, detail: `${real.referenceId}: ${real.code}: ${real.message}` };
   }
   return { ok: true, ids };
 }
