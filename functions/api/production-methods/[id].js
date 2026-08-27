@@ -77,6 +77,7 @@
 import { sfFetch, apiVersion, jsonError, checkNotModifiedSince } from "../_sf.js";
 import { rollupOrderSubstatus, rollupChecklistToOrder, rollupTimerToOrder } from "../_pm-rollup.js";
 import { cascadeChecklistToItems } from "../_ppi-checklist.js";
+import { orderIdForMethod } from "../_print-date-rollup.js";
 import { createReworkIfNeeded } from "../_rework.js";
 
 const PM_OBJECT = "Production_Method__c";
@@ -138,7 +139,7 @@ export async function onRequestPatch({ params, request, env }) {
     }
     if (!body || typeof body !== "object") return jsonError("invalid_body", 400);
 
-    const orderId = body.orderId;
+    let orderId = body.orderId;
     if (orderId != null && !SF_ID.test(orderId)) {
       return jsonError("invalid_orderId", 400);
     }
@@ -247,6 +248,20 @@ export async function onRequestPatch({ params, request, env }) {
 
     // Best-effort: keep Order_Substatus__c an honest summary of its methods.
     // Only relevant when Status__c just changed; never fails this response.
+    // orderId is caller-supplied (see this file's header) and both current call
+    // sites pass it -- index.html's kanban drag and pre-production.html's card
+    // action. But when it is missing the roll-up below is skipped SILENTLY: no
+    // error, no log, just an Order_Substatus__c that quietly stops matching its
+    // methods. That bit hard enough during testing to be worth closing: a status
+    // change now looks the order up from the method rather than trusting every
+    // future caller to remember a field it does not otherwise need.
+    if (!orderId && "Status__c" in payload) {
+      orderId = await orderIdForMethod(env, id).catch((e) => {
+        console.error("orderIdForMethod failed", id, e);
+        return null;
+      });
+    }
+
     let rolledUpSubstatus = null;
     if (orderId && "Status__c" in payload) {
       rolledUpSubstatus = await rollupOrderSubstatus(env, orderId).catch((e) => {
