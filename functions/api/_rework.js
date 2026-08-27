@@ -112,17 +112,29 @@ const q = (id) => `'${String(id).replace(/'/g, "")}'`;
 const quoteList = (ids) => ids.map(q).join(",");
 
 /**
- * A query failed. Log it and say which one.
+ * Something failed. Log it and say which thing, in the RESPONSE, not just the
+ * log.
  *
  * This exists because the first version returned a bare null on every query
  * failure, which is indistinguishable in the API response from "there was
  * nothing to rework" -- the single most common healthy outcome. A silently
  * mistyped relationship name therefore looked exactly like a clean order, and
  * cost an afternoon to find. Never collapse a failure into the success shape.
+ *
+ * 2026-08-27: that first pass only converted the QUERY failures. The four
+ * failures in the build itself (composite head, composite tail, method
+ * overflow, thrown exception) were still returning bare null, so a reprint
+ * that passed every gate and then died inside Salesforce's composite API
+ * reported `"rework": null` -- again indistinguishable from a clean order,
+ * again only visible in Cloudflare's logs. `detail` carries Salesforce's own
+ * errorCode/message straight back to the caller so the next failure names
+ * itself on the first try instead of the third.
  */
-function fail(reason, orderId) {
-  console.error(`rework: ${reason} for order ${orderId}`);
-  return { created: false, reason, failed: true };
+function fail(reason, orderId, detail) {
+  console.error(`rework: ${reason} for order ${orderId}`, detail == null ? "" : detail);
+  const out = { created: false, reason, failed: true };
+  if (detail != null) out.detail = typeof detail === "string" ? detail : String(detail);
+  return out;
 }
 
 /**
@@ -265,10 +277,30 @@ export async function createReworkIfNeeded(env, orderId, by) {
     const v = apiVersion(env);
     const base = `/services/data/${v}/sobjects`;
 
-    const orderBody = { Status: "Pre-Production", Original_Production_Order__c: orderId };
+    // Cloned fields first, then the values that must NOT be inherited.
+    const orderBody = {};
     for (const f of CLONED_ORDER_FIELDS) {
       if (original[f] != null) orderBody[f] = original[f];
     }
+    Object.assign(orderBody, {
+      // EffectiveDate ("Order Start Date") is a REQUIRED standard field on
+      // Order. The first version of this file left it off, and the whole
+      // composite died with REQUIRED_FIELD_MISSING -- invisibly, because
+      // /composite returns HTTP 200 even when every sub-request failed, and
+      // because this function then collapsed that into a bare null. reprint.js
+      // has always set these; it is the working reference for what this org
+      // needs to insert an Order, so match it rather than rediscovering it.
+      EffectiveDate: new Date().toISOString().slice(0, 10),
+      IsReductionOrder: false,
+      Status: "Pre-Production",
+      Order_Substatus__c: "Pre-Production",
+      Original_Production_Order__c: orderId,
+      // Drives the reprint badge on the pre-production board
+      // (isReprint: !!r.Misprint__c in pre-production.html). Without it the
+      // reprint reaches the floor looking like an ordinary new job, and the
+      // person picking it up has no signal that it is replacing ruined stock.
+      Misprint__c: true,
+    });
     if (by) orderBody.Last_Updated_By__c = by;
 
     // Head chunk: everything that later records reference by @{ref.id}. Those
@@ -306,15 +338,11 @@ export async function createReworkIfNeeded(env, orderId, by) {
     if (head.length > COMPOSITE_LIMIT) {
       // Only reachable with ~22 damaged methods on one order, which would mean
       // something is very wrong upstream. Fail loudly rather than half-build.
-      console.error("rework: too many methods for one composite call", orderId, affectedMethods.length);
-      return null;
+      return fail("too_many_methods", orderId, `${affectedMethods.length} affected methods`);
     }
 
     const headRes = await composite(env, head);
-    if (!headRes.ok) {
-      console.error("rework: head composite failed", orderId, headRes.detail);
-      return null;
-    }
+    if (!headRes.ok) return fail("head_composite_failed", orderId, headRes.detail);
 
     const newOrderId = headRes.ids.order;
     const newMethodIds = affectedMethods.map((_, i) => headRes.ids[`pm${i}`]);
@@ -365,9 +393,8 @@ export async function createReworkIfNeeded(env, orderId, by) {
       const chunk = tail.slice(i, i + COMPOSITE_LIMIT).map((r, n) => ({ ...r, referenceId: `t${i}_${n}` }));
       const res = await composite(env, chunk);
       if (!res.ok) {
-        console.error("rework: tail chunk failed, rolling back", orderId, res.detail);
         await rollback(env, newOrderId, createdIds);
-        return null;
+        return fail("tail_composite_failed", orderId, res.detail);
       }
       createdIds.push(...Object.values(res.ids));
     }
@@ -380,8 +407,7 @@ export async function createReworkIfNeeded(env, orderId, by) {
       totalQty,
     };
   } catch (e) {
-    console.error("createReworkIfNeeded failed", orderId, e);
-    return null;
+    return fail("threw", orderId, (e && e.stack) || (e && e.message) || String(e));
   }
 }
 
