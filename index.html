@@ -511,7 +511,7 @@
           <textarea value="{{open.misDetails}}" onInput="{{ open.onMisDetails }}" placeholder="Misprint details — sizes, cause, notes…" style="width:100%;min-height:64px;background:#121215;border:1px solid #232327;border-radius:9px;padding:11px 13px;font-size:13px;color:#ECEAE4;outline:none;resize:vertical"></textarea>
           <div style="display:flex;gap:9px;align-items:flex-start;background:#101013;border:1px solid #232327;border-radius:9px;padding:11px 12px;margin-top:10px">
             <i class="ti ti-info-circle" style="color:#6C665C;font-size:14px;flex-shrink:0;margin-top:1px"></i>
-            <div style="font:400 10px/1.5 'Archivo';color:#8a8378">Reprints are created automatically from the counts entered on <a href="counting.html" style="color:#C9923A">Run Counts</a> when every method on this order is finished. This stepper is a running note only — it no longer files anything.</div>
+            <div style="font:400 10px/1.5 'Archivo';color:#8a8378">Reprints are created automatically from the counts entered on <a href="counting.html" style="color:#C9923A">Run Results</a> when every method on this order is finished. This stepper is a running note only — it no longer files anything.</div>
           </div>
         </div>
       </div>
@@ -744,6 +744,14 @@ class Component extends DCLogic {
       // from now instead of each page keeping its own inline nav links.
       navOpen: false,
     };
+    // ?card=<methodId>&makeup=<qty> from the counting screen's shortfall panel.
+    // Held on the instance, not in state: it is a one-shot instruction, not
+    // something the render reads. Consumed by applyDeepLink() once the board's
+    // first fetch returns.
+    try{
+      const p=new URLSearchParams(location.search);
+      this._deepLink={ card:p.get('card')||null, makeup:Number(p.get('makeup'))||0 };
+    }catch(_){ this._deepLink=null; }
   }
   // bg() marks everything a callback starts as background work, so the
   // centre-screen loading overlay (see ca-api.js) stays down for it. The
@@ -882,7 +890,8 @@ class Component extends DCLogic {
       const timers={}, misD={};
       cards.forEach(c=>{ timers[c.id]={setup:{elapsed:c._setup||0,running:false,startedAt:0},prod:{elapsed:c._prod||0,running:false,startedAt:0}}; });
       recs.forEach(r=>{ if(r.Misprint_Details__c) misD[r.Id]=r.Misprint_Details__c; });
-      this.setState(st=>({ orders:cards, connection:'live', timers:Object.assign({},st.timers,timers), misDetails:Object.assign({},st.misDetails,misD) }));
+      this.setState(st=>({ orders:cards, connection:'live', timers:Object.assign({},st.timers,timers), misDetails:Object.assign({},st.misDetails,misD) }),
+        ()=>this.applyDeepLink(cards));
     } catch(_) { this.setState({orders:this._demoOrders, connection:'demo'}); }
   }
   // Also clears the stored role (not just the name) -- otherwise a stale
@@ -978,6 +987,31 @@ class Component extends DCLogic {
   // order-level field (notes, misprint count, etc.) from one method's
   // drawer stays in sync if the sibling method's drawer is opened next.
   updateOrderFieldLocally(orderId,fields){ this.setState(st=>({ orders: st.orders.map(o=>o.orderId===orderId?Object.assign({},o,fields):o) })); }
+  /* Deep link from the counting screen's shortfall panel:
+       index.html?card=<methodId>&makeup=<qty>
+     opens that method's drawer and puts the New Run form up with the shortfall
+     quantity already in it.
+
+     WHY (2026-08-27): the shortfall panel used to be a plain link to
+     calendar.html, which dropped the manager on a cold week grid with nothing
+     selected and no way to act -- they had to remember the order number, find
+     it, and retype the quantity. The Production Dashboard drawer already has
+     the New Run form and already knows the method, so send them there instead.
+
+     Runs on the load() callback rather than componentDidMount because the card
+     does not exist until the first fetch returns. If the card is not on the
+     board yet the link is LEFT PENDING, not discarded, so the next 15s poll
+     retries -- the alternative is a link that silently does nothing when the
+     board happens to be mid-refresh. */
+  applyDeepLink(cards){
+    const dl=this._deepLink; if(!dl||!dl.card) return;
+    const card=(cards||[]).find(c=>c.id===dl.card);
+    if(!card) return;
+    this._deepLink=null;
+    this.openCard(card.id);
+    if(dl.makeup>0) setTimeout(()=>this.openRunCreate(card.id, card.printDate, card.printEndDateTime, dl.makeup), 80);
+    const a=window.CAApi; if(a&&a.writeParams) a.writeParams({card:'', makeup:''});
+  }
   openCard(cardId){
     // A poll or a half-typed Log Shipment form belongs to the card that was
     // open a moment ago, not this one -- drop both before switching.
