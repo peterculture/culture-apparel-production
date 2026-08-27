@@ -48,7 +48,7 @@ const quoteList = (ids) => ids.map(q).join(",");
 /** The org has not had the production-result fields deployed yet. */
 function notAvailable(detail) {
   return Response.json(
-    { available: false, records: [], byMethod: {}, byOrder: {}, totalOutstanding: 0, detail },
+    { available: false, records: [], byMethod: {}, byOrder: {}, byRun: {}, totalOutstanding: 0, detail },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
@@ -69,7 +69,7 @@ export async function onRequestGet({ env }) {
       return notAvailable(first ? `${first.errorCode}: ${first.message}` : `status ${runs.status}`);
     }
 
-    const empty = { available: true, records: [], byMethod: {}, byOrder: {}, totalOutstanding: 0 };
+    const empty = { available: true, records: [], byMethod: {}, byOrder: {}, byRun: {}, totalOutstanding: 0 };
     if (!runs.records.length) {
       return Response.json(empty, { headers: { "Cache-Control": "no-store" } });
     }
@@ -159,8 +159,15 @@ export async function onRequestGet({ env }) {
     // Pre-summed lookups so a board can render a badge without doing its own
     // grouping. index.html keys cards by METHOD id; calendar.html works per
     // ORDER -- hence both.
+    // byRun exists because a shortfall is rescheduled PER RUN, not per method.
+    // Two runs on one method that each left garments unprinted need two make-up
+    // runs -- one for each, so the press time booked matches the work that was
+    // actually missed rather than one lumped number nobody can trace back.
+    // byMethod/byOrder remain for badges and totals, where the sum is what a
+    // manager wants to see at a glance.
     const byMethod = {};
     const byOrder = {};
+    const byRun = {};
     let totalOutstanding = 0;
     for (const rec of records) {
       // `counted` is not decoration. Result_Status__c = 'Submitted' is the only
@@ -175,10 +182,11 @@ export async function onRequestGet({ env }) {
       totalOutstanding += rec.qty;
       if (rec.methodId) byMethod[rec.methodId] = (byMethod[rec.methodId] || 0) + rec.qty;
       if (rec.orderId) byOrder[rec.orderId] = (byOrder[rec.orderId] || 0) + rec.qty;
+      byRun[rec.runId] = rec.qty;
     }
 
     return Response.json(
-      { available: true, records, byMethod, byOrder, totalOutstanding },
+      { available: true, records, byMethod, byOrder, byRun, totalOutstanding },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (err) {
