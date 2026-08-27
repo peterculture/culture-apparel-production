@@ -322,12 +322,20 @@
                 <i class="ti ti-calendar-exclamation" style="color:#E0B23C;font-size:17px;flex-shrink:0;margin-top:1px"></i>
                 <div style="min-width:0">
                   <div style="font:600 13px/1.3 'Oswald';color:#ECEAE4">{{open.shortfallQty}} garments never made it to the press</div>
-                  <div style="font:400 11px/1.55 'Archivo';color:#D8C79A;margin-top:6px">Counted on this method but never printed. They're intact and still on the shelf — they need press time here, not a reprint.</div>
+                  <div style="font:400 11px/1.55 'Archivo';color:#D8C79A;margin-top:6px">Counted on this method but never printed. They're intact and still on the shelf — they need press time here, not a reprint. <strong style="color:#ECEAE4">Each run is scheduled separately</strong>, so the press time booked matches the run that missed it.</div>
                 </div>
               </div>
-              <sc-if value="{{open.canManage}}" hint-placeholder-val="{{ true }}">
-                <button onClick="{{ open.onScheduleMakeup }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;font:700 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#08080A;background:#E0B23C;border:none;border-radius:9px;padding:12px;cursor:pointer;margin-top:12px" style-hover="filter:brightness(1.08)"><i class="ti ti-plus"></i>Schedule The Make-Up Run</button>
-              </sc-if>
+              <sc-for list="{{open.shortfallRuns}}" as="s" hint-placeholder-count="1">
+                <div style="display:flex;align-items:center;gap:10px;background:#1B1509;border:1px solid #4A3A10;border-radius:9px;padding:10px 12px;margin-top:9px">
+                  <div style="min-width:0;flex:1">
+                    <div style="font:600 12px/1 'Oswald';letter-spacing:.03em;color:#ECEAE4">{{s.runName}}</div>
+                    <div style="font:400 10px/1 'Archivo';color:#D8C79A;margin-top:5px">{{s.qtyLabel}}</div>
+                  </div>
+                  <sc-if value="{{s.canAct}}" hint-placeholder-val="{{ true }}">
+                    <button onClick="{{ s.onSchedule }}" style="flex-shrink:0;display:inline-flex;align-items:center;gap:6px;font:700 9px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#08080A;background:#E0B23C;border:none;border-radius:8px;padding:10px 13px;cursor:pointer" style-hover="filter:brightness(1.08)"><i class="ti ti-plus"></i>Schedule</button>
+                  </sc-if>
+                </div>
+              </sc-for>
             </div>
           </sc-if>
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px"><span style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378">Production Runs</span><sc-if value="{{open.runsLoading}}" hint-placeholder-val="{{ false }}"><span style="font:400 10px/1 'Archivo';color:#4d483f">Loading…</span></sc-if><button onClick="{{ open.onNewRun }}" style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#5E9B9A;background:transparent;border:1px solid #3D5418;border-radius:7px;padding:6px 9px;cursor:pointer" style-hover="background:#18230D"><i class="ti {{open.newRunIcon}}"></i>{{open.newRunLabel}}</button></div>
@@ -658,6 +666,12 @@ class Component extends DCLogic {
       // Loaded on its own path (loadShortfall) so an org without the
       // production-result fields loses a badge, not the board.
       shortfalls:{}, onlyShortfall:false,
+      // The individual shortfall runs behind those totals. A shortfall is
+      // rescheduled PER RUN -- two runs on one method that each left garments
+      // unprinted need two make-up runs, so the press time booked matches the
+      // run that actually missed it. The map above drives the badge; this drives
+      // the drawer.
+      shortfallRuns:[],
       openId:null, dragId:null, dragOverStage:null,
       // Keyed by CARD id (== Production_Method__c id), not order id -- each
       // method times itself independently now. Demo cards use their own id
@@ -788,7 +802,11 @@ class Component extends DCLogic {
       const api = window.CAApi; if(!api || !api.getShortfalls) return;
       const d = await api.getShortfalls();
       if(!d || d.available === false) return;
-      this.setState({ shortfalls: d.byMethod || {} });
+      // Only outstanding AND counted rows reach the drawer, matching what the
+      // endpoint already sums into byMethod -- an uncounted run's number is not
+      // evidence of anything yet (see the note in shortfalls/index.js).
+      const runs=(d.records||[]).filter(r=>r.outstanding && r.counted && r.qty>0);
+      this.setState({ shortfalls: d.byMethod || {}, shortfallRuns: runs });
     } catch(_) { /* keep last known value */ }
   }
   // Advances/rewinds ONE card (== one Production_Method__c). cardId is the
@@ -2013,7 +2031,17 @@ class Component extends DCLogic {
         // the method id, which is what the shortfall map is keyed by.
         hasShortfall: (Number(st.shortfalls[src.id])||0) > 0,
         shortfallQty: String(Number(st.shortfalls[src.id])||0),
-        onScheduleMakeup:()=>this.openRunCreate(src.id, src.printDate, src.printEndDateTime, Number(st.shortfalls[src.id])||0),
+        // One row per run that left garments unprinted, each with its own
+        // Schedule button seeded with THAT run's quantity. Deliberately not one
+        // button for the method total: booking a single make-up run for two
+        // runs' shortfalls loses which run the work belongs to, and the press
+        // time you need is per run, not per method.
+        shortfallRuns:(st.shortfallRuns||[]).filter(s=>s.methodId===src.id).map(s=>({
+          runName: window.CAApi.text ? (window.CAApi.text(s.runName)||'—') : (s.runName||'—'),
+          qtyLabel: s.qty+' garment'+(s.qty===1?'':'s')+' to reschedule',
+          canAct: !!(window.CAApi&&window.CAApi.canAccessManagement&&window.CAApi.canAccessManagement()),
+          onSchedule:()=>this.openRunCreate(src.id, src.printDate, src.printEndDateTime, s.qty),
+        })),
         newRunLabel: rc?'Cancel':'New Run', newRunIcon: rc?'ti-x':'ti-plus',
         assignees, timers,
         hasMockup:!!d.mockupUrl, noMockup:!d.mockupUrl, mockupNode: d.mockupUrl?React.createElement('img',{src:d.mockupUrl,alt:'Production mockup',onClick:(window.CAApi&&window.CAApi.mockupClick)?window.CAApi.mockupClick(d.mockupUrl,(d.customer||'')+' - '+(d.num||'')):null, title:'Click to inspect', style:{cursor:'zoom-in',width:96,height:96,flexShrink:0,borderRadius:11,border:'1px solid #232327',objectFit:'cover',background:'#121215'}}):null, onZk:()=>this.openZk(src.orderId,src.num), zkErrMsg:(st.zkErr&&st.zkErr[src.orderId])||'', hasZkErr:!!(st.zkErr&&st.zkErr[src.orderId]),
