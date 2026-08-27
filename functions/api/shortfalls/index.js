@@ -163,7 +163,15 @@ export async function onRequestGet({ env }) {
     const byOrder = {};
     let totalOutstanding = 0;
     for (const rec of records) {
-      if (!rec.outstanding || !rec.qty) continue;
+      // `counted` is not decoration. Result_Status__c = 'Submitted' is the only
+      // evidence a human actually counted this run -- that is the whole reason
+      // the field exists, and _rework.js gates on it for exactly this reason.
+      // A run with a number typed straight into Salesforce and never submitted
+      // has a quantity nobody has vouched for; alerting a manager to schedule
+      // press time off it would be acting on a draft. dev2 had one of these
+      // (PR-0060, 20 garments, never submitted) inflating the shop-wide total
+      // by 4x, which is how this got noticed.
+      if (!rec.outstanding || !rec.counted || !rec.qty) continue;
       totalOutstanding += rec.qty;
       if (rec.methodId) byMethod[rec.methodId] = (byMethod[rec.methodId] || 0) + rec.qty;
       if (rec.orderId) byOrder[rec.orderId] = (byOrder[rec.orderId] || 0) + rec.qty;
