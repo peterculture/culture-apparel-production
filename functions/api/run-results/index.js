@@ -213,7 +213,8 @@ async function getCountableRuns(env, url) {
   const orders = orderIds.length
     ? await runQuery(
         env,
-        `SELECT Id, OrderNumber, Customer_Order_Name__c, Account.Name, Customer_Facing_Delivery_Date__c ` +
+        `SELECT Id, OrderNumber, GOA_Order_Number__c, Customer_Order_Name__c, Account.Name, ` +
+            `Customer_Facing_Delivery_Date__c ` +
           `FROM Order WHERE Id IN (${quoteList(orderIds)})`,
       )
     : { ok: true, records: [] };
@@ -233,6 +234,10 @@ async function getCountableRuns(env, url) {
       placements: m ? m.Placements__c : null,
       orderId: m ? m.Order__c : null,
       orderNumber: o ? o.OrderNumber : null,
+      // The shop's own number ("20484-10"), which is what anyone at a press
+      // actually calls the job -- OrderNumber is the Salesforce counter and
+      // means nothing on the floor. Both are returned; the card leads with this.
+      goaNumber: o ? o.GOA_Order_Number__c : null,
       orderName: o ? o.Customer_Order_Name__c : null,
       customer: o && o.Account ? o.Account.Name : null,
       dueDate: o ? o.Customer_Facing_Delivery_Date__c : null,
@@ -288,7 +293,7 @@ async function getOneRun(env, runId) {
     if (method && method.Order__c) {
       const oRes = await runQuery(
         env,
-        `SELECT Id, OrderNumber, Customer_Order_Name__c, Account.Name FROM Order ` +
+        `SELECT Id, OrderNumber, GOA_Order_Number__c, Customer_Order_Name__c, Account.Name FROM Order ` +
           `WHERE Id = ${q(method.Order__c)}`,
       );
       order = oRes.ok && oRes.records.length ? oRes.records[0] : null;
@@ -306,9 +311,11 @@ async function getOneRun(env, runId) {
         placements: method ? method.Placements__c : null,
         orderId: method ? method.Order__c : null,
         orderNumber: order ? order.OrderNumber : null,
+        goaNumber: order ? order.GOA_Order_Number__c : null,
         orderName: order ? order.Customer_Order_Name__c : null,
         customer: order && order.Account ? order.Account.Name : null,
         pressName: r.Press__r ? r.Press__r.Name : null,
+        scheduledStart: r.Scheduled_Start__c,
         scheduledQty: r[RUN_QTY_FIELD],
         resultStatus: r.Result_Status__c || RESULT_DRAFT,
         recordedBy: r.Result_Recorded_By__c,
