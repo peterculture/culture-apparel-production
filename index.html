@@ -83,6 +83,9 @@
       <sc-for list="{{methodFilters}}" as="m" hint-placeholder-count="3">
         <button onClick="{{ m.onToggle }}" style="display:inline-flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:{{m.textColor}};background:{{m.bg}};border:1px solid {{m.border}};border-radius:8px;padding:9px 12px;cursor:pointer"><span style="width:8px;height:8px;border-radius:50%;background:{{m.color}}"></span>{{m.label}}</button>
       </sc-for>
+      <sc-if value="{{hasAnyShortfall}}" hint-placeholder-val="{{ false }}">
+        <button onClick="{{ onToggleShortfall }}" title="Garments that were counted but never printed — each needs a make-up run on its own method" style="display:inline-flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:{{shortfallFilterFg}};background:{{shortfallFilterBg}};border:1px solid {{shortfallFilterBorder}};border-radius:8px;padding:9px 12px;cursor:pointer" style-hover="border-color:#5E4A14;color:#E0B23C"><i class="ti ti-calendar-exclamation"></i>{{shortfallFilterLabel}}</button>
+      </sc-if>
     </div>
     <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
       <span style="font:400 11px/1 'Archivo';color:#6C665C">{{shownLabel}}</span>
@@ -139,6 +142,9 @@
               </sc-if>
               <sc-if value="{{o.hasMisprints}}" hint-placeholder-val="{{ true }}">
                 <span style="align-self:flex-start;display:inline-flex;align-items:center;gap:5px;font:700 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:6px;padding:5px 9px"><i class="ti ti-alert-triangle"></i>{{o.mis}} misprint</span>
+              </sc-if>
+              <sc-if value="{{o.hasShortfall}}" hint-placeholder-val="{{ false }}">
+                <span title="Counted, but never printed — needs a make-up run on this method" style="align-self:flex-start;display:inline-flex;align-items:center;gap:5px;font:700 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#E0B23C;background:#241C0A;border:1px solid #5E4A14;border-radius:6px;padding:5px 9px"><i class="ti ti-calendar-exclamation"></i>{{o.shortfallQty}} not printed</span>
               </sc-if>
               <div style="display:flex;align-items:center;gap:10px;padding-top:9px;border-top:1px solid #202024">
                 <span style="display:inline-flex;align-items:center;gap:5px;font:700 11px/1 'Oswald';letter-spacing:.04em;text-transform:uppercase;color:{{o.urgColor}}"><i class="ti {{o.urgIcon}}"></i>{{o.dueLabel}}</span>
@@ -310,6 +316,20 @@
         </div>
 
         <div>
+          <sc-if value="{{open.hasShortfall}}" hint-placeholder-val="{{ false }}">
+            <div style="background:#241C0A;border:1px solid #5E4A14;border-radius:11px;padding:14px 15px;margin-bottom:13px">
+              <div style="display:flex;gap:10px;align-items:flex-start">
+                <i class="ti ti-calendar-exclamation" style="color:#E0B23C;font-size:17px;flex-shrink:0;margin-top:1px"></i>
+                <div style="min-width:0">
+                  <div style="font:600 13px/1.3 'Oswald';color:#ECEAE4">{{open.shortfallQty}} garments never made it to the press</div>
+                  <div style="font:400 11px/1.55 'Archivo';color:#D8C79A;margin-top:6px">Counted on this method but never printed. They're intact and still on the shelf — they need press time here, not a reprint.</div>
+                </div>
+              </div>
+              <sc-if value="{{open.canManage}}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ open.onScheduleMakeup }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;font:700 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#08080A;background:#E0B23C;border:none;border-radius:9px;padding:12px;cursor:pointer;margin-top:12px" style-hover="filter:brightness(1.08)"><i class="ti ti-plus"></i>Schedule The Make-Up Run</button>
+              </sc-if>
+            </div>
+          </sc-if>
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px"><span style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378">Production Runs</span><sc-if value="{{open.runsLoading}}" hint-placeholder-val="{{ false }}"><span style="font:400 10px/1 'Archivo';color:#4d483f">Loading…</span></sc-if><button onClick="{{ open.onNewRun }}" style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#5E9B9A;background:transparent;border:1px solid #3D5418;border-radius:7px;padding:6px 9px;cursor:pointer" style-hover="background:#18230D"><i class="ti {{open.newRunIcon}}"></i>{{open.newRunLabel}}</button></div>
           <sc-if value="{{open.runCreateOpen}}" hint-placeholder-val="{{ false }}">
             <div style="background:#121215;border:1px solid #3D5418;border-radius:10px;padding:13px 14px;display:flex;flex-direction:column;gap:11px;margin-bottom:14px">
@@ -678,6 +698,12 @@ class Component extends DCLogic {
       gatePin:'', gateErr:'', gateSubmitting:false, gateShake:false,
       orders: [], connection:'loading',
       q:'', methods:{ sp:true, em:true, hp:true, promo:true },
+      // Outstanding shortfalls -- garments a run finished without ever putting
+      // on the press, which need a make-up run on the SAME method before the
+      // delivery date. Keyed by METHOD id, matching this board's card id.
+      // Loaded on its own path (loadShortfall) so an org without the
+      // production-result fields loses a badge, not the board.
+      shortfalls:{}, onlyShortfall:false,
       openId:null, dragId:null, dragOverStage:null,
       // Keyed by CARD id (== Production_Method__c id), not order id -- each
       // method times itself independently now. Demo cards use their own id
@@ -777,8 +803,8 @@ class Component extends DCLogic {
   // dashboards". Every later refresh, save and drawer-open stays silent.
   // See the header comment in ca-api.js.
   fg(fn){ const a=window.CAApi; return (a&&a.foregroundLoad) ? a.foregroundLoad(fn) : fn(); }
-  componentDidMount(){ this._t = setInterval(()=>this.setState({ now:new Date() }), 1000); this.fg(()=>this.load()); this.bg(()=>this.loadSfEnv()); this.bg(()=>this.loadPrep()); this._ar = setInterval(()=>{ if(this.state.connection==='live' && !this.state.openId && !this.state.dragId) this.bg(()=>this.load()); }, 15000); this._pr = setInterval(()=>this.bg(()=>this.loadPrep()), 30000); }
-  componentWillUnmount(){ clearInterval(this._t); clearInterval(this._ar); clearInterval(this._pr); this.clearPoll(); }
+  componentDidMount(){ this._t = setInterval(()=>this.setState({ now:new Date() }), 1000); this.fg(()=>this.load()); this.bg(()=>this.loadSfEnv()); this.bg(()=>this.loadPrep()); this.bg(()=>this.loadShortfall()); this._ar = setInterval(()=>{ if(this.state.connection==='live' && !this.state.openId && !this.state.dragId) this.bg(()=>this.load()); }, 15000); this._pr = setInterval(()=>this.bg(()=>this.loadPrep()), 30000); this._sr = setInterval(()=>this.bg(()=>this.loadShortfall()), 30000); }
+  componentWillUnmount(){ clearInterval(this._t); clearInterval(this._ar); clearInterval(this._pr); clearInterval(this._sr); this.clearPoll(); }
   // Independent fetch/failure path from load() -- a hiccup fetching the
   // Pre-Production queue shouldn't flip this board's own "Live · Salesforce"
   // badge to Demo, and vice versa. Leaves whatever prep value was last
@@ -789,6 +815,19 @@ class Component extends DCLogic {
       const api = window.CAApi; if(!api) throw new Error('CAApi not loaded');
       const prepOrders = await api.getOrders();
       this.setState({ prep: api.prepBufferStats(prepOrders) });
+    } catch(_) { /* keep last known value */ }
+  }
+  // Same independent-path rule as loadPrep above, and for a sharper reason: an
+  // org that hasn't had the production-result fields deployed returns
+  // available:false here, and a board that treated that as a failure would flip
+  // itself to Demo over a badge it was never going to show. Failure leaves the
+  // last known map in place; only a real answer replaces it.
+  async loadShortfall(){
+    try{
+      const api = window.CAApi; if(!api || !api.getShortfalls) return;
+      const d = await api.getShortfalls();
+      if(!d || d.available === false) return;
+      this.setState({ shortfalls: d.byMethod || {} });
     } catch(_) { /* keep last known value */ }
   }
   // Advances/rewinds ONE card (== one Production_Method__c). cardId is the
@@ -1240,9 +1279,13 @@ class Component extends DCLogic {
   // when the order was created (Close and Create Order's Print Date &
   // Time + Duration). Either half is skipped if its source field is blank,
   // same as before.
-  openRunCreate(methodId, printDate, printEndDateTime){
+  // seedQty (optional) pre-fills Total Garments. Used by the shortfall banner
+  // so "schedule the make-up run" arrives with the right number already in the
+  // box -- the one number the manager would otherwise have to carry in their
+  // head from the badge to the form, and the one most worth not mistyping.
+  openRunCreate(methodId, printDate, printEndDateTime, seedQty){
     const start=this.splitDT(printDate), end=this.splitDT(printEndDateTime);
-    this.setState({ runCreateMethodId:methodId, runCreateForm:{ pressId:null, pressName:'', pressQ:'', startDate:start.date, startTime:start.time, endDate:end.date, endTime:end.time, qty:'' }, runCreatePressResults:[], runCreateErr:'' });
+    this.setState({ runCreateMethodId:methodId, runCreateForm:{ pressId:null, pressName:'', pressQ:'', startDate:start.date, startTime:start.time, endDate:end.date, endTime:end.time, qty: seedQty ? String(seedQty) : '' }, runCreatePressResults:[], runCreateErr:'' });
   }
   closeRunCreate(){ this.setState({runCreateMethodId:null, runCreateForm:null, runCreatePressResults:[], runCreateErr:''}); }
   setRunCreateField(patch){ this.setState(st=>({runCreateForm:Object.assign({}, st.runCreateForm, patch)})); }
@@ -1742,7 +1785,12 @@ class Component extends DCLogic {
     // method-card for that order, and toggling a method chip hides only
     // that method's cards (an order with Screen Print + Heat Press stays
     // visible via its Screen Print card even if Heat Press is toggled off).
-    const matches = o => (!q || (o.customer+' '+o.num+' '+o.account).toLowerCase().includes(q)) && st.methods[o.meth];
+    // A card carries a shortfall when its METHOD has garments that were counted
+    // but never printed. Keyed by method id, which is this board's card id.
+    const shortfallQty = o => Number(st.shortfalls[o.id]) || 0;
+    const matches = o => (!q || (o.customer+' '+o.num+' '+o.account).toLowerCase().includes(q))
+      && st.methods[o.meth]
+      && (!st.onlyShortfall || shortfallQty(o) > 0);
     const visible = st.orders.filter(matches);
 
     const mk = o => {
@@ -1751,6 +1799,14 @@ class Component extends DCLogic {
         methLabel:m.label, methShort: (o.placements&&o.placements.length) ? (m.short+' · '+o.placements.join(' + ')) : m.short, methColor:m.color,
         hasWorker:!!wname, noWorker:!wname, workerName:wname||'Unassigned', workerInit:o.workerInit||o.worker||(wname?wname.trim().slice(0,2).toUpperCase():'—'), workerColor:o.workerColor||(w&&w.color)||'#3a3a40',
         urgColor:U[o.urg]||U.ok, hasProgress:typeof o.pct==='number', progressWidth:(o.pct||0)+'%', hasMisprints:(o.mis||0)>0,
+        // Shortfall: counted, but never made it onto the press. Deliberately a
+        // SEPARATE badge from misprints and in a different colour, because they
+        // call for opposite actions -- a misprint means buy and print a
+        // replacement (the automation already did), a shortfall means the
+        // garments are sitting on a shelf and just need press time. Merging
+        // them into one "problems" chip would be the same mistake the data
+        // model spent three revisions avoiding.
+        hasShortfall: shortfallQty(o) > 0, shortfallQty: shortfallQty(o),
         // Urgency icon + bolder overdue card (added 2026-08-11): a distinct
         // icon shape per urgency bucket, not just color, plus a tinted
         // panel (not just the 6px stripe) for overdue cards -- see
@@ -1839,6 +1895,12 @@ class Component extends DCLogic {
     const methodFilters = ['sp','em','hp','promo'].map(k=>{ const on=st.methods[k]; return { key:k, label:M[k].label, color:M[k].color, onToggle:()=>this.setState(s2=>({methods:Object.assign({},s2.methods,{[k]:!s2.methods[k]})})), bg:on?'#1a1a1e':'transparent', border:on?'#3a3a40':'#242428', textColor:on?'#ECEAE4':'#6C665C' }; });
 
     const shownLabel = visible.length===st.orders.length ? (st.orders.length+' orders') : (visible.length+' of '+st.orders.length+' orders');
+    // Computed from st.orders, NOT from `visible` -- the chip has to keep
+    // showing its own count while it is the thing doing the filtering, or
+    // turning it on would make the number it reports change under the cursor.
+    const shortfallCards = st.orders.filter(o=>shortfallQty(o)>0);
+    const shortfallTotalQty = shortfallCards.reduce((a,o)=>a+shortfallQty(o),0);
+    const sfOn = !!st.onlyShortfall;
 
     // Drawer -- src is one CARD (one Production_Method__c). Timers and
     // worker assignment are genuinely per-card (keyed by src.id, the method
@@ -1977,6 +2039,11 @@ class Component extends DCLogic {
         canManage:!!(window.CAApi&&window.CAApi.canAccessManagement&&window.CAApi.canAccessManagement()),
         runsView, runsEmpty:runsView.length===0, runsLoading: st.runsLoadingFor===src.id,
         runCreateOpen:!!rc, runCreate, onNewRun:()=> st.runCreateMethodId===src.id ? this.closeRunCreate() : this.openRunCreate(src.id, src.printDate, src.printEndDateTime),
+        // The drawer's own copy of the card badge, plus the action. src.id is
+        // the method id, which is what the shortfall map is keyed by.
+        hasShortfall: (Number(st.shortfalls[src.id])||0) > 0,
+        shortfallQty: String(Number(st.shortfalls[src.id])||0),
+        onScheduleMakeup:()=>this.openRunCreate(src.id, src.printDate, src.printEndDateTime, Number(st.shortfalls[src.id])||0),
         newRunLabel: rc?'Cancel':'New Run', newRunIcon: rc?'ti-x':'ti-plus',
         assignees, timers,
         hasMockup:!!d.mockupUrl, noMockup:!d.mockupUrl, mockupNode: d.mockupUrl?React.createElement('img',{src:d.mockupUrl,alt:'Production mockup',onClick:(window.CAApi&&window.CAApi.mockupClick)?window.CAApi.mockupClick(d.mockupUrl,(d.customer||'')+' - '+(d.num||'')):null, title:'Click to inspect', style:{cursor:'zoom-in',width:96,height:96,flexShrink:0,borderRadius:11,border:'1px solid #232327',objectFit:'cover',background:'#121215'}}):null, onZk:()=>this.openZk(src.orderId,src.num), zkErrMsg:(st.zkErr&&st.zkErr[src.orderId])||'', hasZkErr:!!(st.zkErr&&st.zkErr[src.orderId]),
@@ -2059,6 +2126,12 @@ class Component extends DCLogic {
     });
     return {
       columns, kpis, methodFilters, clock, dateStr, worker:wn, workerInit:(window.CAApi&&window.CAApi.initials?window.CAApi.initials(wn):wn.slice(0,2).toUpperCase()), rushCount:String(rushCount), shownLabel,
+      hasAnyShortfall: shortfallCards.length>0,
+      shortfallFilterLabel: sfOn ? ('Shortfalls only · '+shortfallTotalQty) : (shortfallTotalQty+' not printed'),
+      shortfallFilterBg: sfOn ? '#241C0A' : 'transparent',
+      shortfallFilterBorder: sfOn ? '#5E4A14' : '#242428',
+      shortfallFilterFg: sfOn ? '#E0B23C' : '#8a7f60',
+      onToggleShortfall:()=>this.setState(s2=>({onlyShortfall:!s2.onlyShortfall})),
       connLabel, connColor, isAdmin,
       navOpen: st.navOpen, onOpenNav:()=>this.setState({navOpen:true}), onCloseNav:()=>this.setState({navOpen:false}),
       navBoards: (window.CAApi&&window.CAApi.buildNavBoards) ? window.CAApi.buildNavBoards('index') : [],
