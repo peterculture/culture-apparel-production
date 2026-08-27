@@ -1097,6 +1097,48 @@
     return jsend('/api/run-results', 'POST', { runId: runId, lines: lines, by: workerName() });
   }
 
+  /* ── mockup thumbnails ──
+     Build the <img> as a React node instead of putting its URL in a template
+     hole.
+
+     WHY (2026-08-27): the <x-dc> template is ordinary HTML sitting in the
+     document, so the BROWSER parses it before dc-runtime ever runs. An
+     <img src="{{o.mockupUrl}}"> therefore issues a real request for the literal
+     path /%7B%7Bo.mockupUrl%7D%7D on every single page load. Cloudflare Pages
+     answers that with the SPA fallback -- HTTP 200 and the whole ~188KB page,
+     downloaded as an "image" and thrown away. It is not an image, so the load
+     fails, which fires the inline onError attribute, whose literal text
+     `{{ o.onThumbErr }}` is then evaluated as JavaScript and throws
+     `ReferenceError: o is not defined` into the console. Every load, every
+     board, on tablets over shop wifi.
+
+     Neither symptom affects the rendered card: React receives a proper onError
+     prop and the "no mockup" fallback works correctly. The cost is a wasted
+     page-sized download and a console error that looks like a real bug and is
+     not -- it sent this project chasing the wrong thing twice.
+
+     Building the node here keeps the URL out of the parsed template entirely.
+     index.html:1974 and station.html already used React.createElement for their
+     larger mockups, which is very likely why neither ever produced this error.
+
+     When onClick is given the node also gets a hover brightness bump, replacing
+     the style-hover pseudo-attribute the template version used. */
+  function mockupThumb(url, style, onError, onClick, alt){
+    if (!url || typeof React === 'undefined') return null;
+    var props = { src: url, alt: alt || '', style: Object.assign({}, style || {}) };
+    if (onError) props.onError = onError;
+    if (onClick) {
+      props.onClick = onClick;
+      props.style.cursor = 'zoom-in';
+      props.onMouseEnter = function (e) { e.currentTarget.style.filter = 'brightness(1.12)'; };
+      props.onMouseLeave = function (e) { e.currentTarget.style.filter = ''; };
+    }
+    return React.createElement('img', props);
+  }
+  // The two thumbnail sizes in use, so four call sites can't drift apart.
+  var THUMB_CARD = { width:64, height:'auto', alignSelf:'stretch', objectFit:'cover', flexShrink:0, background:'#121215', borderRight:'1px solid #202024' };
+  var THUMB_PANEL = { width:96, height:96, flexShrink:0, borderRadius:11, border:'1px solid #232327', objectFit:'cover', background:'#121215' };
+
   // Runs that finished with garments that never reached the press -- the
   // manager-facing half of the incomplete alert. Returns the whole envelope:
   //   { available, records, byMethod:{methodId:qty}, byOrder:{orderId:qty}, totalOutstanding }
@@ -1429,6 +1471,7 @@
     getOrders: getOrders, getProductionOrders: getProductionOrders, getInbox: getInbox, getPreProductionItems: getPreProductionItems, patchItem: patchItem, deleteItem: deleteItem, createItem: createItem, searchPlans: searchPlans, searchPresses: searchPresses, createMethod: createMethod, createProductionRun: createProductionRun, getProductionRuns: getProductionRuns, patchProductionRun: patchProductionRun, deleteProductionRun: deleteProductionRun, getProposedRuns: getProposedRuns, patchProposedRun: patchProposedRun, patchMethodStatus: patchMethodStatus, patchMethodChecklist: patchMethodChecklist, getMethodsForOrder: getMethodsForOrder, patchMethodFields: patchMethodFields, deleteMethod: deleteMethod, patchOrder: patchOrder, getOrderSizes: getOrderSizes,
     getCountableRuns: getCountableRuns, getRunResults: getRunResults, submitRunResults: submitRunResults,
     getShortfalls: getShortfalls,
+    mockupThumb: mockupThumb, THUMB_CARD: THUMB_CARD, THUMB_PANEL: THUMB_PANEL,
     getPackaging: getPackaging, postPackaging: postPackaging, deletePackaging: deletePackaging,
     getShipments: getShipments, postShipment: postShipment, deleteShipment: deleteShipment, getZkWizardUrl: getZkWizardUrl,
     splitShipment: splitShipment, combineShipment: combineShipment,
