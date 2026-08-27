@@ -1049,18 +1049,17 @@
     return jsend('/api/orders/' + encodeURIComponent(id), 'PATCH', body);
   }
   function getOrderSizes(orderId){ return jget('/api/order-sizes?orderId=' + encodeURIComponent(orderId)).then(function (d) { return d.records || []; }); }
-  // Ports Salesforce's "Production Error" quick action (Order -> Flow
-  // "SCREEN Order Reprint Process"). items: [{ orderItemId, misprintQty, damagedQty }, ...]
-  // -- only lines with misprintQty + damagedQty > 0 get actioned server-side.
-  // Creates a new child Order (linked back via Original_Production_Order__c,
-  // Status/Order_Substatus__c reset to Pre-Production) with matching reprint
-  // OrderItems, and stamps Misprint_Details__c / TotalQtyMisprints__c onto the
-  // original order. See functions/api/orders/[id]/reprint.js.
-  function createReprintOrder(orderId, items, misprintDetails){
-    return jsend('/api/orders/' + encodeURIComponent(orderId) + '/reprint', 'POST', {
-      items: items, misprintDetails: misprintDetails, by: workerName()
-    });
-  }
+  // createReprintOrder REMOVED 2026-08-27, along with the "Production Error"
+  // modal in index.html and functions/api/orders/[id]/reprint.js. Reprints are
+  // now built automatically from the counts a press operator enters on
+  // counting.html -- see functions/api/_rework.js.
+  //
+  // Not a cleanup: the two paths could not coexist. Both linked the child order
+  // back with Original_Production_Order__c, which is what the automation's
+  // idempotency guard checks, so a manual reprint permanently and silently
+  // blocked the automatic one on that order -- and because nothing records
+  // WHICH damage a reprint covered, the guard could not be taught to tell them
+  // apart without risking a double order of real garments.
 
   /* ── run results (Production_Run_Line_Items__c + Result_Status__c) ──
      The counting screen's data path, and the ONLY place in this app that
@@ -1427,7 +1426,7 @@
     getShippingOrders: getShippingOrders, completeOrder: completeOrder, getStatsTrend: getStatsTrend,
     CHECK_FIELD: CHECK_FIELD, RECV_FROM_SF: RECV_FROM_SF, RECV_TO_SF: RECV_TO_SF, TIME_OPTIONS: TIME_OPTIONS,
     PLACEMENTS: PLACEMENTS, methodsList: methodsList, METHOD_META: METHOD_META,
-    getOrders: getOrders, getProductionOrders: getProductionOrders, getInbox: getInbox, getPreProductionItems: getPreProductionItems, patchItem: patchItem, deleteItem: deleteItem, createItem: createItem, searchPlans: searchPlans, searchPresses: searchPresses, createMethod: createMethod, createProductionRun: createProductionRun, getProductionRuns: getProductionRuns, patchProductionRun: patchProductionRun, deleteProductionRun: deleteProductionRun, getProposedRuns: getProposedRuns, patchProposedRun: patchProposedRun, patchMethodStatus: patchMethodStatus, patchMethodChecklist: patchMethodChecklist, getMethodsForOrder: getMethodsForOrder, patchMethodFields: patchMethodFields, deleteMethod: deleteMethod, patchOrder: patchOrder, getOrderSizes: getOrderSizes, createReprintOrder: createReprintOrder,
+    getOrders: getOrders, getProductionOrders: getProductionOrders, getInbox: getInbox, getPreProductionItems: getPreProductionItems, patchItem: patchItem, deleteItem: deleteItem, createItem: createItem, searchPlans: searchPlans, searchPresses: searchPresses, createMethod: createMethod, createProductionRun: createProductionRun, getProductionRuns: getProductionRuns, patchProductionRun: patchProductionRun, deleteProductionRun: deleteProductionRun, getProposedRuns: getProposedRuns, patchProposedRun: patchProposedRun, patchMethodStatus: patchMethodStatus, patchMethodChecklist: patchMethodChecklist, getMethodsForOrder: getMethodsForOrder, patchMethodFields: patchMethodFields, deleteMethod: deleteMethod, patchOrder: patchOrder, getOrderSizes: getOrderSizes,
     getCountableRuns: getCountableRuns, getRunResults: getRunResults, submitRunResults: submitRunResults,
     getShortfalls: getShortfalls,
     getPackaging: getPackaging, postPackaging: postPackaging, deletePackaging: deletePackaging,
