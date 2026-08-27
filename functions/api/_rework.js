@@ -46,6 +46,7 @@
  * with all of its decorations rebuilt.
  */
 import { sfFetch, apiVersion, runQuery } from "./_sf.js";
+import { rollupMisprintsToOrder } from "./_pm-rollup.js";
 
 const SF_ID = /^[a-zA-Z0-9]{15,18}$/;
 
@@ -433,6 +434,21 @@ export async function createReworkIfNeeded(env, orderId, by) {
       }
       createdIds.push(...Object.values(res.ids));
     }
+
+    // Keep the ORIGINAL order's TotalQtyMisprints__c honest. It drives the
+    // misprint number in the Production Dashboard drawer and the red badge on
+    // the card, and reprint.js -- retired 2026-08-27 -- used to be the only
+    // thing that maintained it. Without this the badge would freeze at whatever
+    // a manager last typed into the stepper by hand, while the real count moved
+    // underneath it. rollupMisprintsToOrder recomputes from the reprint child
+    // orders' actual line quantities rather than adding to what is already
+    // there, so counting a run twice cannot inflate it.
+    //
+    // Best-effort and deliberately last: a failure here must not undo a reprint
+    // that has already been built correctly.
+    await rollupMisprintsToOrder(env, orderId).catch((e) =>
+      console.error("rework: misprint rollup failed", orderId, e),
+    );
 
     return {
       created: true,
