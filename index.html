@@ -123,7 +123,7 @@
         <sc-for list="{{col.items}}" as="o" hint-placeholder-count="2">
           <div draggable="true" onDragStart="{{ o.onDragStart }}" onDragEnd="{{ o.onDragEnd }}" onClick="{{ o.onOpen }}" style="display:flex;background:{{o.cardBg}};border:1px solid {{o.cardBorder}};border-radius:11px;overflow:hidden;cursor:pointer;opacity:{{o.cardOpacity}};transition:border-color .12s,transform .12s" style-hover="border-color:#3a3a40;transform:translateY(-1px)">
             <div style="width:6px;background:{{o.urgColor}};flex-shrink:0"></div>
-            <sc-if value="{{o.hasThumb}}" hint-placeholder-val="{{ false }}"><img src="{{o.mockupUrl}}" alt="" onError="{{ o.onThumbErr }}" onClick="{{ o.onMockupOpen }}" style-hover="filter:brightness(1.12)" style="width:64px;height:auto;align-self:stretch;object-fit:cover;flex-shrink:0;background:#121215;border-right:1px solid #202024;cursor:zoom-in"></sc-if>
+            <sc-if value="{{o.hasThumb}}" hint-placeholder-val="{{ false }}">{{o.thumbNode}}</sc-if>
             <sc-if value="{{o.noThumb}}" hint-placeholder-val="{{ true }}"><div style="width:64px;flex-shrink:0;align-self:stretch;background:#1c1c20;border-right:1px solid #2a2a2f;display:flex;align-items:center;justify-content:center"><i class="ti ti-photo-off" style="color:#8a8378;font-size:24px"></i></div></sc-if>
             <div style="padding:13px 14px;flex:1;min-width:0;display:flex;flex-direction:column;gap:10px">
               <div style="display:flex;align-items:flex-start;gap:8px">
@@ -1760,6 +1760,17 @@ class Component extends DCLogic {
            here: it keeps the click off onOpen, and the browser still treats a
            press-and-move on the image as the card's drag. */
         onMockupOpen: (window.CAApi&&window.CAApi.mockupClick)?window.CAApi.mockupClick(o.mockupUrl,(o.customer||'')+' - '+(o.num||'')):null,
+        /* Built here rather than as <img src="{{...}}"> in the template -- see
+           mockupThumb() in ca-api.js for why that costs a page-sized download
+           and a console error on every single load. */
+        thumbNode: (!!o.mockupUrl && !st.thumbErr[o.id] && window.CAApi && window.CAApi.mockupThumb)
+          ? window.CAApi.mockupThumb(
+              o.mockupUrl,
+              window.CAApi.THUMB_CARD,
+              ()=>{ try{ const cid=o.id; this.setState(s2=>({thumbErr:Object.assign({},s2.thumbErr,{[cid]:true})})); }catch(err){ console.error('onThumbErr failed for', o&&o.id, err); } },
+              (window.CAApi.mockupClick)?window.CAApi.mockupClick(o.mockupUrl,(o.customer||'')+' - '+(o.num||'')):null
+            )
+          : null,
         cardOpacity: st.dragId===o.id ? 0.35 : 1,
         onOpen: ()=>this.openCard(o.id),
         onDragStart: (e)=>{ if(e&&e.dataTransfer){ e.dataTransfer.effectAllowed='move'; try{e.dataTransfer.setData('text/plain',o.id);}catch(_){}} this.setState({dragId:o.id}); },
