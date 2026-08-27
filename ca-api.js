@@ -1098,6 +1098,21 @@
     return jsend('/api/run-results', 'POST', { runId: runId, lines: lines, by: workerName() });
   }
 
+  // Runs that finished with garments that never reached the press -- the
+  // manager-facing half of the incomplete alert. Returns the whole envelope:
+  //   { available, records, byMethod:{methodId:qty}, byOrder:{orderId:qty}, totalOutstanding }
+  // `byMethod` / `byOrder` are pre-summed and already filtered to OUTSTANDING
+  // shortfalls, so a board renders a badge with a single lookup and no grouping.
+  //
+  // "Outstanding" is derived, not stored: a shortfall stops counting once a
+  // later run exists on the same method. See functions/api/shortfalls/index.js
+  // for why, and for the assumption that carries.
+  //
+  // Boards should call this in the BACKGROUND and ignore failures. It is
+  // deliberately separate from the main board query so that an org without the
+  // production-result fields loses a badge rather than a whole screen.
+  function getShortfalls(){ return jget('/api/shortfalls'); }
+
   /* ── packaging (Order_Packaging__c) ── */
   function getPackaging(orderId){ return jget('/api/packaging?orderId=' + encodeURIComponent(orderId)).then(function (d) { return d.records || []; }); }
   function postPackaging(orderId, type, qty){ return jsend('/api/packaging', 'POST', { orderId: orderId, Packaging_Type__c: type, Quantity__c: qty }); }
@@ -1414,6 +1429,7 @@
     PLACEMENTS: PLACEMENTS, methodsList: methodsList, METHOD_META: METHOD_META,
     getOrders: getOrders, getProductionOrders: getProductionOrders, getInbox: getInbox, getPreProductionItems: getPreProductionItems, patchItem: patchItem, deleteItem: deleteItem, createItem: createItem, searchPlans: searchPlans, searchPresses: searchPresses, createMethod: createMethod, createProductionRun: createProductionRun, getProductionRuns: getProductionRuns, patchProductionRun: patchProductionRun, deleteProductionRun: deleteProductionRun, getProposedRuns: getProposedRuns, patchProposedRun: patchProposedRun, patchMethodStatus: patchMethodStatus, patchMethodChecklist: patchMethodChecklist, getMethodsForOrder: getMethodsForOrder, patchMethodFields: patchMethodFields, deleteMethod: deleteMethod, patchOrder: patchOrder, getOrderSizes: getOrderSizes, createReprintOrder: createReprintOrder,
     getCountableRuns: getCountableRuns, getRunResults: getRunResults, submitRunResults: submitRunResults,
+    getShortfalls: getShortfalls,
     getPackaging: getPackaging, postPackaging: postPackaging, deletePackaging: deletePackaging,
     getShipments: getShipments, postShipment: postShipment, deleteShipment: deleteShipment, getZkWizardUrl: getZkWizardUrl,
     splitShipment: splitShipment, combineShipment: combineShipment,
