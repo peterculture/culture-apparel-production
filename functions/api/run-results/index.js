@@ -546,12 +546,24 @@ async function composite(env, compositeRequest) {
   }
 
   const subs = Array.isArray(data.compositeResponse) ? data.compositeResponse : [];
+  const failures = [];
   for (const s of subs) {
     if (s.httpStatusCode >= 400) {
       const b = s.body;
-      const detail = Array.isArray(b) && b[0] ? `${b[0].errorCode}: ${b[0].message}` : JSON.stringify(b);
-      return { ok: false, detail };
+      const first = Array.isArray(b) && b[0] ? b[0] : null;
+      failures.push({
+        referenceId: s.referenceId,
+        code: first ? first.errorCode : "UNKNOWN",
+        message: first ? first.message : JSON.stringify(b),
+      });
     }
+  }
+  if (failures.length) {
+    // allOrNone:true makes every innocent sub-request report PROCESSING_HALTED.
+    // Reporting in array order therefore names a bystander and hides the real
+    // cause. Same fix as _rework.js -- see the longer note there.
+    const real = failures.find((f) => f.code !== "PROCESSING_HALTED") || failures[0];
+    return { ok: false, detail: `${real.referenceId}: ${real.code}: ${real.message}` };
   }
   return { ok: true };
 }
