@@ -493,13 +493,16 @@ class Component extends DCLogic {
     const tabs=[ mkTab('todo','To Count',todo.length), mkTab('done','Counted',done.length) ];
 
     const q=st.q.trim().toLowerCase();
+    /* Search the RENDERED text, not the raw field. GOA_Order_Number__c is a
+       Salesforce HYPERLINK() formula, so its raw value is
+       `<a href="/801ca00000SJ1xy" target="_self">20484-3</a>` -- searching that
+       string directly means typing "href", "target" or "801" matches every card
+       on the board. txt() is the same helper the cards render through, so what
+       you can see is exactly what you can search. */
     const pool=(st.tab==='done'?done:todo).filter(r=>{
       if(!q) return true;
-      return String(r.goaNumber||'').toLowerCase().includes(q)
-        || String(r.orderNumber||'').toLowerCase().includes(q)
-        || String(r.customer||'').toLowerCase().includes(q)
-        || String(r.orderName||'').toLowerCase().includes(q)
-        || String(r.name||'').toLowerCase().includes(q);
+      return [r.goaNumber, r.orderNumber, r.customer, r.orderName, r.name]
+        .some(v=>txt(v).toLowerCase().includes(q));
     });
     const cards=pool.map(r=>{
       const loss=(Number(r.totalMisprint)||0)+(Number(r.totalDamaged)||0);
