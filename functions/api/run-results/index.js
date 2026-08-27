@@ -109,6 +109,22 @@ const RUN_BASE_FIELDS = [
   "LastModifiedDate",
 ];
 
+/**
+ * NOTE WHAT IS ABSENT: Reject_Reason__c and Notes__c.
+ *
+ * Both exist on the object in dev2 (Peter Larson created them 2026-05-22) and
+ * both are invisible to the integration user's profile. Naming an FLS-hidden
+ * field in a SELECT does not return a blank column -- it makes the ENTIRE query
+ * a parse error ("No such column 'Reject_Reason__c'"), so including them for
+ * completeness took down the whole counting screen with an empty run list.
+ *
+ * They are omitted rather than FLS-fixed because the counting screen does not
+ * render either one: a shop worker recording a misprint is not writing prose,
+ * and a free-text box on a tablet at a press gets used roughly never. If they
+ * are ever wanted, grant the integration profile read/edit on both FIRST, in
+ * every org, and only then add them back here -- an org that has not had the
+ * permission granted will otherwise lose the whole board rather than one field.
+ */
 const LINE_FIELDS = [
   "Id",
   "Name",
@@ -120,8 +136,6 @@ const LINE_FIELDS = [
   "Incomplete_Qty__c",
   "Misprint_Qty__c",
   "Damaged_Qty__c",
-  "Reject_Reason__c",
-  "Notes__c",
 ];
 
 /** The org has not had the production-result fields deployed yet. */
@@ -311,8 +325,6 @@ async function getOneRun(env, runId) {
         incompleteQty: l.Incomplete_Qty__c,
         misprintQty: l.Misprint_Qty__c,
         damagedQty: l.Damaged_Qty__c,
-        rejectReason: l.Reject_Reason__c,
-        notes: l.Notes__c,
       })),
     },
     { headers: { "Cache-Control": "no-store" } },
@@ -371,9 +383,9 @@ export async function onRequestPost({ request, env }) {
         // blank must be able to, and blank is the model's "nothing wrong here".
         fields[field] = parsedQty.value;
       }
-      if (typeof raw.rejectReason === "string") fields.Reject_Reason__c = raw.rejectReason.slice(0, 255) || null;
-      if (typeof raw.notes === "string") fields.Notes__c = raw.notes.slice(0, 32000) || null;
-
+      // No Reject_Reason__c / Notes__c here either -- see LINE_FIELDS above.
+      // A write to an FLS-hidden field fails the whole composite sub-request,
+      // which would roll back a counter's numbers over a field they never saw.
       if (Object.keys(fields).length) parsed.push({ id: raw.id, fields });
     }
 
