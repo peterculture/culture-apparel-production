@@ -699,6 +699,11 @@ class Component extends DCLogic {
     // own id so the order-level lookups added for multi-method support (timers,
     // packaging, shipments, etc.) work the same in demo mode as live mode.
     this._demoOrders = seedOrders.map(o=>Object.assign({orderId:o.id, status:({rfp:'Ready for Print',ip:'In Production',pp:'Post-Production',done:'Completed'})[o.stage]}, o));
+    // Packaging/shipment fixtures for the demo cards above. Applied ONLY by
+    // load()'s catch branch, alongside _demoOrders -- see the pkg/ship note in
+    // the state literal below.
+    this._demoPkg = { 'GOA-4790':[{type:'Poly mailers',qty:6}], 'GOA-4760':[{type:'Master cartons',qty:10},{type:'Poly bags',qty:500}] };
+    this._demoShip = { 'GOA-4760':[{carrier:'FedEx Ground',tracking:'7712 4490 1183'}], 'GOA-4755':[{carrier:'UPS Ground',tracking:'1Z 998 A21 55'}], 'GOA-4772':[{carrier:'USPS Priority',tracking:'9405 5118 9922'}] };
     // Accepts an identity established on ANY board, including station.html /
     // shipping.html which write their own key -- see anyWorkerName() in ca-api.js.
     let storedName=''; try{ storedName=(window.CAApi&&window.CAApi.anyWorkerName)?window.CAApi.anyWorkerName():(localStorage.getItem('caShopWorkerName')||''); }catch(_){}
@@ -732,8 +737,17 @@ class Component extends DCLogic {
       // as both card id and order id (see _demoOrders above), so this still
       // reads correctly in demo mode.
       timers:{ 'GOA-4809':{ setup:{elapsed:1320,running:false,startedAt:0}, prod:{elapsed:2460,running:true,startedAt:Date.now()} }, 'GOA-4814':{ setup:{elapsed:900,running:false,startedAt:0}, prod:{elapsed:1560,running:false,startedAt:0} }, 'GOA-4790':{ setup:{elapsed:1080,running:false,startedAt:0}, prod:{elapsed:3900,running:false,startedAt:0} } },
-      pkg:{ 'GOA-4790':[{type:'Poly mailers',qty:6}], 'GOA-4760':[{type:'Master cartons',qty:10},{type:'Poly bags',qty:500}] },
-      ship:{ 'GOA-4760':[{carrier:'FedEx Ground',tracking:'7712 4490 1183'}], 'GOA-4755':[{carrier:'UPS Ground',tracking:'1Z 998 A21 55'}], 'GOA-4772':[{carrier:'USPS Priority',tracking:'9405 5118 9922'}] },
+      /* EMPTY on a live board. These two maps used to be seeded here with
+         packaging and shipment rows for four GOA numbers, which then sat in
+         state for the whole session -- a successful live load never cleared
+         them. They were keyed by demo order NUMBER while live cards key by
+         Salesforce Id, so nothing rendered from them in practice, but demo
+         fixtures on a live code path are one schema change away from
+         rendering, and this board's whole failure mode is looking healthy
+         while showing invented numbers. The fixtures now live on
+         this._demoPkg / this._demoShip and are applied only by the demo
+         branch of load(). Live entries are filled per order by openCard(). */
+      pkg:{}, ship:{},
       misDetails:{}, pkgType:'Standard Culture Box', pkgQty:1, ppItemsById:{},
       // Card drawer's "Production Runs" section (view + edit existing runs
       // under this card's Production_Method__c) -- mirrors pre-production.html's
@@ -966,9 +980,20 @@ class Component extends DCLogic {
       const timers={}, misD={};
       cards.forEach(c=>{ timers[c.id]={setup:{elapsed:c._setup||0,running:false,startedAt:0},prod:{elapsed:c._prod||0,running:false,startedAt:0}}; });
       recs.forEach(r=>{ if(r.Misprint_Details__c) misD[r.Id]=r.Misprint_Details__c; });
-      this.setState(st=>({ orders:cards, connection:'live', timers:Object.assign({},st.timers,timers), misDetails:Object.assign({},st.misDetails,misD) }),
+      /* Coming back from a demo fallback: drop the demo packaging/shipment
+         fixtures rather than leaving them keyed alongside live data. openCard()
+         refills these per order from Salesforce. Only fires on the demo->live
+         transition, so a live board's already-fetched rows survive a refresh. */
+      const wasDemo = this.state.connection==='demo';
+      this.setState(st=>({ orders:cards, connection:'live', timers:Object.assign({},st.timers,timers), misDetails:Object.assign({},st.misDetails,misD),
+        pkg: wasDemo ? {} : st.pkg, ship: wasDemo ? {} : st.ship }),
         ()=>this.applyDeepLink(cards));
-    } catch(_) { this.setState({orders:this._demoOrders, connection:'demo'}); }
+    } catch(_) {
+      this.setState({
+        orders:this._demoOrders, connection:'demo',
+        pkg:Object.assign({}, this._demoPkg), ship:Object.assign({}, this._demoShip),
+      });
+    }
   }
   // Also clears the stored role (not just the name) -- otherwise a stale
   // 'manager' role from a prior login could combine with re-picking
