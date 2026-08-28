@@ -195,6 +195,10 @@
           <div style="font:400 10px/1.5 'Archivo';letter-spacing:.02em;color:#4d483f;margin-top:8px">{{open.statusHelp}}</div>
         </div>
 
+        <!-- Set-up/production timers are locked once the method leaves the
+             press (see timerLocked()), so in Post-Production they are two dead
+             tiles. Hidden rather than shown greyed out. -->
+        <sc-if value="{{open.notPP}}" hint-placeholder-val="{{ true }}">
         <div>
           <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:11px">Time Logged</div>
           <div style="display:flex;gap:10px">
@@ -222,9 +226,19 @@
             </sc-for>
           </div>
         </div>
+        </sc-if>
 
         <a href="{{open.orderSheetUrl}}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;font:700 11px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#ECEAE4;background:#141417;border:1px solid #2a2a2f;border-radius:10px;padding:13px;text-decoration:none" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-printer"></i>Open Order Sheet</a>
 
+        <sc-if value="{{open.isPP}}" hint-placeholder-val="{{ false }}">
+          <a href="{{open.runResultsUrl}}" style="display:flex;align-items:center;gap:11px;background:#1A1409;border:1px solid #5E4214;border-radius:10px;padding:13px 14px;text-decoration:none" style-hover="border-color:#C9923A"><i class="ti ti-clipboard-list" style="color:#C9923A;font-size:19px;flex-shrink:0"></i><div style="min-width:0"><div style="font:700 11px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#E0B870">Run Results</div><div style="font:400 10px/1.45 'Archivo';color:#8a8378;margin-top:5px">Record misprints, damaged, and incomplete garments</div></div><i class="ti ti-chevron-right" style="margin-left:auto;color:#6C665C;font-size:15px;flex-shrink:0"></i></a>
+        </sc-if>
+
+        <!-- Everything from Specifications through Production Runs is press-time
+             detail. Once the method reaches Post-Production the printing is
+             done, so this whole block collapses and the drawer becomes a
+             pack-and-ship screen. See open.notPP. -->
+        <sc-if value="{{open.notPP}}" hint-placeholder-val="{{ true }}">
         <div>
           <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:9px">Specifications for Printing</div>
           <textarea value="{{open.specs}}" onInput="{{ open.onSpecs }}" placeholder="Print specs — placement, colors, screens, digitizing notes…" style="width:100%;min-height:72px;font:400 13px/1.55 'Archivo';color:#C9C6BF;white-space:pre-wrap;background:#121215;border:1px solid #232327;border-radius:9px;padding:12px 14px;outline:none;resize:vertical"></textarea>
@@ -457,6 +471,7 @@
             <sc-if value="{{open.runsEmpty}}" hint-placeholder-val="{{ true }}"><div style="font:400 11px/1.4 'Archivo';color:#4d483f;padding:2px">No production runs created for this method yet.</div></sc-if>
           </div>
         </div>
+        </sc-if>
 
         <div>
           <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:11px">Shipping &amp; Delivery</div>
@@ -509,6 +524,10 @@
           </div>
         </div>
 
+        <!-- Hidden in Post-Production: the stepper is a running note only, and
+             the Run Results link above is the real place misprints/damaged/
+             incomplete get recorded. See open.notPP. -->
+        <sc-if value="{{open.notPP}}" hint-placeholder-val="{{ true }}">
         <div>
           <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:11px">Misprints</div>
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
@@ -522,6 +541,7 @@
             <div style="font:400 10px/1.5 'Archivo';color:#8a8378">Reprints are created automatically from the counts entered on <a href="counting.html" style="color:#C9923A">Run Results</a> when every method on this order is finished. This stepper is a running note only — it no longer files anything.</div>
           </div>
         </div>
+        </sc-if>
       </div>
 
       <div style="padding:16px 22px;border-top:1px solid #1b1b1e;display:flex;gap:10px">
@@ -1950,6 +1970,28 @@ class Component extends DCLogic {
       });
       const assignees=['MA','DK','PR','JT'].map(k=>{ const on=src.worker===k; return { key:k, init:k, name:W[k].name, color:W[k].color, onPick:()=>this.assign(src.id,k), bg:on?'#1a1a1e':'transparent', border:on?W[k].color:'#242428', textColor:on?'#ECEAE4':'#8a8378' }; });
       const pkg=st.pkg[src.orderId]||[]; const shp=st.ship[src.orderId]||[]; const nx=NEXT[src.stage];
+      /* Post-Production collapses this drawer down to the six things the
+         packing bench actually needs: the mockup, the status stepper, the
+         order sheet, the Run Results link, shipping and packaging. Everything
+         between Specifications and Production Runs is press-time detail that
+         is finished by the time a method lands here, and the timers are
+         already locked (timerLocked()), so they would render as dead tiles.
+         Resolved exactly the way statusHelp/statusSteps below resolve the
+         current step -- the method's own Status__c first, the board stage only
+         as a fallback -- so the hidden sections and the highlighted step can
+         never disagree about which stage this card is in. */
+      const curStatus = src.status || {rfp:'Ready for Print',ip:'In Production',pp:'Post-Production',done:'Completed'}[src.stage];
+      const isPP = curStatus==='Post-Production';
+      /* counting.html takes ?runId=, and openRun() there fetches the run
+         directly rather than picking it out of the countable list, so a deep
+         link works even for a run the list would not have shown. Only send one
+         when this method has exactly one run -- with two or more there is no
+         right guess, and with none (or runs still loading) the plain list is
+         the honest destination. */
+      const ppRuns = st.runsByMethod[src.id] || [];
+      const runResultsUrl = (ppRuns.length===1)
+        ? ('counting.html?runId='+encodeURIComponent(ppRuns[0].id))
+        : 'counting.html';
       // Production Runs section -- scoped to THIS card's own
       // Production_Method__c (src.id), same as pre-production.html, so a
       // sibling method's runs never bleed into this card's list. Visible at
@@ -2046,6 +2088,7 @@ class Component extends DCLogic {
         assignees, timers,
         hasMockup:!!d.mockupUrl, noMockup:!d.mockupUrl, mockupNode: d.mockupUrl?React.createElement('img',{src:d.mockupUrl,alt:'Production mockup',onClick:(window.CAApi&&window.CAApi.mockupClick)?window.CAApi.mockupClick(d.mockupUrl,(d.customer||'')+' - '+(d.num||'')):null, title:'Click to inspect', style:{cursor:'zoom-in',width:96,height:96,flexShrink:0,borderRadius:11,border:'1px solid #232327',objectFit:'cover',background:'#121215'}}):null, onZk:()=>this.openZk(src.orderId,src.num), zkErrMsg:(st.zkErr&&st.zkErr[src.orderId])||'', hasZkErr:!!(st.zkErr&&st.zkErr[src.orderId]),
         specs:d.printSpecs||'', onSpecs:(e)=>this.setSpecs(src.orderId,e.target.value), special:d.specialNotes||'', onSpecial:(e)=>this.setSpecial(src.orderId,e.target.value), orderSheetUrl:'order-sheet.html?orderId='+encodeURIComponent(src.orderId),
+        isPP, notPP:!isPP, runResultsUrl,
         delivery:d.shipDelivery||'', deliveryOptions:[{value:'',label:'— not set —'},{value:'Shipping',label:'Shipping'},{value:'Local Dropoff',label:'Local Dropoff'},{value:'Pickup',label:'Pickup'},{value:'Order Fulfillment',label:'Order Fulfillment'},{value:'Split Ship',label:'Split Ship'},{value:'Delivery',label:'Delivery'}], onDelivery:(e)=>this.setDelivery(src.orderId,e.target.value),
         labelPrinted:!!d.labelPrinted, onToggleLabel:()=>this.toggleLabel(src.orderId), labelBg:d.labelPrinted?'#18230D':'#16161a', labelBorder:d.labelPrinted?'#3D5418':'#2a2a2f', labelColor:d.labelPrinted?'#BBD382':'#9C978C', labelIcon:d.labelPrinted?'ti-checkbox':'ti-square',
         // Pre_Production_Item__c records come back per ORDER (an order-wide
