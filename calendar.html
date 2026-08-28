@@ -1017,7 +1017,8 @@ class Component extends DCLogic {
     const api=this._api;
     if(this.state.conn!=='live'){ alert('Not connected to Salesforce (demo mode).'); return; }
     if(!this.canEdit()){ alert('Only managers can reschedule.'); return; }
-    if(api && api.confirmManager && !api.confirmManager('reschedule this job')) return;
+    // await: confirmManager returns a Promise, and `!promise` is always false.
+    if(api && api.confirmManager && !(await api.confirmManager('reschedule this job'))) return;
 
     const dur = this.durationOf(order);
     const end = new Date(startDate.getTime()+dur*3600000);
@@ -1298,7 +1299,8 @@ class Component extends DCLogic {
     if(!this.canEdit()){ this.runFail('Only managers and admins can change a run.'); return; }
     const f=st.runEdits[key] || (this._runSeeds && this._runSeeds[key]);
     if(!f){ this.runFail('Nothing to save.'); return; }
-    if(api && api.confirmManager && !api.confirmManager(run?'Changing this production run':'Creating a production run')) return;
+    // await: confirmManager returns a Promise, and `!promise` is always false.
+    if(api && api.confirmManager && !(await api.confirmManager(run?'Changing this production run':'Creating a production run'))) return;
 
     if(!f.pressId){ this.runFail('Pick a press.'); return; }
     const start=this.buildRunDateTime(f.startDate,f.startTime);
@@ -1366,7 +1368,8 @@ class Component extends DCLogic {
     const api=this._api;
     if(this.state.conn!=='live'){ this.runFail('Not connected to Salesforce (demo mode).'); return; }
     if(!this.canEdit()){ this.runFail('Only managers and admins can remove a run.'); return; }
-    if(api && api.confirmManager && !api.confirmManager('Removing a production run')) return;
+    // await: confirmManager returns a Promise, and `!promise` is always false.
+    if(api && api.confirmManager && !(await api.confirmManager('Removing a production run'))) return;
     if(!window.confirm('Remove this production run? This can’t be undone.')) return;
     this.setState({runBusy:run.Id, runErr:'', runMsg:''});
     try{
