@@ -1144,9 +1144,10 @@ class Component extends DCLogic {
       this.setState(st=>({ methodsByOrder:Object.assign({}, st.methodsByOrder, {[orderId]:recs||[]}), methodsLoadingFor:null }));
     }).catch(()=>{ this.setState({methodsLoadingFor:null}); });
   }
-  openMethodEdit(r){
+  async openMethodEdit(r){
     const api=this._api||window.CAApi;
-    if(api && !api.confirmManager('Editing a production method')) return;
+    // await: confirmManager returns a Promise, and `!promise` is always false.
+    if(api && !(await api.confirmManager('Editing a production method'))) return;
     this.setState({
       methodEditId: r.Id,
       // Captured at open time so saveMethodEdit can ask the server "reject
@@ -1198,9 +1199,10 @@ class Component extends DCLogic {
       }
     }
   }
-  removeMethod(r, orderId){
+  async removeMethod(r, orderId){
     const api=this._api||window.CAApi;
-    if(api && !api.confirmManager('Removing a production method')) return;
+    // await: confirmManager returns a Promise, and `!promise` is always false.
+    if(api && !(await api.confirmManager('Removing a production method'))) return;
     if(!window.confirm('Remove this production method? This can’t be undone.')) return;
     if(!this._api) return;
     this._api.deleteMethod(r.Id).then(()=>{
@@ -1349,9 +1351,10 @@ class Component extends DCLogic {
       }
     }
   }
-  removeRun(runId, methodId){
+  async removeRun(runId, methodId){
     const api=this._api||window.CAApi;
-    if(api && !api.confirmManager('Removing a production run')) return;
+    // await: confirmManager returns a Promise, and `!promise` is always false.
+    if(api && !(await api.confirmManager('Removing a production run'))) return;
     if(!window.confirm('Remove this production run? This can’t be undone.')) return;
     if(!this._api) return;
     this._api.deleteProductionRun(runId).then(()=>{
@@ -1420,9 +1423,10 @@ class Component extends DCLogic {
   // to be created by hand again, do it in Salesforce; do not restore this
   // modal without first giving reprints a record of what they cover.
   removePkg(orderId,idx){ const cur=(this.state.pkg[orderId]||[])[idx]; this.setState(st=>{ const arr=(st.pkg[orderId]||[]).slice(); arr.splice(idx,1); const p=Object.assign({},st.pkg); p[orderId]=arr; return {pkg:p}; }); if(this._api && this.state.connection==='live' && cur && cur.id) this._api.deletePackaging(cur.id).catch(()=>{}); }
-  removePPItem(orderId,itemId){
+  async removePPItem(orderId,itemId){
     const api=this._api||window.CAApi;
-    if(api && !api.confirmManager('Removing a production item')) return;
+    // await: confirmManager returns a Promise, and `!promise` is always false.
+    if(api && !(await api.confirmManager('Removing a production item'))) return;
     if(!window.confirm('Remove this production item? This can’t be undone.')) return;
     this.setState(st=>{ const pp=Object.assign({},st.ppItemsById); pp[orderId]=(pp[orderId]||[]).filter(x=>x.Id!==itemId); return {ppItemsById:pp}; }); if(this._api && this.state.connection==='live' && itemId) this._api.deleteItem(itemId).catch(()=>{});
   }
