@@ -77,6 +77,14 @@ const PM_PLACEMENT_FIELD = "Placement__c";
 // with each method's own record listing all the locations it covers.
 const PM_PLACEMENTS_FIELD = "Placements__c";
 
+/* Salesforce Id shape. Every value that reaches a SOQL literal in this file
+   is checked against this first -- the query is built by string concatenation,
+   so an unchecked id closes the quote and appends its own WHERE. Same constant
+   and same regex as ./[id].js and ../production-runs/index.js; kept per-file
+   rather than shared because these route modules deliberately import only
+   from _sf.js and the rollups. */
+const SF_ID = /^[a-zA-Z0-9]{15,18}$/;
+
 const ITEM_OBJECT       = "Pre_Production_Item__c";
 const ITEM_PM_FIELD     = "Production_Method__c";      // lookup -> Method
 const ITEM_TYPE_FIELD   = "Type__c";                   // picklist: Screen|Ink|Thread|Digitization|Transfer
@@ -132,7 +140,11 @@ export async function onRequestGet({ env, request }) {
   try {
     const url = new URL(request.url);
     const orderId = (url.searchParams.get("orderId") || "").trim();
-    if (!orderId) return jsonError("missing_orderId", 400);
+    /* Shape-checked BEFORE it reaches the WHERE clause below. A truthiness
+       test alone let `x' OR Id != null OR Name = 'x` terminate the literal and
+       return every Production_Method__c in the org. Rejected here without
+       touching Salesforce. */
+    if (!SF_ID.test(orderId)) return jsonError("missing_orderId", 400);
 
     // LastModifiedDate added 2026-07-29 so the drawer's method-edit form can
     // capture "what I loaded" and the PATCH endpoint can reject a save if
@@ -175,7 +187,13 @@ export async function onRequestPost({ env, request }) {
   const by = (payload && payload.by == null ? "" : String(payload.by)).trim().slice(0, 80);
 
   // --- validate before touching Salesforce ---
+  // Same shape check as the GET. Not exploitable on this path today -- a
+  // malformed Id fails the composite create before the rollup runs -- but
+  // rollupOrderSubstatus() below documents its orderId as already-validated
+  // and drops it straight into a WHERE clause, so validate it here rather
+  // than rely on Salesforce rejecting it first.
   if (!orderId || typeof orderId !== "string")   return jsonError("missing_orderId", 400);
+  if (!SF_ID.test(orderId))                      return jsonError("missing_orderId", 400);
   if (!status || typeof status !== "string")     return jsonError("missing_status", 400);
   if (!ALLOWED_STATUSES.has(status))             return jsonError("bad_status", 400);
   if (!type || typeof type !== "string")         return jsonError("missing_type", 400);
