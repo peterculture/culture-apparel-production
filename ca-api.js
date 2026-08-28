@@ -1228,7 +1228,18 @@
   /* ── station worker board ── */
   function getStationItems(station){ return jget('/api/station-items?station=' + encodeURIComponent(station)).then(function (d) { return d.records || []; }); }
   function updateItemStatus(station, itemId, subStatus){ return jsend('/api/update-item-status', 'POST', { station: station, itemId: itemId, subStatus: subStatus, by: workerName() }); }
-  function updateOrderReceiving(orderId, status, missing){ return jsend('/api/update-order-receiving', 'POST', { station:'garment', orderId: orderId, status: status, missing: missing || '', by: workerName() }); }
+  /* `missing` is the Partial count-in note. It is OMITTED from the body unless
+     the caller passes a string, and that distinction is load-bearing: the old
+     `missing: missing || ''` sent the key on every call, so the endpoint wrote
+     '' over whatever was in Salesforce every time a worker tapped Partial --
+     erasing a note somebody had typed in Salesforce itself. Absent now means
+     "leave it alone"; a string (including '') means "write exactly this", which
+     is what the station's own Missing Items box sends when it saves. */
+  function updateOrderReceiving(orderId, status, missing){
+    var body = { station:'garment', orderId: orderId, status: status, by: workerName() };
+    if (typeof missing === 'string') body.missing = missing;
+    return jsend('/api/update-order-receiving', 'POST', body);
+  }
   function getInventory(type){ return jget('/api/inventory?type=' + encodeURIComponent(type)).then(function (d) { return d.items || []; }); }
   function postInventory(type, items){ return jsend('/api/inventory', 'POST', { type: type, items: items }); }
   function stationLogin(station, pin){ return jsend('/api/station-login', 'POST', { station: station, pin: pin }); }
