@@ -201,6 +201,20 @@
         <sc-if value="{{open.notPP}}" hint-placeholder-val="{{ true }}">
         <div>
           <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:11px">Time Logged</div>
+          <sc-if value="{{open.runPicker.shown}}" hint-placeholder-val="{{ false }}">
+            <div style="background:#101013;border:1px solid #232327;border-radius:11px;padding:12px 13px;margin-bottom:11px">
+              <div style="font:600 9px/1 'Oswald';letter-spacing:.11em;text-transform:uppercase;color:#6C665C;margin-bottom:9px">Working on</div>
+              <div style="display:flex;gap:7px;flex-wrap:wrap">
+                <sc-for list="{{open.runPicker.options}}" as="r" hint-placeholder-count="2">
+                  <button onClick="{{ r.onPick }}" style="flex:1;min-width:104px;text-align:left;background:{{r.bg}};border:1px solid {{r.border}};border-radius:9px;padding:9px 11px;cursor:pointer"><div style="font:600 12px/1 'Oswald';letter-spacing:.03em;color:{{r.nameColor}}">{{r.name}}</div><div style="font:400 9px/1 'Archivo';color:{{r.stateColor}};margin-top:5px">{{r.stateLabel}}</div></button>
+                </sc-for>
+              </div>
+              <sc-if value="{{open.runPicker.hasNote}}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;gap:7px;align-items:flex-start;font:400 10px/1.45 'Archivo';color:#E0B870;background:#241a09;border:1px solid #5E4214;border-radius:8px;padding:9px 10px;margin-top:9px"><i class="ti ti-alert-triangle" style="font-size:12px;flex-shrink:0;margin-top:1px"></i><span>{{open.runPicker.note}}</span></div>
+              </sc-if>
+              <div style="font:400 9px/1.45 'Archivo';color:#4d483f;margin-top:9px">Start and Stop apply to the run selected here. Pick any run, in any order — the press does not have to work through them in sequence.</div>
+            </div>
+          </sc-if>
           <div style="display:flex;gap:10px">
             <sc-for list="{{open.timers}}" as="t" hint-placeholder-count="2">
               <div style="flex:1;background:#121215;border:1px solid #232327;border-radius:11px;padding:13px 14px">
@@ -646,6 +660,26 @@ const POLL_MAX_TRIES = 40; // ~4 minutes, then give up quietly
 // to enforce anything, and "Other" lets a worker type a free-form carrier.
 const CARRIER_OPTIONS = ['UPS','FedEx','USPS','DHL','Local Courier','Other'];
 
+/* ── which run each method's timers are pointed at ────────────────────────
+   Kept in localStorage, not just state. The alternative is losing the choice
+   whenever the tablet sleeps or the page reloads, and the fallback would then
+   silently re-derive "first run with no actual end" -- so a worker who had
+   deliberately switched to run 3 would come back pointed at run 1 and stamp
+   the wrong run's actual end on the next Stop. A wrong timestamp on a finished
+   run is worse than a stale preference, so this is written down.
+
+   Keyed by Production_Method__c Id. Entries for methods that are long finished
+   just sit there; they are a few bytes each and selectedRunId() ignores any id
+   that is not in the method's current run list. */
+const RUN_SEL_KEY = 'caTimerRunByMethod';
+function loadRunSel(){
+  try { return JSON.parse(localStorage.getItem(RUN_SEL_KEY) || '{}') || {}; }
+  catch (_) { return {}; }
+}
+function saveRunSel(map){
+  try { localStorage.setItem(RUN_SEL_KEY, JSON.stringify(map || {})); } catch (_) {}
+}
+
 class Component extends DCLogic {
   constructor(props){
     super(props);
@@ -707,6 +741,10 @@ class Component extends DCLogic {
       // Production_Method__c record once it's advanced past Pre-Production.
       // See openCard()/loadRunsForCard()/saveRunRow().
       runsByMethod:{}, runsLoadingFor:null, runEdits:{}, runRowPressResults:{}, runRowSaving:{}, runRowErr:{}, runRowMsg:{},
+      // Which run each method's Set-up/Production timers act on, chosen by the
+      // worker rather than derived. See selectedRunId()/selectRun() and the
+      // RUN_SEL_KEY block above.
+      runSelByMethod: loadRunSel(),
       // "Production Methods" section of the card drawer -- fresh per-order
       // fetch (methodsByOrder, keyed by orderId) so a manager can see, edit,
       // and remove every sibling method on the order the open card belongs
@@ -1448,15 +1486,21 @@ class Component extends DCLogic {
   }
 
   /* ── Runs as the timer's memory ──────────────────────────────────────────
-     Both timers cycle once per run: start/stop for run 1, then again for run
-     2, and so on. That needs to survive a page reload, and there is no
-     "which cycle am I on" field anywhere -- so it is DERIVED from the runs
-     themselves rather than stored.
+     Both timers cycle once per run: start/stop for one run, then again for the
+     next. Which run that is used to be derived -- first run with no
+     Actual_End__c, in schedule order -- which made the cycle strictly linear.
+     It is now the worker's choice (see selectedRunId/selectRun), with that old
+     rule kept as the default and as the fallback after a run is finished.
 
-     A run with no Actual_End__c has not been finished yet, so the first such
-     run (in schedule order) is the one the timers are pointed at. When every
-     run has an end, both timers are done and lock. That is why the pointer
-     never needs writing down: stamping the actuals IS writing it down. */
+     What has NOT changed is where the progress lives: a run with no
+     Actual_End__c has not been finished, and when every run has an end both
+     timers lock. Stamping the actuals is still the durable record of what has
+     been printed -- the selection on top of it is a pointer, not the truth.
+
+     Note the elapsed seconds themselves are per-METHOD, not per-run
+     (Print_Setup_Timer__c / Production_Timer__c on Production_Method__c), so
+     switching runs does not switch clocks -- it re-points which run's actual
+     start/end the next Start/Stop will stamp. */
   runsInOrder(methodId){
     const runs=(this.state.runsByMethod[methodId]||[]).slice();
     return runs.sort((a,b)=>{
@@ -1466,7 +1510,55 @@ class Component extends DCLogic {
       return String(a.name||'').localeCompare(String(b.name||''));   // stable for unscheduled runs
     });
   }
-  currentRunFor(methodId){ return this.runsInOrder(methodId).find(r=>!r.actualEnd) || null; }
+  /* ── which run the timers act on ──────────────────────────────────────
+     Was: always the first run with no actual end, so runs could only ever be
+     worked in schedule order. The floor does not work that way -- a blown
+     screen on run 1 means moving to run 2 to keep the press busy and coming
+     back to run 1 once the screen is re-burned. So the run is now PICKED, and
+     the old rule survives only as the opening default.
+
+     An explicit pick wins whenever it still names a run on this method (a run
+     deleted out from under the selection falls back rather than pointing at
+     nothing). With no pick, this is exactly the previous behaviour, which is
+     what makes the change invisible for the single-run jobs that are most of
+     the board. */
+  selectedRunId(methodId){
+    const runs=this.runsInOrder(methodId);
+    if(!runs.length) return null;
+    const picked=(this.state.runSelByMethod||{})[methodId];
+    if(picked && runs.some(r=>r.id===picked)) return picked;
+    const nextUp=runs.find(r=>!r.actualEnd);
+    return nextUp ? nextUp.id : null;
+  }
+  /* Worker picked a run. Deliberately allowed at ANY time, including while a
+     timer is running and including a run that already has an actual end --
+     this is the manual control the linear version lacked, and re-selecting a
+     finished run is the only way to correct a stamp made on the wrong one. The
+     drawer says out loud what a switch mid-run leaves behind (see runPicker's
+     note) rather than blocking it. */
+  selectRun(methodId, runId){
+    this.setState(st=>{
+      const map=Object.assign({}, st.runSelByMethod, {[methodId]:runId});
+      saveRunSel(map);
+      return {runSelByMethod:map};
+    });
+  }
+  /* Drop the explicit pick so selectedRunId() goes back to deriving. Used
+     when a run is finished -- see stopTimer(). */
+  releaseRunSel(methodId){
+    this.setState(st=>{
+      if(!(st.runSelByMethod||{})[methodId]) return null;
+      const map=Object.assign({}, st.runSelByMethod);
+      delete map[methodId];
+      saveRunSel(map);
+      return {runSelByMethod:map};
+    });
+  }
+  currentRunFor(methodId){
+    const id=this.selectedRunId(methodId);
+    if(!id) return null;
+    return this.runsInOrder(methodId).find(r=>r.id===id) || null;
+  }
 
   /* Locked = stopped for good. Two signals, because a method with no runs has
      no run actuals to read:
@@ -1513,12 +1605,13 @@ class Component extends DCLogic {
     return iso;
   }
 
-  /* The Stop button. Ends the current run's cycle: commits the elapsed
+  /* The Stop button. Ends the selected run's cycle: commits the elapsed
      seconds, stamps the production timer's actual end, and moves the method
      forward. Unlike Pause, this does not re-arm for the SAME run -- the run
-     now has an actual end, so currentRunFor() advances to the next one. When
-     there is no next one, timerLocked() goes true and the tile turns into a
-     static "Stopped" block. */
+     now has an actual end, and the worker's pick is released (see below) so
+     the pointer falls back to the next unfinished run. When there is no next
+     one, timerLocked() goes true and the tile turns into a static "Stopped"
+     block. */
   stopTimer(cardId,which){
     if(this.timerLocked(cardId,which)) return;
     const card=(this.state.orders||[]).find(o=>o.id===cardId);
@@ -1535,6 +1628,13 @@ class Component extends DCLogic {
         // ends up with an end and no beginning. Same rounded stamp for both.
         if(!run.actualStart) this.stampRunActual(cardId, run.id, 'actualStart');
         this.stampRunActual(cardId, run.id, 'actualEnd');
+        /* Stop means "done with this run", so drop the explicit pick and let
+           selectedRunId() re-derive -- which lands on the next unfinished run.
+           Without this the pointer would stay on the run just finished, and the
+           next Stop would re-stamp its actual end instead of the new run's.
+           The worker can immediately pick a different run; this only decides
+           where the pointer sits when they don't. */
+        this.releaseRunSel(cardId);
       }
       /* `run` is the one just stamped, so "remaining" means runs after it. */
       const remaining=this.runsInOrder(cardId).filter(r=>!r.actualEnd && (!run || r.id!==run.id));
@@ -1938,13 +2038,17 @@ class Component extends DCLogic {
            state is a plain div, not a disabled button. */
         const locked=this.timerLocked(src.id,key);
         const runsHere=this.runsInOrder(src.id);
-        const curRun=runsHere.find(r=>!r.actualEnd)||null;
+        /* The run the worker has pointed these timers at -- no longer
+           necessarily the earliest unfinished one. */
+        const curRun=this.currentRunFor(src.id);
         const runsLeft=runsHere.filter(r=>!r.actualEnd).length;
         /* Which run this cycle belongs to, spelled out under the buttons when
            the method has more than one -- otherwise the operator has no way to
-           tell that Stop ends THIS run rather than the whole job. */
+           tell that Stop ends THIS run rather than the whole job. Named, not
+           numbered: with runs picked out of order "Run 2 of 3" would describe a
+           position in the schedule rather than the run in front of them. */
         const runLabel = (runsHere.length>1 && curRun)
-          ? ('Run '+(runsHere.indexOf(curRun)+1)+' of '+runsHere.length)
+          ? ((curRun.name || 'This run')+' · '+runsLeft+' of '+runsHere.length+' left')
           : '';
         return { label, display:this.fmtDur(disp), timeColor:locked?'#6C665C':(c.running?'#7FA644':'#ECEAE4'),
           locked, notLocked:!locked,
@@ -1964,10 +2068,53 @@ class Component extends DCLogic {
              pressing the button once. */
           stopHint: key==='setup'
             ? 'Stop ends set-up and moves this method to In Production.'
-            : (runsLeft>1 ? 'Stop ends this run, stamps its actual times, and sends the method back to Ready for Print for the next run.'
+            : (runsLeft>1 ? ('Stop ends '+((curRun&&curRun.name)||'this run')+', stamps its actual times, and sends the method back to Ready for Print for the next one.')
                           : 'Stop ends production, stamps the actual times, and moves this method to Post-Production.'),
           showOrderTotal:siblings.length>1, orderTotalDisplay:this.fmtDur(orderTotal) };
       });
+      /* ── run picker ──────────────────────────────────────────────────
+         One picker per METHOD, sitting above both timer tiles rather than
+         inside each, because there is one clock per method: the elapsed
+         seconds live on Production_Method__c, and only the run's actual
+         start/end are per run. Two pickers would imply set-up and production
+         could point at different runs, which nothing downstream can express.
+
+         Hidden for a single-run method -- the overwhelmingly common case,
+         where there is nothing to choose and a control offering one option is
+         just noise.
+
+         Finished runs stay selectable on purpose: re-pointing at one is the
+         only way to correct an end time stamped on the wrong run. */
+      const pickerRuns=this.runsInOrder(src.id);
+      const pickedRunId=this.selectedRunId(src.id);
+      const prodRunning=!!(tmr.prod&&tmr.prod.running);
+      const runPicker={
+        shown: pickerRuns.length>1,
+        options: pickerRuns.map((r,i)=>{
+          const on=r.id===pickedRunId;
+          const done=!!r.actualEnd;
+          const started=!!r.actualStart && !done;
+          return {
+            id:r.id,
+            name:(r.name||('Run '+(i+1))),
+            stateLabel: done ? 'Done' : (started ? 'Started' : 'Not started'),
+            stateColor: done ? '#7FA644' : (started ? '#E0B870' : '#6C665C'),
+            bg: on ? '#2a1210' : '#121215',
+            border: on ? '#C6372B' : '#242428',
+            nameColor: on ? '#ECEAE4' : '#9C978C',
+            onPick: ()=>this.selectRun(src.id, r.id),
+          };
+        }),
+        /* Said plainly rather than enforced. Switching mid-run is the whole
+           point of this control (a blown screen means moving to another run to
+           keep the press busy), but the run left behind keeps no end time until
+           someone comes back to it, and that is worth knowing before the tap
+           rather than after. */
+        note: prodRunning
+          ? 'The production timer is running. Switching now leaves the current run without an end time — press Stop first if it is finished.'
+          : '',
+        hasNote: prodRunning,
+      };
       const assignees=['MA','DK','PR','JT'].map(k=>{ const on=src.worker===k; return { key:k, init:k, name:W[k].name, color:W[k].color, onPick:()=>this.assign(src.id,k), bg:on?'#1a1a1e':'transparent', border:on?W[k].color:'#242428', textColor:on?'#ECEAE4':'#8a8378' }; });
       const pkg=st.pkg[src.orderId]||[]; const shp=st.ship[src.orderId]||[]; const nx=NEXT[src.stage];
       /* Post-Production collapses this drawer down to the six things the
@@ -2085,7 +2232,7 @@ class Component extends DCLogic {
           onSchedule:()=>this.openRunCreate(src.id, src.printDate, src.printEndDateTime, s.qty),
         })),
         newRunLabel: rc?'Cancel':'New Run', newRunIcon: rc?'ti-x':'ti-plus',
-        assignees, timers,
+        assignees, timers, runPicker,
         hasMockup:!!d.mockupUrl, noMockup:!d.mockupUrl, mockupNode: d.mockupUrl?React.createElement('img',{src:d.mockupUrl,alt:'Production mockup',onClick:(window.CAApi&&window.CAApi.mockupClick)?window.CAApi.mockupClick(d.mockupUrl,(d.customer||'')+' - '+(d.num||'')):null, title:'Click to inspect', style:{cursor:'zoom-in',width:96,height:96,flexShrink:0,borderRadius:11,border:'1px solid #232327',objectFit:'cover',background:'#121215'}}):null, onZk:()=>this.openZk(src.orderId,src.num), zkErrMsg:(st.zkErr&&st.zkErr[src.orderId])||'', hasZkErr:!!(st.zkErr&&st.zkErr[src.orderId]),
         specs:d.printSpecs||'', onSpecs:(e)=>this.setSpecs(src.orderId,e.target.value), special:d.specialNotes||'', onSpecial:(e)=>this.setSpecial(src.orderId,e.target.value), orderSheetUrl:'order-sheet.html?orderId='+encodeURIComponent(src.orderId),
         isPP, notPP:!isPP, runResultsUrl,
