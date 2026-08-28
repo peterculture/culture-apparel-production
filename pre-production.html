@@ -1315,6 +1315,17 @@ class Component extends DCLogic {
     if(!f.placements || !f.placements.length){ this.setState({methodErr:'Pick at least one placement'}); return; }
     this.setState({methodSaving:true, methodErr:''});
     const fields={ Type__c:f.type, Placements__c:f.placements, Status__c:f.status };
+    /* Send orderId alongside Status__c so the backend's Order_Substatus__c
+       rollup has it in hand -- index.html's copy of this form does the same.
+       This is NOT load-bearing any more: production-methods/[id].js falls back
+       to orderIdForMethod() whenever Status__c changes without an orderId, so
+       the rollup fires either way. What it saves is that extra SOQL round trip
+       per save, and it keeps the two boards' copies of this function identical,
+       which is the only reason the difference between them was ever noticed.
+       Harmless on a non-status save -- the backend only acts on it when
+       Status__c is in the PATCH body. See rollupOrderSubstatus in
+       functions/api/_pm-rollup.js. */
+    if(orderId) fields.orderId=orderId;
     try {
       await this._api.patchMethodFields(id, fields, this.state.methodEditLoadedAt);
       this.setState({methodSaving:false, methodEditId:null, methodEditForm:null, methodEditLoadedAt:null});
