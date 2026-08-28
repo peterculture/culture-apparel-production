@@ -653,31 +653,46 @@
 
           <div>
             <div style="display:flex;align-items:center;gap:9px;margin-bottom:11px;flex-wrap:wrap">
-              <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378">Production Runs</div>
-              <sc-if value="{{hasCreatedRuns}}" hint-placeholder-val="{{ false }}"><span style="font:400 11px/1 'Archivo';color:#6C665C">Already on the shop calendar.</span></sc-if>
+              <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378">{{createdPanel.methodsHeading}}</div>
+              <sc-if value="{{createdPanel.methodsLoading}}" hint-placeholder-val="{{ false }}"><span style="font:400 11px/1 'Archivo';color:#4d483f">Loading…</span></sc-if>
             </div>
-            <sc-if value="{{createdRunsEmpty}}" hint-placeholder-val="{{ true }}">
-              <div style="border:1px dashed #2a2a2f;border-radius:10px;padding:18px 14px;text-align:center;font:400 12px/1.5 'Archivo';color:#4d483f">No runs on this method yet. Create one below — it goes straight onto the shop calendar and will appear here.</div>
+            <sc-if value="{{createdPanel.isMultiMethod}}" hint-placeholder-val="{{ false }}">
+              <div style="font:400 11px/1.5 'Archivo';color:#4d483f;margin:-4px 0 13px">This order is printed more than one way. Every method is listed below — book runs for all of them here, no need to exit to the board and reopen each one.</div>
             </sc-if>
-            <div style="display:flex;flex-direction:column;gap:10px">
-              <sc-for list="{{createdPanel.runsView}}" as="run" hint-placeholder-count="0">
-                <div style="background:#121215;border:1px solid #232327;border-radius:10px;padding:13px 14px;display:flex;flex-direction:column;gap:9px">
-                  <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
-                    <span style="font:600 11px/1 'Oswald';letter-spacing:.06em;color:#5E9B9A">{{run.name}}</span>
-                    <span style="font:400 11px/1 'Archivo';color:#9C978C">{{run.press}}</span>
-                    <sc-if value="{{run.hasLocation}}" hint-placeholder-val="{{ false }}"><span style="font:600 9px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#C9C6BF;background:#1e1e22;border-radius:5px;padding:4px 7px">{{run.locationLabel}}</span></sc-if>
-                    <sc-if value="{{run.hasQty}}" hint-placeholder-val="{{ false }}"><span style="margin-left:auto;font:600 11px/1 'Oswald';color:#ECEAE4;background:#1e1e22;border-radius:5px;padding:4px 8px">{{run.qtyLabel}}</span></sc-if>
+            <div style="display:flex;flex-direction:column;gap:13px">
+              <sc-for list="{{createdPanel.methodsView}}" as="m" hint-placeholder-count="1">
+                <div style="background:#0D0D0F;border:1px solid #1f1f23;border-left:3px solid {{m.color}};border-radius:11px;padding:14px 15px;display:flex;flex-direction:column;gap:11px">
+                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <span style="font:600 13px/1.25 'Oswald';color:#ECEAE4">{{m.label}}</span>
+                    <sc-if value="{{m.isJustCreated}}" hint-placeholder-val="{{ true }}"><span style="font:600 8px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#BBD382;background:#18230D;border:1px solid #3D5418;border-radius:6px;padding:4px 7px">Just created</span></sc-if>
+                    <sc-if value="{{m.hasStatus}}" hint-placeholder-val="{{ false }}"><span style="margin-left:auto;font:600 8px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#8a8378;background:#141417;border:1px solid #242428;border-radius:6px;padding:4px 7px">{{m.status}}</span></sc-if>
                   </div>
-                  <div style="font:400 11px/1.3 'Archivo';color:#8a8378">{{run.when}}</div>
-                  <div style="font:400 11px/1.3 'Archivo';color:{{run.statusColor}}">{{run.statusLabel}}</div>
-                  <sc-if value="{{run.notPublished}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:flex-start;gap:7px;font:400 10px/1.35 'Archivo';color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:8px;padding:9px 11px"><i class="ti ti-alert-triangle" style="margin-top:1px"></i><span>Not on the shop calendar. Runs publish when they’re created, so this one’s publish failed — save any change to it to retry.</span></div></sc-if>
-                  <sc-if value="{{run.hasErr}}" hint-placeholder-val="{{ false }}"><div style="font:600 10px/1.3 'Oswald';letter-spacing:.03em;text-transform:uppercase;color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:8px;padding:9px 11px">{{run.err}}</div></sc-if>
+                  <sc-if value="{{m.runsEmpty}}" hint-placeholder-val="{{ true }}">
+                    <div style="border:1px dashed #2a2a2f;border-radius:9px;padding:15px 13px;text-align:center;font:400 11px/1.5 'Archivo';color:#4d483f">No runs on this method yet. Create one below — it goes straight onto the shop calendar and will appear here.</div>
+                  </sc-if>
+                  <sc-if value="{{m.hasRuns}}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:9px">
+                      <sc-for list="{{m.runsView}}" as="run" hint-placeholder-count="0">
+                        <div style="background:#121215;border:1px solid #232327;border-radius:10px;padding:13px 14px;display:flex;flex-direction:column;gap:9px">
+                          <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+                            <span style="font:600 11px/1 'Oswald';letter-spacing:.06em;color:#5E9B9A">{{run.name}}</span>
+                            <span style="font:400 11px/1 'Archivo';color:#9C978C">{{run.press}}</span>
+                            <sc-if value="{{run.hasLocation}}" hint-placeholder-val="{{ false }}"><span style="font:600 9px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#C9C6BF;background:#1e1e22;border-radius:5px;padding:4px 7px">{{run.locationLabel}}</span></sc-if>
+                            <sc-if value="{{run.hasQty}}" hint-placeholder-val="{{ false }}"><span style="margin-left:auto;font:600 11px/1 'Oswald';color:#ECEAE4;background:#1e1e22;border-radius:5px;padding:4px 8px">{{run.qtyLabel}}</span></sc-if>
+                          </div>
+                          <div style="font:400 11px/1.3 'Archivo';color:#8a8378">{{run.when}}</div>
+                          <div style="font:400 11px/1.3 'Archivo';color:{{run.statusColor}}">{{run.statusLabel}}</div>
+                          <sc-if value="{{run.notPublished}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:flex-start;gap:7px;font:400 10px/1.35 'Archivo';color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:8px;padding:9px 11px"><i class="ti ti-alert-triangle" style="margin-top:1px"></i><span>Not on the shop calendar. Runs publish when they&rsquo;re created, so this one&rsquo;s publish failed &mdash; save any change to it to retry.</span></div></sc-if>
+                          <sc-if value="{{run.hasErr}}" hint-placeholder-val="{{ false }}"><div style="font:600 10px/1.3 'Oswald';letter-spacing:.03em;text-transform:uppercase;color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:8px;padding:9px 11px">{{run.err}}</div></sc-if>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                  <button onClick="{{ m.onCreateRun }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:8px;font:700 12px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#fff;background:#C6372B;border:none;border-radius:10px;padding:13px;cursor:pointer" style-hover="filter:brightness(1.1)"><i class="ti ti-tools"></i>Create Production Run</button>
                 </div>
               </sc-for>
             </div>
           </div>
-
-          <button onClick="{{ onOpenRunModal }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:9px;font:700 13px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#fff;background:#C6372B;border:none;border-radius:11px;padding:16px;cursor:pointer" style-hover="filter:brightness(1.1)"><i class="ti ti-tools"></i>Create Production Run</button>
           <sc-if value="{{createdPanel.canAddAnotherMethod}}" hint-placeholder-val="{{ true }}">
             <button onClick="{{ onCreateAnotherMethod }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:9px;font:700 13px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#ECEAE4;background:transparent;border:1px solid #3a3a40;border-radius:11px;padding:16px;cursor:pointer;margin-top:-12px" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-layers-plus"></i>Create Another Method</button>
             <div style="font:400 11px/1.5 'Archivo';color:#4d483f;margin-top:-14px">For an order printed more than one way — screen print on the front, embroidery on the back. Specs and notes carry over; the runs above stay on this method.</div>
@@ -749,7 +764,7 @@
 
         <div>
           <div style="font:600 11px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#8a8378;margin-bottom:8px">Print Method</div>
-          <div style="font:600 14px/1.3 'Archivo';color:#ECEAE4;background:#121215;border:1px solid #232327;border-radius:9px;padding:11px 13px">{{createdPanel.methodLabel}}</div>
+          <div style="font:600 14px/1.3 'Archivo';color:#ECEAE4;background:#121215;border:1px solid #232327;border-radius:9px;padding:11px 13px">{{runTargetLabel}}</div>
         </div>
 
         <div>
@@ -870,6 +885,15 @@ class Component extends DCLogic {
       // Post-creation "Production Method Created" panel + the Create
       // Production Run modal it launches -- see submitMethod()/submitRun().
       createdPanel:null, runModalOpen:false, runForm:null, runPressResults:[], runSubmitting:false, runErr:'', runMsg:'',
+      /* Which Production_Method__c the open Create Production Run modal is
+         building a run for. Deliberately SEPARATE from createdPanel: that one
+         means "the method this panel is about" (it anchors the specs/notes
+         carry-over and the Create Another Method flow), while this one means
+         "the method the next run hangs off". They were the same field until
+         the panel started listing every method on the order -- once a manager
+         can book a run against a sibling from here, re-pointing createdPanel
+         would have quietly rewritten the panel's own headline mid-flow. */
+      runTarget:null,
       // The Account Manager's suggested runs for the order this modal is for.
       // proposalUsedId remembers which one the manager built from, so the
       // proposal can be stamped Accepted and linked to the run once it saves.
@@ -1043,7 +1067,7 @@ class Component extends DCLogic {
   // worker could inherit a manager's open Management session. Now switching
   // account always returns to the board and Management must be re-opened,
   // which re-runs the live role check.
-  switchUser(){ const a=window.CAApi; if(a&&a.clearIdentity) a.clearIdentity(); else { try{localStorage.removeItem('caShopWorkerName');}catch(_){} } try{localStorage.removeItem('caShopRole');}catch(_){} if(a&&a.writeParams) a.writeParams({view:null, addMethodForOrder:null}); this.setState({nameOk:false, gatePin:'', gateErr:'', view:'board', mgrId:null, createdPanel:null, runModalOpen:false}); }
+  switchUser(){ const a=window.CAApi; if(a&&a.clearIdentity) a.clearIdentity(); else { try{localStorage.removeItem('caShopWorkerName');}catch(_){} } try{localStorage.removeItem('caShopRole');}catch(_){} if(a&&a.writeParams) a.writeParams({view:null, addMethodForOrder:null}); this.setState({nameOk:false, gatePin:'', gateErr:'', view:'board', mgrId:null, createdPanel:null, runTarget:null, runModalOpen:false}); }
   onGatePress(d){ if(this.state.gatePin.length>=4 || this.state.gateSubmitting) return; const pin=this.state.gatePin+d; this.setState({gatePin:pin, gateErr:''}); if(pin.length===4) setTimeout(()=>this.submitGatePin(pin),140); }
   onGateBackspace(){ if(this.state.gateSubmitting) return; this.setState(st=>({gatePin:st.gatePin.slice(0,-1), gateErr:''})); }
   // Verifies the switch-account PIN SERVER-SIDE via the same
@@ -1160,7 +1184,7 @@ class Component extends DCLogic {
   // lands cleanly back on the board regardless of where the manager was.
   // Drops ?view=mgr (and the one-shot addMethodForOrder deep-link param, so
   // a refresh after backing out doesn't re-open the form for that order).
-  closeMgr(){ this.setState({view:'board', mgrId:null, mgrMultiMethod:false, createdPanel:null, runModalOpen:false}); const a=window.CAApi; if(a&&a.writeParams) a.writeParams({view:null, addMethodForOrder:null}); }
+  closeMgr(){ this.setState({view:'board', mgrId:null, mgrMultiMethod:false, createdPanel:null, runTarget:null, runModalOpen:false}); const a=window.CAApi; if(a&&a.writeParams) a.writeParams({view:null, addMethodForOrder:null}); }
   async loadInbox(){ if(!this._api) this._api=window.CAApi; if(!this._api || this.state.connection!=='live'){ this.setState({inbox:[], inboxLoaded:true}); return; } try{ const recs=await this._api.getInbox(); this.setState({inbox:recs, inboxLoaded:true}); }catch(_){ this.setState({inbox:[], inboxLoaded:true}); } }
   pickInbox(id){
     const rec=(this.state.inbox||[]).find(r=>r.Id===id)||{};
@@ -1220,7 +1244,7 @@ class Component extends DCLogic {
     // method" deep link straight after creating something -- it just had no
     // obvious trigger until "Create another method" made it the normal path.
     this.setState({view:'mgr', mgrId:orderId, mgrSource:'order', mgrMultiMethod: (seed && seed.multiMethod === true) || ref.multiMethod === true, form, planResults:[], mgrErr:'', mgrMsg:'', openId:null,
-      createdPanel:null, runModalOpen:false, runForm:this.defaultRunForm(), runPressResults:[], runErr:'', runMsg:''});
+      createdPanel:null, runTarget:null, runModalOpen:false, runForm:this.defaultRunForm(), runPressResults:[], runErr:'', runMsg:''});
   }
   // FIXED 2026-07-22: these only ever pushed to Salesforce and updated the
   // isolated manager-form state (this.state.form) -- never
@@ -1249,11 +1273,19 @@ class Component extends DCLogic {
     this.loadProposals(orderId);
   }
   // ── Production Methods section of the card drawer -- edit-in-place + remove ──
-  loadMethodsForOrder(orderId){
+  /* opts.withRuns fans out a loadRunsForCard() per method once the list is
+     back. Only the "Method Created" panel asks for that: it lists every method
+     on the order with that method's own runs underneath, and runsByMethod is
+     keyed per method, so without this the sibling lists render permanently
+     empty and a manager would think there was nothing booked. The board drawer
+     deliberately does NOT ask -- it shows one method and openOrder() has
+     already fetched that one's runs. */
+  loadMethodsForOrder(orderId, opts){
     if(!orderId || !this._api || this.state.connection!=='live') return;
     this.setState({methodsLoadingFor:orderId});
     this._api.getMethodsForOrder(orderId).then(recs=>{
       this.setState(st=>({ methodsByOrder:Object.assign({}, st.methodsByOrder, {[orderId]:recs||[]}), methodsLoadingFor:null }));
+      if(opts && opts.withRuns) (recs||[]).forEach(r=>{ if(r && r.Id) this.loadRunsForCard(r.Id); });
     }).catch(()=>{ this.setState({methodsLoadingFor:null}); });
   }
   openMethodEdit(r){
@@ -1612,6 +1644,13 @@ class Component extends DCLogic {
       // state -- but it makes the section authoritative rather than only
       // correct after the first create.
       this.loadRunsForCard(pmId);
+      /* The panel lists every method on this order, each with its own runs and
+         its own Create Production Run button, so a two- or three-method job can
+         be scheduled end to end without leaving Management. Fetched fresh here
+         rather than assembled from what this session happens to have created:
+         a method added earlier, or by someone else, belongs on this list too.
+         withRuns fills in each sibling's runs. */
+      this.loadMethodsForOrder(oid, {withRuns:true});
       // Best-effort refresh of the underlying board data in the background
       // (new method now exists; if a run gets sent to the shop floor before
       // the manager returns here, that should be reflected too).
@@ -1663,10 +1702,20 @@ class Component extends DCLogic {
     // a legitimate press booking before anyone knows which location it prints.
     return { pressId:null, pressName:'', pressQ:'', startDate:start.date, startTime:start.time, endDate:end.date, endTime:end.time, qty:'', printLocation:'' };
   }
-  openRunModal(){
+  /* pmId/methodLabel/placements name the method this run will hang off. The
+     panel passes them per method (one button per method); the no-argument call
+     is kept working and falls back to the just-created method, which is what
+     every caller meant before the panel listed siblings. placements ride along
+     because the modal's Print Location picker is scoped to the method's own
+     locations -- taking them from createdPanel would offer method #1's
+     locations while booking method #2. */
+  openRunModal(pmId, methodLabel, placements){
     const cp=this.state.createdPanel||{};
     const ref=this.referenceForOrder(cp.orderId);
-    this.setState({ runModalOpen:true, runForm:this.defaultRunForm(ref.printDateISO, ref.printEndDateTimeISO), runPressResults:[], runErr:'', runMsg:'', proposals:[], proposalUsedId:null });
+    const target = pmId
+      ? { pmId, methodLabel: methodLabel || '', placements: (placements||[]).slice() }
+      : { pmId: cp.pmId, methodLabel: cp.methodLabel || '', placements: (cp.placements||[]).slice() };
+    this.setState({ runTarget:target, runModalOpen:true, runForm:this.defaultRunForm(ref.printDateISO, ref.printEndDateTimeISO), runPressResults:[], runErr:'', runMsg:'', proposals:[], proposalUsedId:null });
     this.loadProposals(cp.orderId);
   }
   closeRunModal(){ this.setState({ runModalOpen:false }); }
@@ -1761,8 +1810,8 @@ class Component extends DCLogic {
     // a blank select that silently submits nothing.
     if(p.printLocation){
       const api=this._api||window.CAApi;
-      const cp=this.state.createdPanel||{};
-      const allowed=(api&&api.locationsForMethod)?api.locationsForMethod(cp.placements):[];
+      const rt=this.state.runTarget||this.state.createdPanel||{};
+      const allowed=(api&&api.locationsForMethod)?api.locationsForMethod(rt.placements):[];
       if(allowed.indexOf(p.printLocation)!==-1) patch.printLocation=p.printLocation;
     }
     this.setRunField(patch);
@@ -1805,6 +1854,12 @@ class Component extends DCLogic {
     if(this.state.runSubmitting) return;
     const st=this.state, f=st.runForm, cp=st.createdPanel;
     if(!f || !cp) return;
+    /* The method this run belongs to -- not necessarily the one the panel is
+       headlined by, now that every method on the order gets its own Create
+       Production Run button. Falls back to createdPanel for the pre-runTarget
+       callers (and for a modal somehow opened without one). */
+    const rt = st.runTarget || cp;
+    if(!rt.pmId){ this.setState({runErr:'No production method to attach this run to', runMsg:''}); return; }
     if(!f.pressId){ this.setState({runErr:'Pick a press', runMsg:''}); return; }
     const start=this.buildRunDateTime(f.startDate,f.startTime);
     if(!start){ this.setState({runErr:'Set a scheduled start date & time', runMsg:''}); return; }
@@ -1818,7 +1873,7 @@ class Component extends DCLogic {
       // printLocation only rides along when the manager actually chose one --
       // the endpoint omits the field entirely for a blank value so a create
       // can't fail against an org that doesn't have Print_Location__c yet.
-      const runBody={ printMethodId:cp.pmId, pressId:f.pressId, scheduledStart:start, scheduledEnd:end, quantity:qtyNum };
+      const runBody={ printMethodId:rt.pmId, pressId:f.pressId, scheduledStart:start, scheduledEnd:end, quantity:qtyNum };
       if(f.printLocation) runBody.printLocation=f.printLocation;
       const res=await this._api.createProductionRun(runBody);
       if(res && (res.error || res.ok===false)) throw new Error(res.error||'create_failed');
@@ -1847,7 +1902,7 @@ class Component extends DCLogic {
       // board drawer's own "Create Production Run" button (openRunModalForCard),
       // where the drawer's Production Runs section needs the new run to show
       // up without requiring a close/reopen.
-      this.loadRunsForCard(cp.pmId);
+      this.loadRunsForCard(rt.pmId);
       if(mode==='shopfloor'){
         // CHANGED 2026-08-20: this used to closeMgr() straight back to the
         // board, which made confirming from Management impossible.
@@ -1867,7 +1922,7 @@ class Component extends DCLogic {
         // proposalUsedId clears with the form. A second run under the same
         // method is a different run, and silently re-stamping the same
         // suggestion for it would make the accept trail lie.
-        this.setState({runSubmitting:false, runForm:this.defaultRunForm(), runPressResults:[], runErr:'', runMsg:'Run created and added to the shop calendar — add another for this method, or close this window when done.', proposalUsedId:null});
+        this.setState({runSubmitting:false, runForm:this.defaultRunForm(), runPressResults:[], runErr:'', runMsg:'Run created and added to the shop calendar — add another for '+(rt.methodLabel||'this method')+', or close this window when done.', proposalUsedId:null});
         this.loadProposals(cp.orderId);
       }
     }catch(e){ this.setState({runSubmitting:false, runErr:'Create failed — check press / schedule and try again'}); }
@@ -1883,6 +1938,7 @@ class Component extends DCLogic {
     const ref=this.referenceForOrder(orderId);
     this.setState({
       createdPanel:{ pmId, orderId, methodLabel, placements:(placements||[]).slice(), multiMethod: this.referenceForOrder(orderId).multiMethod === true },
+      runTarget:{ pmId, methodLabel, placements:(placements||[]).slice() },
       runModalOpen:true, runForm:this.defaultRunForm(ref.printDateISO, ref.printEndDateTimeISO), runPressResults:[], runErr:'', runMsg:'',
       proposals:[], proposalUsedId:null,
     });
@@ -1998,6 +2054,59 @@ class Component extends DCLogic {
     // methodLabel, never a copy of the order data itself.
     const cpRaw = st.createdPanel;
     const cpRef = cpRaw ? this.referenceForOrder(cpRaw.orderId) : null;
+    /* One run row, shaped for the panel. Extracted when the panel went
+       multi-method: the same rows now render under each method, and two copies
+       of this mapping would drift the moment a status label changed. */
+    const runsViewFor = (pmId) => (st.runsByMethod[pmId] || []).map(r=>{
+      const pub = r.schedStatus === 'Confirmed';
+      return {
+        id:r.id, name:r.name,
+        press: r.pressName || 'No press set',
+        when: r.scheduledStart
+          ? new Date(r.scheduledStart).toLocaleString([], {weekday:'short', month:'numeric', day:'numeric', hour:'numeric', minute:'2-digit'})
+          : 'No schedule set',
+        qtyLabel: r.qty!=null ? (r.qty+' pcs') : '', hasQty: r.qty!=null,
+        locationLabel: r.printLocation || '', hasLocation: !!r.printLocation,
+        /* Same vocabulary as the drawer and the calendar: the label says what
+           is TRUE of the run. 'Planned' now means the publish failed, not that
+           someone still has to act -- see _run-schedule-status.js. */
+        statusLabel: pub ? 'On the shop calendar'
+                   : r.schedStatus === 'Planned' ? 'Not on the shop calendar — publishing failed'
+                   : 'Suggested by the auto-scheduler — it may move again',
+        statusColor: pub ? '#9878C0' : '#6C665C',
+        notPublished: !pub,
+        err:(st.runRowErr&&st.runRowErr[r.id])||'', hasErr:!!(st.runRowErr&&st.runRowErr[r.id]),
+      };
+    });
+    /* The order's methods, newest fetch first, falling back to the just-created
+       one until that fetch lands (see methodsView's comment below). */
+    const cpMethodRecs = cpRaw ? (st.methodsByOrder[cpRaw.orderId] || []) : [];
+    const cpMethodsBase = !cpRaw ? [] : (cpMethodRecs.length
+      ? cpMethodRecs.map(r=>{
+          const placements=(r.Placements__c||'').split(';').map(x=>x.trim()).filter(Boolean);
+          return { id:r.Id, type:r.Type__c||'', placements, status:r.Status__c||'',
+                   label:(r.Type__c||'Production Method')+(placements.length?(' – '+placements.join(' + ')):'') };
+        })
+      : [{ id:cpRaw.pmId, type:'', placements:(cpRaw.placements||[]).slice(), status:'',
+           label:cpRaw.methodLabel||'This method' }]);
+    const cpMethodsView = cpMethodsBase.map(m=>{
+      const meta=(api && api.METHOD_META && api.METHOD_META[m.type]) || { color:'#8a8378' };
+      const runs=runsViewFor(m.id);
+      return {
+        id:m.id, label:m.label, color:meta.color,
+        status:m.status, hasStatus:!!m.status,
+        // The method this trip through Management just created, so a manager
+        // building a third method can still tell which one is new.
+        isJustCreated: !!(cpRaw && m.id===cpRaw.pmId),
+        runsView:runs, hasRuns:runs.length>0, runsEmpty:runs.length===0,
+        runsLoading: st.runsLoadingFor===m.id,
+        runCountLabel: runs.length===1 ? '1 run' : (runs.length+' runs'),
+        /* Scoped to THIS method -- pmId and placements both, so the run is
+           filed against the right method and the Print Location picker offers
+           that method's own locations. See openRunModal(). */
+        onCreateRun: ()=>this.openRunModal(m.id, m.label, m.placements),
+      };
+    });
     const createdPanel = cpRaw ? Object.assign({}, cpRaw, cpRef, {
       printSpecsDisplay: (cpRef && cpRef.printSpecs) || 'None on file.',
       specialNotesDisplay: (cpRef && cpRef.specialNotes) || 'None on file.',
@@ -2017,42 +2126,30 @@ class Component extends DCLogic {
          or the org has no such field, the drawer's own "Add another method" is
          still the escape hatch. */
       canAddAnotherMethod: !!(cpRaw && cpRaw.multiMethod != null ? cpRaw.multiMethod : (cpRef && cpRef.multiMethod)),
-      /* Runs created under THIS method. The Confirm action that lived here
-         (2026-08-20 to 2026-08-21) is gone: creating a run now publishes it,
-         so there is nothing left to confirm. The list stays -- seeing the runs
-         you just made, on the screen where you made them, is worth keeping on
-         its own. submitRun() calls loadRunsForCard(pmId) after a successful
-         create, so it fills itself in. */
-      runsView: (st.runsByMethod[cpRaw.pmId] || []).map(r=>{
-        const pub = r.schedStatus === 'Confirmed';
-        return {
-          id:r.id, name:r.name,
-          press: r.pressName || 'No press set',
-          when: r.scheduledStart
-            ? new Date(r.scheduledStart).toLocaleString([], {weekday:'short', month:'numeric', day:'numeric', hour:'numeric', minute:'2-digit'})
-            : 'No schedule set',
-          qtyLabel: r.qty!=null ? (r.qty+' pcs') : '', hasQty: r.qty!=null,
-          locationLabel: r.printLocation || '', hasLocation: !!r.printLocation,
-          /* Same vocabulary as the drawer and the calendar: the label says
-             what is TRUE of the run. 'Planned' now means the publish failed,
-             not that someone still has to act -- see _run-schedule-status.js.
-             notPublished drives a warning rather than a button, because there
-             is no longer anything a manager can click to fix it. */
-          statusLabel: pub ? 'On the shop calendar'
-                     : r.schedStatus === 'Planned' ? 'Not on the shop calendar — publishing failed'
-                     : 'Suggested by the auto-scheduler — it may move again',
-          statusColor: pub ? '#9878C0' : '#6C665C',
-          notPublished: !pub,
-          err:(st.runRowErr&&st.runRowErr[r.id])||'', hasErr:!!(st.runRowErr&&st.runRowErr[r.id]),
-        };
-      }),
-    }) : { customer:'', num:'', qty:'', methodLabel:'', sizeCells:[], sizesEmpty:true, hasSizes:false, printSpecsDisplay:'', specialNotesDisplay:'', runsView:[] };
+      /* Every method on this order, each with its own runs and its own Create
+         Production Run button, so a job printed two or three ways is scheduled
+         end to end from this one screen. Before this, the panel showed only the
+         method just created and booking the second one meant exiting to the
+         board and reopening it through the drawer.
+
+         methodsByOrder is the authority (a fresh per-order fetch -- see
+         loadMethodsForOrder), but it arrives one request later than the panel
+         does, and in demo mode it never arrives at all. Until then, fall back
+         to the single method that was just created, which is exactly what this
+         panel showed before -- an empty list would read as "this order has no
+         methods", which is never true here. */
+      methodsView: cpMethodsView,
+      isMultiMethod: cpMethodsView.length > 1,
+      methodsHeading: cpMethodsView.length > 1 ? 'Methods & Production Runs' : 'Production Runs',
+      methodsLoading: st.methodsLoadingFor === cpRaw.orderId,
+    }) : { customer:'', num:'', qty:'', methodLabel:'', sizeCells:[], sizesEmpty:true, hasSizes:false, printSpecsDisplay:'', specialNotesDisplay:'', methodsView:[], isMultiMethod:false, methodsHeading:'Production Runs', methodsLoading:false };
     const rf = st.runForm || this.defaultRunForm();
     const runPressResultsView = (st.runPressResults||[]).map(p=>({ id:p.Id, name:p.Name, onPick:()=>this.pickRunPress(p.Id,p.Name) }));
 
     return {
-      createdRunsEmpty: !!cpRaw && !(st.runsByMethod[cpRaw.pmId] || []).length,
-      hasCreatedRuns: !!cpRaw && !!(st.runsByMethod[cpRaw.pmId] || []).length,
+      // The Create Production Run modal names the method it is filing against,
+      // which is no longer always the method the panel is headlined by.
+      runTargetLabel: (st.runTarget && st.runTarget.methodLabel) || (cpRaw && cpRaw.methodLabel) || '',
       mgrView, mgrShowInbox: mgrView && !hasOrder && !cpRaw, mgrShowForm: mgrView && hasOrder && !cpRaw, mgrShowCreated: mgrView && !!cpRaw,
       inbox, inboxEmpty:(st.inbox||[]).length===0 && st.inboxLoaded,
       // Distinct from inboxEmpty (genuinely nothing waiting) -- this is "there
@@ -2078,7 +2175,7 @@ class Component extends DCLogic {
       // there is one way into the intake form rather than three.
       onCreateAnotherMethod:()=>{ const cp=st.createdPanel; if(cp&&cp.orderId) this.openMgrForOrder(cp.orderId, {specs:cp.specs, notes:cp.notes, multiMethod:cp.multiMethod===true}); }, submitting:st.submitting, mgrErr:st.mgrErr, mgrMsg:st.mgrMsg, mgrHasMsg:!!st.mgrMsg, mgrHasErr:!!st.mgrErr,
       // Created panel
-      createdPanel, onOpenRunModal:()=>this.openRunModal(),
+      createdPanel,
       /* The third and last way off this panel: done with this order entirely.
          Reuses closeMgr() -- the same exit the Management header's "Back to
          Board" takes -- so there is one teardown path (clears mgrId, the
@@ -2133,7 +2230,7 @@ class Component extends DCLogic {
       // label's placements when present and to all eleven otherwise.
       runLocationShown: !!(api && api.locationAvailable && api.locationAvailable()),
       runLocationOptions: (api && api.locationsForMethod)
-        ? api.locationsForMethod(cpRaw && cpRaw.placements)
+        ? api.locationsForMethod((st.runTarget && st.runTarget.placements) || (cpRaw && cpRaw.placements))
         : [],
       runLocation: rf.printLocation||'',
       onRunLocation:(e)=>this.setRunField({printLocation:e.target.value}),
