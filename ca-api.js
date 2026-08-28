@@ -155,7 +155,10 @@
      actual perimeter; this is just making the existing worker/manager
      distinction mean something in the UI. Worth moving onto real per-person
      PINs too if that gap needs closing -- see README's "Known gap". */
-  var MANAGER_PIN = '6767';
+  /* The shared manager PIN used to live here as a literal, shipped in
+     view-source to every tablet. It is gone: confirmManager() below now asks
+     the SERVER to check a PERSONAL PIN against WORKER_PINS. The client holds no
+     secret at all. */
   // Destructive-action roster: unchanged by the 2026-08-13 three-tier role
   // split below (admin/manager/worker) -- confirmManager() only cares about
   // "elevated or not," so isManager() now accepts EITHER the 'admin' role
@@ -177,16 +180,57 @@
   // sidebar link; this is exposed too in case a page wants to gate an
   // in-page entry point (a button, a deep link) the same way.
   function canAccessManagement(){ var r = role(); return r === 'admin' || r === 'manager'; }
+  /* ── manager confirmation (server-checked as of 2026-08-28) ──
+     RETURNS A PROMISE. Every call site must await it:
+
+         if (!(await api.confirmManager('Removing a production run'))) return;
+
+     Getting that wrong is silent and total: `!somePromise` is always false, so
+     an un-awaited guard never returns early and the destructive action runs
+     with no confirmation while looking perfectly healthy in testing. If you add
+     a call site, grep the identifier afterwards and check every one is awaited.
+
+     Two things changed from the old client-side version:
+
+     1. No PIN in the browser. The typed PIN goes to /api/worker-login, which
+        checks it against WORKER_PINS server-side and answers {name, role}.
+        workerLogin() deliberately does NOT write identity (login.html does that
+        itself), so confirming here never changes who is signed in.
+
+     2. An elevated stored role no longer skips the prompt. The old version
+        opened with `if (isManager()) return true`, so a tablet left signed in
+        as a manager -- the exact shared-tablet case the confirmation exists
+        for -- was never asked for anything. It always prompts now.
+
+     Any manager's own PIN works regardless of who is signed in, so a manager
+     can authorise in place instead of the worker switching user first.
+
+     KNOWN SIDE EFFECT: /api/worker-login also issues the signed ca_sess cookie,
+     so a successful confirmation leaves the tablet's SERVER session as that
+     manager. That is inert today (requireCap is report-only unless
+     ACCESS_ENFORCE=1) and arguably right -- the write being authorised is the
+     manager's -- but it needs a decision before enforcement is switched on. */
   function confirmManager(actionLabel){
-    if (isManager()) return true;
-    if (MANAGER_NAMES.indexOf(workerName()) === -1) {
-      window.alert('Only Gian, Anthony, or Parker can do this. Switch user if one of them is here.');
+    var entered = window.prompt(
+      (actionLabel || 'This action') + ' needs a manager PIN.\n\n' +
+      'Anthony, Gian or Parker can enter their own PIN — whoever is signed in on this tablet.'
+    );
+    if (entered == null) return Promise.resolve(false);          // cancelled
+    entered = String(entered).trim();
+    if (!entered) return Promise.resolve(false);
+    return workerLogin(entered).then(function (who) {
+      var r = who && who.role;
+      if (r === 'manager' || r === 'admin') return true;
+      window.alert('That PIN belongs to ' + ((who && who.name) || 'a worker') +
+                   ', who is not a manager. Ask Anthony, Gian or Parker.');
       return false;
-    }
-    var entered = window.prompt((actionLabel || 'This action') + ' requires the manager PIN:');
-    if (entered == null) return false;
-    if (entered !== MANAGER_PIN) { window.alert('Incorrect manager PIN.'); return false; }
-    return true;
+    }).catch(function (e) {
+      /* Fail CLOSED, and say which kind of failure it was. A confirmation that
+         could not be checked is not a confirmation. */
+      if (e && e.status === 401) window.alert('That PIN was not recognised.');
+      else window.alert('Could not check that PIN — no answer from the server. Nothing was changed.');
+      return false;
+    });
   }
 
   /* ── real per-worker PIN login (2026-08-13) ──
