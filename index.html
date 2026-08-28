@@ -206,7 +206,7 @@
               <div style="font:600 9px/1 'Oswald';letter-spacing:.11em;text-transform:uppercase;color:#6C665C;margin-bottom:9px">Working on</div>
               <div style="display:flex;gap:7px;flex-wrap:wrap">
                 <sc-for list="{{open.runPicker.options}}" as="r" hint-placeholder-count="2">
-                  <button onClick="{{ r.onPick }}" style="flex:1;min-width:104px;text-align:left;background:{{r.bg}};border:1px solid {{r.border}};border-radius:9px;padding:9px 11px;cursor:pointer"><div style="font:600 12px/1 'Oswald';letter-spacing:.03em;color:{{r.nameColor}}">{{r.name}}</div><div style="font:400 9px/1 'Archivo';color:{{r.stateColor}};margin-top:5px">{{r.stateLabel}}</div></button>
+                  <button onClick="{{ r.onPick }}" style="flex:1;min-width:104px;text-align:left;background:{{r.bg}};border:1px solid {{r.border}};border-radius:9px;padding:9px 11px;cursor:pointer"><div style="font:600 12px/1 'Oswald';letter-spacing:.03em;color:{{r.nameColor}}">{{r.name}}</div><sc-if value="{{r.showLocation}}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:4px;margin-top:5px"><i class="ti ti-map-pin" style="font-size:10px;color:{{r.locationColor}};flex-shrink:0"></i><span style="font:400 10px/1.2 'Archivo';color:{{r.locationColor}}">{{r.location}}</span></div></sc-if><div style="font:400 9px/1 'Archivo';color:{{r.stateColor}};margin-top:5px">{{r.stateLabel}}</div></button>
                 </sc-for>
               </div>
               <sc-if value="{{open.runPicker.hasNote}}" hint-placeholder-val="{{ false }}">
@@ -2088,6 +2088,14 @@ class Component extends DCLogic {
       const pickerRuns=this.runsInOrder(src.id);
       const pickedRunId=this.selectedRunId(src.id);
       const prodRunning=!!(tmr.prod&&tmr.prod.running);
+      /* Print_Location__c is optional org-side, and it comes back null both
+         when a run has no location and when the org doesn't have the field at
+         all -- the run rows below treat those identically (see loadRunsForCard).
+         The picker can afford one extra branch: with the field present, "No
+         location set" is useful (it tells the operator to go set it), but in an
+         org without the field every run would carry that line and it would be a
+         lie, so the line is dropped entirely there. */
+      const locationOn=!!(window.CAApi&&window.CAApi.locationAvailable&&window.CAApi.locationAvailable());
       const runPicker={
         shown: pickerRuns.length>1,
         options: pickerRuns.map((r,i)=>{
@@ -2099,6 +2107,13 @@ class Component extends DCLogic {
             name:(r.name||('Run '+(i+1))),
             stateLabel: done ? 'Done' : (started ? 'Started' : 'Not started'),
             stateColor: done ? '#7FA644' : (started ? '#E0B870' : '#6C665C'),
+            /* Where on the garment this run prints. Two runs under one method
+               are usually the same artwork in two places (front, then back), so
+               the PR name alone doesn't tell an operator which press setup they
+               are about to start timing. */
+            location: r.printLocation || 'No location set',
+            showLocation: !!r.printLocation || locationOn,
+            locationColor: r.printLocation ? '#9C978C' : '#4d483f',
             bg: on ? '#2a1210' : '#121215',
             border: on ? '#C6372B' : '#242428',
             nameColor: on ? '#ECEAE4' : '#9C978C',
