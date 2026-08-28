@@ -25,10 +25,31 @@
  * -- then stream the bytes back same-origin so the browser never needs a
  * Salesforce session of its own.
  *
- * SECURITY: when `url` is a Salesforce servlet link, only the Id-shaped
- * substring is ever used -- the outbound request is always built from OUR
- * OWN env/instance_url via sfFetch, never from the caller's host, so that
- * path can't be turned into an open proxy for arbitrary URLs.
+ * SECURITY (rewritten 2026-08-28 -- the previous note described only the
+ * Salesforce branch and did not mention the direct-fetch branch below, which
+ * was at the time an unrestricted server-side proxy):
+ *
+ *   BRANCH A -- Salesforce ContentVersion. Only the Id-shaped substring of the
+ *   caller's string is ever used, and the outbound request is built from OUR
+ *   OWN env/instance_url via sfFetch, never from the caller's host. The Id must
+ *   now carry the ContentVersion key prefix (068); before that check, any URL
+ *   ending in a 15-18 character run -- a Google Images thumbnail token, for
+ *   instance -- was fed to /sobjects/ContentVersion/<junk>/VersionData.
+ *
+ *   BRANCH B -- direct fetch. This USED TO fetch any http(s) URL the caller
+ *   supplied and stream the bytes back: a server-side request forgery hole
+ *   reaching anything the Worker could route to, internal and link-local
+ *   addresses included. It is now closed on three sides:
+ *     - the host must match ALLOWED_MOCKUP_HOSTS below;
+ *     - literal IPs, loopback/private/link-local/CGNAT ranges and internal
+ *       suffixes (.local, .internal, localhost) are refused outright;
+ *     - redirects are followed MANUALLY, at most MAX_REDIRECTS hops, and every
+ *       hop is re-validated -- `redirect: "follow"` would have let an
+ *       allow-listed host bounce the request to anywhere on the second hop.
+ *   Nothing is forwarded outbound: no credentials, no caller headers, GET only.
+ *
+ * Adding a host to the allow-list is a deliberate decision, not a shrug: this
+ * endpoint fetches on the server's behalf from inside the network boundary.
  *
  * FALLBACK (added 2026-08-12): found live on a dev2 order whose Design__c
  * record had a plain external image link in Mockup_URL__c (a Google Images
@@ -46,11 +67,74 @@
  */
 import { sfFetch, apiVersion, jsonError } from "../_sf.js";
 
-// Salesforce record Ids are 15 (case-sensitive) or 18 (case-insensitive,
-// checksum-suffixed) alphanumeric characters. Matches the LAST such run in
-// the string so it works whether `url` is the full shepherd download link
-// or, in the future, just a bare Id someone passes directly.
-const ID_RE = /([a-zA-Z0-9]{15,18})(?:[/?#].*)?$/;
+/* Salesforce record Ids are 15 (case-sensitive) or 18 (case-insensitive,
+   checksum-suffixed) alphanumeric characters. Matches the LAST such run in
+   the string so it works whether `url` is the full shepherd download link
+   or, in the future, just a bare Id someone passes directly.
+
+   The leading 068 is the ContentVersion key prefix and it is REQUIRED. Without
+   it this pattern matched any trailing 15-18 character run, so a Google Images
+   URL ending in a token of that length took the ContentVersion branch and was
+   sent to Salesforce as an Id -- the wrong branch, a guaranteed failure, and a
+   confusing one to debug. Branch A only knows how to fetch ContentVersion, so
+   only a ContentVersion Id belongs in it. */
+const ID_RE = /(068[a-zA-Z0-9]{12,15})(?:[/?#].*)?$/;
+
+/* Hosts branch B may fetch from. Exact host or any subdomain of these.
+   gstatic/googleusercontent are the observed real case (see FALLBACK above --
+   a staff member pasted a Google Images thumbnail into Mockup_URL__c); the
+   Salesforce domains cover a public Vault/file link that carries no
+   ContentVersion Id. If a legitimate mockup 400s as blocked_host, the fix is
+   to add its host here after looking at it -- not to widen the match. */
+const ALLOWED_MOCKUP_HOSTS = [
+  "gstatic.com",
+  "googleusercontent.com",
+  "force.com",
+  "salesforce.com",
+  "documentforce.com",
+  "cloudforce.com",
+];
+
+const MAX_REDIRECTS = 3;
+
+/* Refuse anything that could point back inside the network. The allow-list
+   above already excludes bare IPs (an IP literal matches no domain suffix), so
+   this is the second lock rather than the first -- it exists so that widening
+   the allow-list later cannot quietly re-open the SSRF hole. */
+function isBlockedAddress(hostname) {
+  const h = String(hostname || "").toLowerCase().replace(/^\[|\]$/g, "");
+  if (!h) return true;
+  if (h === "localhost" || h.endsWith(".localhost")) return true;
+  if (h.endsWith(".local") || h.endsWith(".internal") || h.endsWith(".home.arpa")) return true;
+  // Any IPv6 literal. Too many ways to spell loopback/ULA/link-local to
+  // enumerate, and no mockup host is ever a bare IPv6 address.
+  if (h.includes(":")) return true;
+  const v4 = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    if ([a, Number(v4[2]), Number(v4[3]), Number(v4[4])].some((n) => n > 255)) return true;
+    if (a === 0 || a === 10 || a === 127) return true;              // this-network, private, loopback
+    if (a === 169 && b === 254) return true;                        // link-local (incl. cloud metadata)
+    if (a === 172 && b >= 16 && b <= 31) return true;               // private
+    if (a === 192 && b === 168) return true;                        // private
+    if (a === 100 && b >= 64 && b <= 127) return true;              // CGNAT
+    if (a >= 224) return true;                                      // multicast + reserved
+    return false;
+  }
+  return false;
+}
+
+function isAllowedMockupHost(hostname) {
+  const h = String(hostname || "").toLowerCase();
+  return ALLOWED_MOCKUP_HOSTS.some((d) => h === d || h.endsWith("." + d));
+}
+
+/** Both gates, in one place, so every hop of a redirect chain gets the same check. */
+function hopAllowed(u) {
+  if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+  if (isBlockedAddress(u.hostname)) return false;
+  return isAllowedMockupHost(u.hostname);
+}
 
 function streamResponse(resp) {
   const contentType = resp.headers.get("content-type") || "application/octet-stream";
@@ -86,9 +170,8 @@ export async function onRequestGet({ request, env }) {
       return streamResponse(resp);
     }
 
-    // Not a Salesforce servlet link -- if it's still a plain http(s) URL,
-    // fetch it directly (see FALLBACK note above). Anything else (bad
-    // scheme, unparseable) still 400s same as before.
+    // BRANCH B -- not a ContentVersion link. See the SECURITY note above for
+    // why each of these gates is here.
     let parsed;
     try {
       parsed = new URL(raw);
@@ -98,15 +181,49 @@ export async function onRequestGet({ request, env }) {
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
       return jsonError("no_id_found", 400);
     }
+    if (!hopAllowed(parsed)) {
+      // Logged with the host so a legitimate mockup on a new host is a
+      // one-line allow-list change rather than a mystery blank thumbnail.
+      console.error("mockup-proxy: blocked host", parsed.hostname);
+      return jsonError("blocked_host", 400);
+    }
+
     try {
-      const resp = await fetch(parsed.toString(), {
-        method: "GET",
-        redirect: "follow",
-        signal: AbortSignal.timeout(8000),
-      });
-      if (!resp.ok) {
-        console.error("mockup-proxy: external mockup fetch failed", parsed.toString(), resp.status);
-        return jsonError("fetch_failed", resp.status);
+      /* Manual redirect handling. `redirect: "follow"` would validate only the
+         FIRST hop -- an allow-listed host answering 302 to http://169.254.169.254
+         would be followed by the platform with no further checks, which is the
+         SSRF hole wearing a hat. Every hop is re-validated here instead. */
+      let current = parsed;
+      let resp = null;
+      for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+        resp = await fetch(current.toString(), {
+          method: "GET",
+          redirect: "manual",
+          signal: AbortSignal.timeout(8000),
+        });
+        if (resp.status < 300 || resp.status > 399) break;
+        const location = resp.headers.get("location");
+        if (!location) break;
+        let next;
+        try {
+          next = new URL(location, current);
+        } catch (_) {
+          console.error("mockup-proxy: unparseable redirect target", location);
+          return jsonError("fetch_failed", 502);
+        }
+        if (!hopAllowed(next)) {
+          console.error("mockup-proxy: blocked redirect", current.hostname, "->", next.hostname);
+          return jsonError("blocked_host", 400);
+        }
+        if (hop === MAX_REDIRECTS) {
+          console.error("mockup-proxy: too many redirects", parsed.toString());
+          return jsonError("fetch_failed", 502);
+        }
+        current = next;
+      }
+      if (!resp || !resp.ok) {
+        console.error("mockup-proxy: external mockup fetch failed", current.toString(), resp && resp.status);
+        return jsonError("fetch_failed", (resp && resp.status) || 502);
       }
       return streamResponse(resp);
     } catch (err) {
