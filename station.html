@@ -196,6 +196,16 @@
               <button onClick="{{ s.onPick }}" class="ca-status-btn" style="display:flex;align-items:center;justify-content:center;gap:8px;font:700 13px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:{{s.color}};background:{{s.bg}};border:1px solid {{s.border}};border-radius:12px;padding:18px 10px;cursor:pointer"><i class="ti ti-circle-check"></i>{{s.label}}</button>
             </sc-for>
           </div>
+          <sc-if value="{{modal.showMissing}}" hint-placeholder-val="{{ false }}">
+            <div style="background:#141013;border:1px solid #4A2420;border-radius:14px;padding:16px 17px;margin-bottom:12px">
+              <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#E8A89F;margin-bottom:8px">Missing Items</div>
+              <div style="font:400 12px/1.5 'Archivo';color:#9C978C;margin-bottom:11px">What did not turn up in this delivery. Saved onto the order in Salesforce. Setting the status to Partial on its own leaves anything already written here untouched.</div>
+              <textarea value="{{modal.missingValue}}" onInput="{{ modal.onMissingInput }}" placeholder="e.g. 12 x L Navy short-shipped, 6 x XL damaged in transit" style="width:100%;box-sizing:border-box;min-height:88px;background:#0D0D0F;border:1px solid #2a2a2f;border-radius:11px;padding:13px 14px;font:400 14px/1.5 'Archivo';color:#ECEAE4;outline:none;resize:vertical"></textarea>
+              <button onClick="{{ modal.onMissingSave }}" style="width:100%;margin-top:11px;display:flex;align-items:center;justify-content:center;gap:8px;font:700 12px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#ECEAE4;background:#2a1210;border:1px solid #7A241C;border-radius:11px;padding:14px;cursor:pointer"><i class="ti ti-device-floppy"></i>{{modal.missingSaveLabel}}</button>
+              <sc-if value="{{modal.hasMissingMsg}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:7px;font:600 11px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:#BBD382;margin-top:10px"><i class="ti ti-check"></i>{{modal.missingMsg}}</div></sc-if>
+              <sc-if value="{{modal.hasMissingErr}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:7px;font:600 11px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:#E8A89F;margin-top:10px"><i class="ti ti-alert-triangle"></i>{{modal.missingErr}}</div></sc-if>
+            </div>
+          </sc-if>
         </sc-if>
 
         <sc-if value="{{modal.isStepStation}}" hint-placeholder-val="{{ true }}">
@@ -309,7 +319,7 @@ class Component extends DCLogic {
       ink:      { label:'Ink Station',    accent:'#2E9CCA', icon:'ti-droplet',   stages:['Needs Label','Needs Mixing','Mixed'], subField:'Ink_Sub_Status__c', identField:'Pantone_Color__c', inventory:'ink', empty:'All inks mixed — nothing waiting.', errorLabel:'Ink Error — reset', cta:'Mix' },
       screen:   { label:'The Blue Lagoon', accent:'#1FB2A6', icon:'ti-grid-4x4',  stages:['Needs Emulsion','Ready for Exposure','Needs Tape','Ready for Print'], subField:'Screen_Sub_Status__c', identField:'Mesh_Count__c', identSuffix:' mesh', inventory:'screen', empty:'All screens ready — board clear.', errorLabel:'Screen Error — reclaim', cta:'Prep' },
       transfer: { label:'Transfer Station', accent:'#E0B23C', icon:'ti-flame',    stages:['Not Received','Transfers Received','Transfers Cut/Ready'], subField:'Transfers_Sub_Status__c', identField:'Transfer_Type__c', inventory:null, empty:'All transfers cut and ready.', errorLabel:'Transfer Error — reset', cta:'Cut' },
-      garment:  { label:'Garment Station', accent:'#7FA644', icon:'ti-shirt',     source:'order', stages:['Not Received','Partial','Counted In','Staged'], inventory:null, empty:'All garments counted in and staged.', errorLabel:'Recount', cta:'Count' },
+      garment:  { label:'Garment Station', accent:'#7FA644', icon:'ti-shirt',     source:'order', stages:['Not Received','Partial','Counted In','Staged'], inventory:null, empty:'All garments counted in and staged.', errorLabel:'Recount', cta:'Count', missingAtStage:'Partial' },
     };
     this._demoItems = {
       ink:[
@@ -360,6 +370,9 @@ class Component extends DCLogic {
       station: _stn,
       tab: _apiP ? _apiP.readParam('tab', _validTabs, 'master') : 'master',
       modalId:null,
+      // Missing-items editor on the garment modal, keyed by orderId: the
+      // in-progress text, the in-flight flag and the last result per order.
+      missingDraft:{}, missingSaving:{}, missingMsg:{}, missingErr:{},
       // Order name / order number search -- filters the current station's
       // items by `order` (GOA_Order_Number__c) or `customer` (order name).
       // Mirrors the search box on index.html / pre-production.html so all
@@ -406,7 +419,13 @@ class Component extends DCLogic {
       let items;
       if(cfg.source==='order'){
         const recs=await api.getOrders();
-        items = recs.filter(r=>(r.Receiving_Status__c||'Not Received')!=='Staged').map(r=>{ const piv=api.pivotItems(r), due=api.dueInfo(r.Print_Date__c); return { id:r.Id, order:api.text(r.GOA_Order_Number__c)||r.OrderNumber||r.Id, customer:api.text(r.Customer_Order_Name__c)||api.text(r.Account&&r.Account.Name)||'—', ident:piv.garment, sizes:piv.sizes, qty:piv.qty+' pcs', dueLabel:due.label, urg:due.urg, days:due.days, stage:(r.Receiving_Status__c||'Not Received'), mockupUrl:r.DesignMockupUrl||null, notes:'' }; });
+        items = recs.filter(r=>(r.Receiving_Status__c||'Not Received')!=='Staged').map(r=>{ const piv=api.pivotItems(r), due=api.dueInfo(r.Print_Date__c); return { id:r.Id, order:api.text(r.GOA_Order_Number__c)||r.OrderNumber||r.Id, customer:api.text(r.Customer_Order_Name__c)||api.text(r.Account&&r.Account.Name)||'—', ident:piv.garment, sizes:piv.sizes, qty:piv.qty+' pcs', dueLabel:due.label, urg:due.urg, days:due.days, stage:(r.Receiving_Status__c||'Not Received'), mockupUrl:r.DesignMockupUrl||null, notes:'',
+          /* The Partial count-in note as Salesforce currently holds it. NOT run
+             through api.text(): that collapses whitespace, and this is a
+             free-text field a worker may well have written over several lines.
+             Already in /api/orders' SELECT list, so reading it here costs no
+             extra field and carries no FLS risk. */
+          missing:(r.Partial_Check_in_Missing_Items__c||'') }; });
       } else {
         const recs=await api.getStationItems(station);
         items = recs.map(r=>{ const o=(r.Production_Method__r&&r.Production_Method__r.Order__r)||{}; const due=api.dueInfo(o.Print_Date__c); const idv=r[cfg.identField]||''; return { id:r.Id, order:api.text(o.GOA_Order_Number__c)||'', customer:api.text(o.Customer_Order_Name__c)||api.text(o.Name)||'—', ident:(idv?api.text(idv)+(cfg.identSuffix||''):'\u2014'), qty:'', dueLabel:due.label, urg:due.urg, days:due.days, stage:(r[cfg.subField]||cfg.stages[0]), mockupUrl:(o.DesignMockupUrl||null), notes:api.text(r.Notes__c)||'' }; });
@@ -520,6 +539,48 @@ class Component extends DCLogic {
     this.setState(st=>{ const items=st.items[stn].map(o=>o.id===id?Object.assign({},o,{stage}):o); return {items:Object.assign({},st.items,{[stn]:items})}; });
     if(this._api && this.state.connection==='live'){ if(cfg.source==='order') this._api.updateOrderReceiving(id,stage).catch(()=>{}); else this._api.updateItemStatus(stn,id,stage).catch(()=>{}); }
   }
+  /* The Partial count-in note. Deliberately its own explicit Save rather than
+     a debounced auto-write like invAdj() below: this field is the only record
+     of what did not turn up, it is routinely filled in from Salesforce by
+     someone who is not at the tablet, and a half-typed autosave would overwrite
+     their note with a fragment. Nothing is sent until the worker presses Save.
+
+     setStage() never sends the note at all (see updateOrderReceiving in
+     ca-api.js), so tapping Partial leaves whatever Salesforce holds intact --
+     this box is the only thing in the app that writes it. */
+  setMissingDraft(id, val){
+    this.setState(st=>({ missingDraft:Object.assign({},st.missingDraft,{[id]:val}),
+                         missingMsg:Object.assign({},st.missingMsg,{[id]:''}),
+                         missingErr:Object.assign({},st.missingErr,{[id]:''}) }));
+  }
+  async saveMissing(id, stage){
+    const st=this.state;
+    if(st.missingSaving[id]) return;
+    const src=(st.items[this.state.station]||[]).find(o=>o.id===id);
+    if(!src) return;
+    const val = st.missingDraft[id]!=null ? st.missingDraft[id] : (src.missing||'');
+    if(!this._api || st.connection!=='live'){
+      this.setState(s2=>({ missingErr:Object.assign({},s2.missingErr,{[id]:'Not connected to Salesforce (demo mode)'}) }));
+      return;
+    }
+    this.setState(s2=>({ missingSaving:Object.assign({},s2.missingSaving,{[id]:true}),
+                         missingErr:Object.assign({},s2.missingErr,{[id]:''}),
+                         missingMsg:Object.assign({},s2.missingMsg,{[id]:''}) }));
+    try{
+      await this._api.updateOrderReceiving(id, stage, val);
+      // Local copy moves with the write so closing and reopening the modal
+      // shows what was saved rather than the pre-edit value.
+      this.setState(s2=>{
+        const items=(s2.items[this.state.station]||[]).map(o=>o.id===id?Object.assign({},o,{missing:val}):o);
+        return { items:Object.assign({},s2.items,{[this.state.station]:items}),
+                 missingSaving:Object.assign({},s2.missingSaving,{[id]:false}),
+                 missingMsg:Object.assign({},s2.missingMsg,{[id]:'Saved to Salesforce.'}) };
+      });
+    }catch(e){
+      this.setState(s2=>({ missingSaving:Object.assign({},s2.missingSaving,{[id]:false}),
+                           missingErr:Object.assign({},s2.missingErr,{[id]:'Could not save — try again'}) }));
+    }
+  }
   invAdj(i,delta){
     const key=this.STATIONS[this.state.station].inventory; if(!key) return;
     this.setState(st=>{ const arr=st.inv[key].map((x,ix)=>ix===i?Object.assign({},x,{qty:Math.max(0,x.qty+delta)}):x); return {inv:Object.assign({},st.inv,{[key]:arr})}; });
@@ -592,7 +653,18 @@ class Component extends DCLogic {
       // buttons are how a worker actually changes the status now (see
       // setStage() -- advance()/canAdvance's forward-only flow is gone).
       const statusOptions = cfg.stages.map(label=>{ const active=label===src.stage; return { label, bg:active?accent:'#141417', color:active?'#08080A':'#ECEAE4', border:active?accent:'#2a2a2f', onPick:()=>this.setStage(src.id,label) }; });
-      modal=Object.assign({},mk(src),{ isGarment, isStepStation:!isGarment, stages, statusOptions, errorLabel:cfg.errorLabel, onError:()=>this.resetStage(src.id), hasMockup:!!src.mockupUrl, noMockup:!src.mockupUrl, mockupNode: src.mockupUrl?React.createElement('img',{src:src.mockupUrl,alt:'Mockup',onClick:(window.CAApi&&window.CAApi.mockupClick)?window.CAApi.mockupClick(src.mockupUrl,(src.customer||'')+' - '+(src.num||'')):null, title:'Click to inspect', style:{cursor:'zoom-in',width:'100%',height:280,borderRadius:16,border:'1px solid #232327',objectFit:'cover',display:'block'}}):null, hasNotes:!!src.notes, notes:src.notes||'' });
+      modal=Object.assign({},mk(src),{ isGarment, isStepStation:!isGarment, stages, statusOptions, errorLabel:cfg.errorLabel, onError:()=>this.resetStage(src.id), hasMockup:!!src.mockupUrl, noMockup:!src.mockupUrl, mockupNode: src.mockupUrl?React.createElement('img',{src:src.mockupUrl,alt:'Mockup',onClick:(window.CAApi&&window.CAApi.mockupClick)?window.CAApi.mockupClick(src.mockupUrl,(src.customer||'')+' - '+(src.num||'')):null, title:'Click to inspect', style:{cursor:'zoom-in',width:'100%',height:280,borderRadius:16,border:'1px solid #232327',objectFit:'cover',display:'block'}}):null, hasNotes:!!src.notes, notes:src.notes||'',
+        /* Only at Partial: off that stage the endpoint clears the field on the
+           next write, so offering an editor there would invite typing a note
+           that is about to be thrown away. */
+        showMissing: isGarment && src.stage===cfg.missingAtStage,
+        missingValue: st.missingDraft[src.id]!=null ? st.missingDraft[src.id] : (src.missing||''),
+        onMissingInput:(e)=>this.setMissingDraft(src.id, e.target.value),
+        onMissingSave:()=>this.saveMissing(src.id, src.stage),
+        missingSaveLabel: st.missingSaving[src.id] ? 'Saving…' : 'Save Missing Items',
+        missingMsg: st.missingMsg[src.id]||'', hasMissingMsg: !!st.missingMsg[src.id],
+        missingErr: st.missingErr[src.id]||'', hasMissingErr: !!st.missingErr[src.id],
+      });
     }
 
     const clock=st.now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
