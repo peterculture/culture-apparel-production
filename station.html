@@ -199,11 +199,12 @@
           <sc-if value="{{modal.showMissing}}" hint-placeholder-val="{{ false }}">
             <div style="background:#141013;border:1px solid #4A2420;border-radius:14px;padding:16px 17px;margin-bottom:12px">
               <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#E8A89F;margin-bottom:8px">Missing Items</div>
-              <div style="font:400 12px/1.5 'Archivo';color:#9C978C;margin-bottom:11px">What did not turn up in this delivery. Saved onto the order in Salesforce. Setting the status to Partial on its own leaves anything already written here untouched.</div>
-              <textarea value="{{modal.missingValue}}" onInput="{{ modal.onMissingInput }}" placeholder="e.g. 12 x L Navy short-shipped, 6 x XL damaged in transit" style="width:100%;box-sizing:border-box;min-height:88px;background:#0D0D0F;border:1px solid #2a2a2f;border-radius:11px;padding:13px 14px;font:400 14px/1.5 'Archivo';color:#ECEAE4;outline:none;resize:vertical"></textarea>
-              <button onClick="{{ modal.onMissingSave }}" style="width:100%;margin-top:11px;display:flex;align-items:center;justify-content:center;gap:8px;font:700 12px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#ECEAE4;background:#2a1210;border:1px solid #7A241C;border-radius:11px;padding:14px;cursor:pointer"><i class="ti ti-device-floppy"></i>{{modal.missingSaveLabel}}</button>
-              <sc-if value="{{modal.hasMissingMsg}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:7px;font:600 11px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:#BBD382;margin-top:10px"><i class="ti ti-check"></i>{{modal.missingMsg}}</div></sc-if>
-              <sc-if value="{{modal.hasMissingErr}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:7px;font:600 11px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:#E8A89F;margin-top:10px"><i class="ti ti-alert-triangle"></i>{{modal.missingErr}}</div></sc-if>
+              <div style="font:400 12px/1.5 'Archivo';color:#9C978C;margin-bottom:11px">What is short in this delivery. Saved onto the order in Salesforce. Tapping a status on its own never changes this &mdash; only saving here does.</div>
+              <textarea value="{{modal.missingValue}}" onInput="{{ modal.onMissingInput }}" disabled="{{modal.missingDisabled}}" placeholder="e.g. short 12 M, 5 L" style="width:100%;box-sizing:border-box;min-height:88px;background:#0D0D0F;border:1px solid #2a2a2f;border-radius:11px;padding:14px;font:400 16px/1.5 'Archivo';color:#ECEAE4;outline:none;resize:vertical"></textarea>
+              <button onClick="{{ modal.onMissingSave }}" disabled="{{modal.missingDisabled}}" style="width:100%;min-height:52px;margin-top:11px;display:flex;align-items:center;justify-content:center;gap:8px;font:700 14px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#ECEAE4;background:#2a1210;border:1px solid #7A241C;border-radius:11px;padding:15px;cursor:pointer"><i class="ti ti-device-floppy"></i>{{modal.missingSaveLabel}}</button>
+              <sc-if value="{{modal.missingOffline}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:7px;font:400 12px/1.4 'Archivo';color:#C9923A;margin-top:10px"><i class="ti ti-plug-connected-x" style="font-size:14px"></i>Demo data &mdash; not connected to Salesforce, so this can&rsquo;t be saved.</div></sc-if>
+              <sc-if value="{{modal.hasMissingMsg}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:7px;font:600 12px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:#BBD382;margin-top:10px"><i class="ti ti-check"></i>{{modal.missingMsg}}</div></sc-if>
+              <sc-if value="{{modal.hasMissingErr}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:flex-start;gap:7px;font:400 12px/1.45 'Archivo';color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:9px;padding:10px 12px;margin-top:10px"><i class="ti ti-alert-triangle" style="margin-top:2px;flex-shrink:0"></i><span>{{modal.missingErr}}</span></div></sc-if>
             </div>
           </sc-if>
         </sc-if>
@@ -370,9 +371,11 @@ class Component extends DCLogic {
       station: _stn,
       tab: _apiP ? _apiP.readParam('tab', _validTabs, 'master') : 'master',
       modalId:null,
-      // Missing-items editor on the garment modal, keyed by orderId: the
-      // in-progress text, the in-flight flag and the last result per order.
-      missingDraft:{}, missingSaving:{}, missingMsg:{}, missingErr:{},
+      /* Missing-items editor on the garment modal. Scalars, not maps: exactly
+         one modal is open at a time, and the draft is re-seeded from the item
+         every time one opens (see onOpen in mk()), so the box always starts
+         from what Salesforce actually holds rather than a stale local edit. */
+      missingDraft:'', missingSaving:false, missingMsg:'', missingErr:'',
       // Order name / order number search -- filters the current station's
       // items by `order` (GOA_Order_Number__c) or `customer` (order name).
       // Mirrors the search box on index.html / pre-production.html so all
@@ -534,53 +537,50 @@ class Component extends DCLogic {
   // jump "Needs Emulsion" straight to "Ready for Print", without stepping
   // through every stage in between. Replaces the old advance()-only flow,
   // which only ever let a worker move one step forward.
-  setStage(id,stage){
-    const stn=this.state.station, cfg=this.STATIONS[stn];
-    this.setState(st=>{ const items=st.items[stn].map(o=>o.id===id?Object.assign({},o,{stage}):o); return {items:Object.assign({},st.items,{[stn]:items})}; });
-    if(this._api && this.state.connection==='live'){ if(cfg.source==='order') this._api.updateOrderReceiving(id,stage).catch(()=>{}); else this._api.updateItemStatus(stn,id,stage).catch(()=>{}); }
-  }
-  /* The Partial count-in note. Deliberately its own explicit Save rather than
-     a debounced auto-write like invAdj() below: this field is the only record
-     of what did not turn up, it is routinely filled in from Salesforce by
-     someone who is not at the tablet, and a half-typed autosave would overwrite
-     their note with a fragment. Nothing is sent until the worker presses Save.
+  /* `missing` is the count-in note, and passing it is what makes this a NOTE
+     EDIT rather than a status tap. Omit it (every status tile, and resetStage)
+     and the request carries no `missing` key at all, so the endpoint leaves the
+     Salesforce value alone -- that is the whole fix. Pass a string (including
+     '') and it is written.
 
-     setStage() never sends the note at all (see updateOrderReceiving in
-     ca-api.js), so tapping Partial leaves whatever Salesforce holds intact --
-     this box is the only thing in the app that writes it. */
-  setMissingDraft(id, val){
-    this.setState(st=>({ missingDraft:Object.assign({},st.missingDraft,{[id]:val}),
-                         missingMsg:Object.assign({},st.missingMsg,{[id]:''}),
-                         missingErr:Object.assign({},st.missingErr,{[id]:''}) }));
-  }
-  async saveMissing(id, stage){
-    const st=this.state;
-    if(st.missingSaving[id]) return;
-    const src=(st.items[this.state.station]||[]).find(o=>o.id===id);
-    if(!src) return;
-    const val = st.missingDraft[id]!=null ? st.missingDraft[id] : (src.missing||'');
-    if(!this._api || st.connection!=='live'){
-      this.setState(s2=>({ missingErr:Object.assign({},s2.missingErr,{[id]:'Not connected to Salesforce (demo mode)'}) }));
+     The status half stays fire-and-forget, as every station write has been. The
+     NOTE half deliberately does not: it reports in-flight / saved / failed,
+     because a note that silently failed to save is indistinguishable from one
+     that saved, and the worker has already walked away from the tablet. (This
+     is a down payment on E4.3; the other ~20 write paths are still silent.) */
+  setStage(id,stage,missing){
+    const stn=this.state.station, cfg=this.STATIONS[stn];
+    const isNoteEdit = typeof missing === 'string';
+    this.setState(st=>{
+      const items=st.items[stn].map(o=>o.id===id?Object.assign({},o,{stage}):o);
+      const patch={ items:Object.assign({},st.items,{[stn]:items}) };
+      if(isNoteEdit) Object.assign(patch,{ missingSaving:true, missingMsg:'', missingErr:'' });
+      return patch;
+    });
+    if(!this._api || this.state.connection!=='live'){
+      // The box is disabled in demo mode, so this is belt-and-braces rather
+      // than the path a worker can actually reach.
+      if(isNoteEdit) this.setState({ missingSaving:false, missingErr:'Demo mode — not connected to Salesforce.' });
       return;
     }
-    this.setState(s2=>({ missingSaving:Object.assign({},s2.missingSaving,{[id]:true}),
-                         missingErr:Object.assign({},s2.missingErr,{[id]:''}),
-                         missingMsg:Object.assign({},s2.missingMsg,{[id]:''}) }));
-    try{
-      await this._api.updateOrderReceiving(id, stage, val);
-      // Local copy moves with the write so closing and reopening the modal
-      // shows what was saved rather than the pre-edit value.
-      this.setState(s2=>{
-        const items=(s2.items[this.state.station]||[]).map(o=>o.id===id?Object.assign({},o,{missing:val}):o);
-        return { items:Object.assign({},s2.items,{[this.state.station]:items}),
-                 missingSaving:Object.assign({},s2.missingSaving,{[id]:false}),
-                 missingMsg:Object.assign({},s2.missingMsg,{[id]:'Saved to Salesforce.'}) };
-      });
-    }catch(e){
-      this.setState(s2=>({ missingSaving:Object.assign({},s2.missingSaving,{[id]:false}),
-                           missingErr:Object.assign({},s2.missingErr,{[id]:'Could not save — try again'}) }));
-    }
+    if(cfg.source!=='order'){ this._api.updateItemStatus(stn,id,stage).catch(()=>{}); return; }
+    if(!isNoteEdit){ this._api.updateOrderReceiving(id,stage).catch(()=>{}); return; }
+    this._api.updateOrderReceiving(id,stage,missing)
+      .then(()=>{
+        /* The item's own copy moves ONLY once Salesforce has taken it. Updating
+           it optimistically would leave a failed save looking identical to a
+           successful one the moment the modal is reopened -- the exact phantom
+           save this station is full of. The draft holds the text meanwhile, so
+           nothing the worker typed is lost either way. */
+        this.setState(st=>{
+          const items=(st.items[stn]||[]).map(o=>o.id===id?Object.assign({},o,{missing}):o);
+          return { items:Object.assign({},st.items,{[stn]:items}),
+                   missingSaving:false, missingMsg:'Saved to Salesforce.' };
+        });
+      })
+      .catch(()=>this.setState({ missingSaving:false, missingErr:'Could not save — your note is still here, try again.' }));
   }
+  setMissingDraft(val){ this.setState({ missingDraft:val, missingMsg:'', missingErr:'' }); }
   invAdj(i,delta){
     const key=this.STATIONS[this.state.station].inventory; if(!key) return;
     this.setState(st=>{ const arr=st.inv[key].map((x,ix)=>ix===i?Object.assign({},x,{qty:Math.max(0,x.qty+delta)}):x); return {inv:Object.assign({},st.inv,{[key]:arr})}; });
@@ -613,7 +613,7 @@ class Component extends DCLogic {
     // Urgency icon + bolder overdue card (added 2026-08-11) -- see
     // URG_ICON/urgCardStyle in ca-api.js, shared across every board.
     const api2 = this._api||window.CAApi;
-    const mk=o=>{ const dc=stageColor(o.stage); const done=o.stage===doneStage; return Object.assign({},o,{ urgColor:U[o.urg]||U.ok, urgIcon:(api2.URG_ICON && api2.URG_ICON[o.urg])||'ti-clock-hour-4', cardBg:api2.urgCardStyle(o.urg).bg, cardBorder:api2.urgCardStyle(o.urg).border, stageColor:dc, stageBg:done?'#18230D':'rgba(255,255,255,.04)', stageBorder:done?'#3D5418':'#2f2f34', opacity:done?0.6:1, hasSizes:!!o.sizes, hasOrderSheet:isOrderStation, orderSheetUrl:isOrderStation?('order-sheet.html?orderId='+encodeURIComponent(o.id)):'', cta:{ label:done?'Done':cfg.cta, color:done?'#7FA644':accent }, onOpen:()=>this.setState({modalId:o.id}) }); };
+    const mk=o=>{ const dc=stageColor(o.stage); const done=o.stage===doneStage; return Object.assign({},o,{ urgColor:U[o.urg]||U.ok, urgIcon:(api2.URG_ICON && api2.URG_ICON[o.urg])||'ti-clock-hour-4', cardBg:api2.urgCardStyle(o.urg).bg, cardBorder:api2.urgCardStyle(o.urg).border, stageColor:dc, stageBg:done?'#18230D':'rgba(255,255,255,.04)', stageBorder:done?'#3D5418':'#2f2f34', opacity:done?0.6:1, hasSizes:!!o.sizes, hasOrderSheet:isOrderStation, orderSheetUrl:isOrderStation?('order-sheet.html?orderId='+encodeURIComponent(o.id)):'', cta:{ label:done?'Done':cfg.cta, color:done?'#7FA644':accent }, onOpen:()=>this.setState({modalId:o.id, missingDraft:o.missing||'', missingMsg:'', missingErr:''}) }); };
 
     let cards=[]; let boardEmpty=false; let showInventory=false, showBoard=true;
     if(st.tab==='inventory'){ showInventory=true; showBoard=false; }
@@ -652,18 +652,25 @@ class Component extends DCLogic {
       // The pipeline dots above still show progress at a glance; these
       // buttons are how a worker actually changes the status now (see
       // setStage() -- advance()/canAdvance's forward-only flow is gone).
-      const statusOptions = cfg.stages.map(label=>{ const active=label===src.stage; return { label, bg:active?accent:'#141417', color:active?'#08080A':'#ECEAE4', border:active?accent:'#2a2a2f', onPick:()=>this.setStage(src.id,label) }; });
+      const statusOptions = cfg.stages.map(label=>{ const active=label===src.stage; return { label, bg:active?accent:'#141417', color:active?'#08080A':'#ECEAE4', border:active?accent:'#2a2a2f', onPick:()=>this.setStage(src.id,label) }; });   // two args on purpose: a status tap is not a note edit
       modal=Object.assign({},mk(src),{ isGarment, isStepStation:!isGarment, stages, statusOptions, errorLabel:cfg.errorLabel, onError:()=>this.resetStage(src.id), hasMockup:!!src.mockupUrl, noMockup:!src.mockupUrl, mockupNode: src.mockupUrl?React.createElement('img',{src:src.mockupUrl,alt:'Mockup',onClick:(window.CAApi&&window.CAApi.mockupClick)?window.CAApi.mockupClick(src.mockupUrl,(src.customer||'')+' - '+(src.num||'')):null, title:'Click to inspect', style:{cursor:'zoom-in',width:'100%',height:280,borderRadius:16,border:'1px solid #232327',objectFit:'cover',display:'block'}}):null, hasNotes:!!src.notes, notes:src.notes||'',
-        /* Only at Partial: off that stage the endpoint clears the field on the
-           next write, so offering an editor there would invite typing a note
-           that is about to be thrown away. */
-        showMissing: isGarment && src.stage===cfg.missingAtStage,
-        missingValue: st.missingDraft[src.id]!=null ? st.missingDraft[src.id] : (src.missing||''),
-        onMissingInput:(e)=>this.setMissingDraft(src.id, e.target.value),
-        onMissingSave:()=>this.saveMissing(src.id, src.stage),
-        missingSaveLabel: st.missingSaving[src.id] ? 'Saving…' : 'Save Missing Items',
-        missingMsg: st.missingMsg[src.id]||'', hasMissingMsg: !!st.missingMsg[src.id],
-        missingErr: st.missingErr[src.id]||'', hasMissingErr: !!st.missingErr[src.id],
+        /* Shown at Partial -- and ALSO whenever the order already carries a
+           note, whatever its stage. Nothing clears the note automatically any
+           more, so that second half is what makes a stale note from a previous
+           delivery visible on a Counted In order instead of invisibly attached
+           to it. Clearing the box and saving is how it goes away. */
+        showMissing: isGarment && (src.stage===cfg.missingAtStage || !!src.missing),
+        missingValue: st.missingDraft,
+        onMissingInput:(e)=>this.setMissingDraft(e.target.value),
+        onMissingSave:()=>this.setStage(src.id, src.stage, st.missingDraft),
+        missingSaveLabel: st.missingSaving ? 'Saving…' : 'Save Missing Items',
+        missingBusy: st.missingSaving,
+        /* Demo mode disables the control outright rather than accepting a tap
+           that goes nowhere -- see the connection check in setStage(). */
+        missingDisabled: st.connection!=='live' || st.missingSaving,
+        missingOffline: st.connection!=='live',
+        missingMsg: st.missingMsg, hasMissingMsg: !!st.missingMsg,
+        missingErr: st.missingErr, hasMissingErr: !!st.missingErr,
       });
     }
 
