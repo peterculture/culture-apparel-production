@@ -20,6 +20,25 @@
   </style>
 </helmet>
 
+<sc-if value="{{showLoading}}" hint-placeholder-val="{{ false }}">
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;font:400 15px/1 'Archivo';color:#c9c2b6">Loading order sheet…</div>
+</sc-if>
+
+<sc-if value="{{showError}}" hint-placeholder-val="{{ false }}">
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px">
+    <div style="max-width:520px;background:#fff;border-radius:14px;border-top:6px solid #C6372B;padding:30px 32px;box-shadow:0 24px 60px -24px rgba(0,0,0,.5)">
+      <div style="display:flex;align-items:center;gap:10px;font:700 11px/1 'Oswald';letter-spacing:.16em;text-transform:uppercase;color:#C6372B;margin-bottom:14px"><i class="ti ti-alert-triangle" style="font-size:16px"></i>Nothing to print</div>
+      <div style="font:700 22px/1.25 'Oswald';color:#141210">{{errorTitle}}</div>
+      <div style="font:400 14px/1.6 'Archivo';color:#4a453d;margin-top:12px">{{errorDetail}}</div>
+      <div style="font:400 12px/1.6 'Archivo';color:#8a8378;margin-top:18px;padding-top:16px;border-top:1px solid #e2ddd4">This page shows nothing rather than risk putting invented numbers on the press. Nothing here is printable until a real order loads.</div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{showSheet}}" hint-placeholder-val="{{ true }}">
+<sc-if value="{{isDemo}}" hint-placeholder-val="{{ false }}">
+  <div style="background:#C6372B;color:#fff;font:700 12px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;text-align:center;padding:11px">Sample layout · ?demo=1 · not a real order</div>
+</sc-if>
 <x-import component-from-global-scope="doc-page" from="./doc-page.js" size="letter" margin="0.55in" hint-size="100%,100%">
 
   <div slot="header" style="display:flex;align-items:center;gap:11px;padding:10px 0 12px;border-bottom:2px solid #C6372B;margin-bottom:4px">
@@ -129,17 +148,29 @@
   </div>
 
 </x-import>
+</sc-if>
 
 <template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#141210"/><text x="50" y="58" font-family="Oswald,Arial" font-size="28" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="2">CA</text><text x="50" y="76" font-family="Arial" font-size="7" font-weight="700" fill="#C6372B" text-anchor="middle" letter-spacing="1">ORDER SHEET</text></svg></template></x-dc>
 <script type="text/x-dc" data-dc-script data-props="{}">
 class Component extends DCLogic {
   constructor(props){
     super(props);
-    // Sample order — renders immediately (holes resolve on first paint). When the
-    // page is opened as /Order Sheet.dc.html?orderId=<SF Id> and /api is reachable,
-    // componentDidMount replaces this with the real order.
+    /* The sample order below is a LAYOUT FIXTURE, not a fallback. It used to
+       render on first paint and simply stay there whenever hydrate() failed --
+       a complete, printable, entirely fictional order sheet for "Cypress Trail
+       10K", with a footer line as the only tell. This is the document the floor
+       prints and cuts screens from, so that failure mode is not acceptable.
+
+       `status` now decides what is on screen, and the sheet renders for exactly
+       two of its four values:
+         'loading' - an orderId was given, the fetch is in flight  -> spinner
+         'live'    - the real order resolved                       -> sheet
+         'demo'    - ?demo=1 was passed explicitly                 -> sheet
+         'error'   - anything else, naming what went wrong         -> error card
+       There is no path from a failed load back to the sample: reaching 'demo'
+       requires typing ?demo=1 into the URL. */
     this.state = {
-      live:false,
+      status:'loading', errorTitle:'', errorDetail:'', orderId:'',
       order:{
         goa:'GOA-4809', goaTail:'4809', customer:'Cypress Trail 10K', account:'Cypress Events', orderNumber:'00043891',
         method:'sp', printDate:'Tue · Jul 21', qty:'300',
@@ -162,16 +193,43 @@ class Component extends DCLogic {
     };
   }
   componentDidMount(){
-    let orderId=''; try { orderId=new URLSearchParams(location.search).get('orderId')||''; } catch(_){}
-    if(orderId) this.hydrate(orderId);
+    let orderId='', demo=false;
+    try {
+      const qs=new URLSearchParams(location.search);
+      orderId=qs.get('orderId')||'';
+      demo=qs.get('demo')==='1';
+    } catch(_){}
+    // Explicit opt-in only. Nothing in the app links here with ?demo=1.
+    if(demo){ this.setState({status:'demo', orderId:orderId||'sample'}); return; }
+    if(!orderId){
+      this.fail('No order was requested', 'This page needs an ?orderId= in its address. Open the order sheet from a board rather than typing the address by hand.');
+      return;
+    }
+    this.setState({status:'loading', orderId});
+    this.hydrate(orderId);
+  }
+  /* One place to land on the error card. Deliberately takes a human title and a
+     detail line -- "could not load" on its own sends a worker to find someone
+     with no idea what to tell them. */
+  fail(title, detail){
+    this.setState({ status:'error', errorTitle:title, errorDetail:detail });
   }
   async hydrate(orderId){
     try {
-      const api = window.CAApi; if(!api) return;
+      const api = window.CAApi;
+      if(!api){ this.fail('The page did not load correctly', 'ca-api.js is missing, so this sheet cannot be built. Reload the page; if it happens again the deployment is broken.'); return; }
       const M = { sp:'Screen Print', em:'Embroidery', hp:'Heat Press' };
       const [o1, o2, rows, items] = await Promise.all([ api.getOrders().catch(()=>[]), (api.getProductionOrders?api.getProductionOrders():Promise.resolve([])).catch(()=>[]), api.getOrderSizes(orderId), api.getPreProductionItems(orderId).catch(()=>[]) ]);
       const rec = o1.concat(o2).find(r => r.Id === orderId);
-      if(!rec) return;
+      /* Not an error in Salesforce -- both queries succeeded, this order just
+         isn't in either result. The usual causes are an order marked Complete
+         (the boards' queries drop it) or one with no production method yet, so
+         say that rather than "not found", which reads as "deleted". */
+      if(!rec){
+        this.fail('Order ' + orderId + ' could not be found',
+                  'The order loaded no data from Salesforce. That usually means it is marked Complete, or it has no production method set up yet. Check it on the board before printing anything.');
+        return;
+      }
       // group size rows by color, keep a shared, ordered column list
       const byColor = {}; const colSet = {};
       rows.forEach(r => {
@@ -229,8 +287,14 @@ class Component extends DCLogic {
         mockupUrl: rec.DesignMockupUrl || null,
         cols, grids, grand: String(grand),
       };
-      this.setState({ live:true, order });
-    } catch(_) { /* keep sample */ }
+      this.setState({ status:'live', order });
+    } catch(e) {
+      // Was: `catch(_) { /* keep sample */ }` -- which left the fictional sample
+      // on screen, printable, whenever Salesforce was unreachable.
+      console.error('order sheet hydrate failed', orderId, e);
+      this.fail('Order ' + orderId + ' could not be loaded',
+                'Salesforce did not answer. Check the connection and reload; do not print this sheet until it shows real data.');
+    }
   }
   renderVals(){
     const o = this.state.order;
@@ -251,7 +315,14 @@ class Component extends DCLogic {
       cols:o.cols, grids, grand:o.grand,
       hasMockup:!!o.mockupUrl, noMockup:!o.mockupUrl,
       mockupNode: o.mockupUrl ? React.createElement('img',{src:o.mockupUrl,alt:'Production mockup',style:{width:190,height:190,flexShrink:0,borderRadius:8,border:'1.5px solid #141210',objectFit:'cover',background:'#efeae2'}}) : null,
-      footNote: this.state.live ? 'Generated live from Salesforce' : 'Sample order sheet',
+      footNote: this.state.status==='live' ? 'Generated live from Salesforce' : 'SAMPLE — NOT A REAL ORDER',
+      // The sheet exists in the DOM for exactly these two states, so there is
+      // nothing to print in the other two.
+      showSheet: this.state.status==='live' || this.state.status==='demo',
+      showLoading: this.state.status==='loading',
+      showError: this.state.status==='error',
+      isDemo: this.state.status==='demo',
+      errorTitle: this.state.errorTitle, errorDetail: this.state.errorDetail,
     };
   }
 }
