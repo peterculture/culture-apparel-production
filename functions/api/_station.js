@@ -342,7 +342,11 @@ export const STATION_CONFIG = {
     // "Partial" without stepping through every stage in between).
     statuses: ["Not Received", "Partial", "Counted In", "Staged"],
     doneStatus: "Staged", // board hides orders at this value
-    // Free-text "missing count-in" note; kept only while at "Partial".
+    /* Free-text "missing count-in" note -- what was short in the delivery.
+       missingAtStage is a UI hint ONLY as of 2026-08-28: it tells station.html
+       which stage should offer the input box. It does NOT gate the write, and
+       the note is no longer cleared when an order leaves that stage -- see
+       update-order-receiving/index.js. */
     missingField: "Partial_Check_in_Missing_Items__c",
     missingAtStage: "Partial",
   },
