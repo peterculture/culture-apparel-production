@@ -8,6 +8,14 @@
  * stage, and cleared otherwise — matching how the Salesforce box disappears once
  * an order moves to Counted In / Staged.
  *
+ * "missing" is OPTIONAL and its ABSENCE is meaningful. Omit the key and the note
+ * is left exactly as Salesforce has it; send a string (even "") and that string
+ * is written. Until 2026-08-28 the client always sent the key, so every tap of
+ * Partial wrote "" over a note someone had typed in Salesforce, and nothing in
+ * this app ever read the field back to make the loss visible. Clearing on the
+ * OTHER statuses is still unconditional -- that is the intended behaviour above,
+ * not the bug.
+ *
  * Gated on the signed station token; only a station whose config is source:"order"
  * (i.e. garment) may call it. The order Id is shape-validated and the status must
  * be one the station config allows.
@@ -37,17 +45,26 @@ export async function onRequestPost({ env, request }) {
 
     const orderId = String(body.orderId || "");
     const status = String(body.status || "");
-    const missing = body.missing == null ? "" : String(body.missing);
+    // hasOwnProperty, not truthiness: "" is a legitimate value to write (a
+    // worker clearing the box on purpose) and must stay distinct from "the
+    // caller said nothing about this field".
+    const hasMissing =
+      Object.prototype.hasOwnProperty.call(body, "missing") && body.missing != null;
+    const missing = hasMissing ? String(body.missing) : "";
 
     if (!SF_ID.test(orderId)) return jsonError("invalid_order_id", 400);
     if (!cfg.statuses.includes(status)) return jsonError("invalid_status", 400);
 
     const payload = { [cfg.field]: status };
 
-    // Missing-count note: keep it only at the "Partial" stage; clear it (null)
-    // for every other status so a stale count doesn't linger.
+    /* Missing-count note. Off the Partial stage it is cleared unconditionally,
+       so a stale count can't linger on an order that is now Counted In. AT
+       Partial it is written only when the caller actually supplied one --
+       otherwise the field is left out of the payload entirely and Salesforce
+       keeps whatever it holds. */
     if (cfg.missingField) {
-      payload[cfg.missingField] = status === cfg.missingAtStage ? missing : null;
+      if (status !== cfg.missingAtStage) payload[cfg.missingField] = null;
+      else if (hasMissing) payload[cfg.missingField] = missing;
     }
 
     const by = (body.by == null ? "" : String(body.by)).trim();
@@ -73,7 +90,15 @@ export async function onRequestPost({ env, request }) {
     }
 
     return Response.json(
-      { ok: true, orderId, status, missing: cfg.missingField ? payload[cfg.missingField] : null },
+      {
+        ok: true,
+        orderId,
+        status,
+        // `missing` is only meaningful when this write actually touched the
+        // field; null when it was deliberately left alone.
+        missingWritten: !!cfg.missingField && cfg.missingField in payload,
+        missing: cfg.missingField && cfg.missingField in payload ? payload[cfg.missingField] : null,
+      },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (err) {
