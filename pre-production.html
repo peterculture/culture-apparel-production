@@ -1288,9 +1288,10 @@ class Component extends DCLogic {
       if(opts && opts.withRuns) (recs||[]).forEach(r=>{ if(r && r.Id) this.loadRunsForCard(r.Id); });
     }).catch(()=>{ this.setState({methodsLoadingFor:null}); });
   }
-  openMethodEdit(r){
+  async openMethodEdit(r){
     const api=this._api||window.CAApi;
-    if(api && !api.confirmManager('Editing a production method')) return;
+    // await: confirmManager returns a Promise, and `!promise` is always false.
+    if(api && !(await api.confirmManager('Editing a production method'))) return;
     this.setState({
       methodEditId: r.Id,
       // Captured at open time so saveMethodEdit can ask the server "reject
@@ -1344,9 +1345,10 @@ class Component extends DCLogic {
       }
     }
   }
-  removeMethod(r, orderId){
+  async removeMethod(r, orderId){
     const api=this._api||window.CAApi;
-    if(api && !api.confirmManager('Removing a production method')) return;
+    // await: confirmManager returns a Promise, and `!promise` is always false.
+    if(api && !(await api.confirmManager('Removing a production method'))) return;
     if(!window.confirm('Remove this production method? This can’t be undone.')) return;
     if(!this._api) return;
     this._api.deleteMethod(r.Id).then(()=>{
@@ -1492,9 +1494,10 @@ class Component extends DCLogic {
       }
     }
   }
-  removeRun(runId, methodId){
+  async removeRun(runId, methodId){
     const api=this._api||window.CAApi;
-    if(api && !api.confirmManager('Removing a production run')) return;
+    // await: confirmManager returns a Promise, and `!promise` is always false.
+    if(api && !(await api.confirmManager('Removing a production run'))) return;
     if(!window.confirm('Remove this production run? This can’t be undone.')) return;
     if(!this._api) return;
     this._api.deleteProductionRun(runId).then(()=>{
@@ -1502,9 +1505,10 @@ class Component extends DCLogic {
     }).catch(()=>{ window.alert('Could not remove this run — try again.'); });
   }
   setItemField(orderId,itemId,field,val){ this.setState(st=>{ const pp=Object.assign({},st.ppItemsById); pp[orderId]=(pp[orderId]||[]).map(it=>it.Id===itemId?Object.assign({},it,{[field]:val}):it); return {ppItemsById:pp}; }); if(this._api && this.state.connection==='live') this._api.patchItem(itemId,{[field]:val}).catch(()=>{}); }
-  removePPItem(orderId,itemId){
+  async removePPItem(orderId,itemId){
     const api=this._api||window.CAApi;
-    if(api && !api.confirmManager('Removing a production item')) return;
+    // await: confirmManager returns a Promise, and `!promise` is always false.
+    if(api && !(await api.confirmManager('Removing a production item'))) return;
     if(!window.confirm('Remove this production item? This can’t be undone.')) return;
     this.setState(st=>{ const pp=Object.assign({},st.ppItemsById); pp[orderId]=(pp[orderId]||[]).filter(it=>it.Id!==itemId); return {ppItemsById:pp}; }); if(this._api && this.state.connection==='live' && itemId) this._api.deleteItem(itemId).catch(()=>{});
   }
