@@ -8,13 +8,20 @@
  * stage, and cleared otherwise — matching how the Salesforce box disappears once
  * an order moves to Counted In / Staged.
  *
- * "missing" is OPTIONAL and its ABSENCE is meaningful. Omit the key and the note
- * is left exactly as Salesforce has it; send a string (even "") and that string
- * is written. Until 2026-08-28 the client always sent the key, so every tap of
- * Partial wrote "" over a note someone had typed in Salesforce, and nothing in
- * this app ever read the field back to make the loss visible. Clearing on the
- * OTHER statuses is still unconditional -- that is the intended behaviour above,
- * not the bug.
+ * "missing" is OPTIONAL and its ABSENCE is the only gate on the note. Omit the
+ * key and the note is left exactly as Salesforce has it; send a string (even "")
+ * and that string is written. Until 2026-08-28 the client always sent the key,
+ * so every tap of Partial wrote "" over a note someone had typed in Salesforce,
+ * and nothing in this app ever read the field back to make the loss visible.
+ *
+ * The STATUS no longer decides anything about the note. Moving an order to
+ * Counted In or Staged does NOT blank it: silent clearing is the bug being
+ * fixed here, and a stale note left visible on the card is a prompt to clear it,
+ * which a worker does by emptying the box and saving. cfg.missingAtStage still
+ * exists in _station.js and still tells the TABLET when to offer the box; it no
+ * longer gates this write. If that ever needs to change -- clear on Counted In,
+ * say -- it is one added condition here, and it is a product decision, not a
+ * tidy-up.
  *
  * Gated on the signed station token; only a station whose config is source:"order"
  * (i.e. garment) may call it. The order Id is shape-validated and the status must
@@ -29,6 +36,14 @@ import { sfFetch, apiVersion, jsonError } from "../_sf.js";
 import { STATION_CONFIG } from "../_station.js";
 
 const SF_ID = /^[a-zA-Z0-9]{15,18}$/;
+
+/* Truncation guard for the count-in note. 255 is the Salesforce default for
+   Text; if Partial_Check_in_Missing_Items__c is a Long Text Area (or a shorter
+   Text) in the org, correct this to the real length -- a note silently cut at
+   255 is its own small version of the bug this endpoint just fixed. Truncating
+   here rather than letting Salesforce reject the whole PATCH keeps a long note
+   from also losing the status change it rode in with. */
+const MISSING_MAX = 255;
 
 export async function onRequestPost({ env, request }) {
   try {
@@ -57,14 +72,10 @@ export async function onRequestPost({ env, request }) {
 
     const payload = { [cfg.field]: status };
 
-    /* Missing-count note. Off the Partial stage it is cleared unconditionally,
-       so a stale count can't linger on an order that is now Counted In. AT
-       Partial it is written only when the caller actually supplied one --
-       otherwise the field is left out of the payload entirely and Salesforce
-       keeps whatever it holds. */
-    if (cfg.missingField) {
-      if (status !== cfg.missingAtStage) payload[cfg.missingField] = null;
-      else if (hasMissing) payload[cfg.missingField] = missing;
+    // Written only when the request carried the key -- see the header note.
+    // Never cleared as a side effect of a status change.
+    if (cfg.missingField && hasMissing) {
+      payload[cfg.missingField] = missing.slice(0, MISSING_MAX);
     }
 
     const by = (body.by == null ? "" : String(body.by)).trim();
