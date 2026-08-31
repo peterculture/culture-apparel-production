@@ -984,6 +984,9 @@ class Component extends DCLogic {
       /* Run allocation grid (E1.3) -- see index.html's matching block. Keyed
          by runId, fetched on demand when a manager opens the grid. */
       runAlloc:{},
+      /* Method-wide committed garments, keyed by methodId -- see index.html's
+         matching block. Feeds runQtyHint's "N unallocated" tail. */
+      methodCommitted:{},
       runsByMethod:{}, runsLoadingFor:null, runEdits:{}, runRowPressResults:{}, runRowSaving:{}, runRowErr:{}, runRowMsg:{},
       // "Production Methods" section of the card drawer -- fresh per-order
       // fetch (methodsByOrder, keyed by orderId) so add/edit/remove always
@@ -1556,7 +1559,20 @@ class Component extends DCLogic {
       this.patchAlloc(runId,{saving:false, err: det || 'Could not save the allocation.'});
     }
   }
+  /* Best-effort: a failure leaves the hint as it was rather than blocking. */
+  loadMethodCommitted(methodId){
+    if(!methodId || !this._api || !this._api.getMethodAllocation) return;
+    if(this.state.connection!=='live') return;
+    this._api.getMethodAllocation(methodId)
+      .then(d=>{
+        const n = d && d.available !== false ? Number(d.methodCommitted) : NaN;
+        this.setState(st=>({ methodCommitted:Object.assign({}, st.methodCommitted,
+          {[methodId]: Number.isFinite(n) ? n : null}) }));
+      })
+      .catch(()=>this.setState(st=>({ methodCommitted:Object.assign({}, st.methodCommitted, {[methodId]:null}) })));
+  }
   loadRunsForCard(methodId){
+    this.loadMethodCommitted(methodId);
     if(!methodId || !this._api || this.state.connection!=='live') return;
     this.setState({runsLoadingFor:methodId});
     this._api.getProductionRuns(methodId).then(recs=>{
@@ -2291,6 +2307,12 @@ class Component extends DCLogic {
       methodsHeading: cpMethodsView.length > 1 ? 'Methods & Production Runs' : 'Production Runs',
       methodsLoading: st.methodsLoadingFor === cpRaw.orderId,
     }) : { customer:'', num:'', qty:'', methodLabel:'', sizeCells:[], sizesEmpty:true, hasSizes:false, printSpecsDisplay:'', specialNotesDisplay:'', methodsView:[], isMultiMethod:false, methodsHeading:'Production Runs', methodsLoading:false };
+    /* Spare garments on the method this panel's run belongs to. Same null rule
+       as the board's own hint. */
+    const cpDone = cpRaw ? st.methodCommitted[cpRaw.pmId] : null;
+    const cpOrderTotal = Number(createdPanel.qty);
+    const cpUnallocated = (cpDone == null || !Number.isFinite(cpOrderTotal))
+      ? null : (cpOrderTotal - cpDone);
     const rf = st.runForm || this.defaultRunForm();
     const runPressResultsView = (st.runPressResults||[]).map(p=>({ id:p.Id, name:p.Name, onPick:()=>this.pickRunPress(p.Id,p.Name) }));
 
@@ -2386,8 +2408,13 @@ class Component extends DCLogic {
          the reference block's own total, re-derived live by
          referenceForOrder() -- the same number the Garment Breakdown grid
          above it sums to, so the two can't disagree. */
-      runQtyHint: createdPanel.qty ? ((window.CAApi&&window.CAApi.runQtyHint)?window.CAApi.runQtyHint(rf.qty, createdPanel.qty):'') : '',
-      runHasQtyHint: !!(createdPanel.qty && (window.CAApi&&window.CAApi.runQtyHint) && window.CAApi.runQtyHint(rf.qty, createdPanel.qty)),
+      /* The Create Production Run modal -- the one place a manager is sizing a
+         run with nothing on screen to tell them how much of the order is still
+         spare. loadRunsForCard() fetches methodCommitted for this method, so by
+         the time the modal is reachable it is usually known; null until then,
+         and the hint just omits the tail. */
+      runQtyHint: createdPanel.qty ? ((window.CAApi&&window.CAApi.runQtyHint)?window.CAApi.runQtyHint(rf.qty, createdPanel.qty, cpUnallocated):'') : '',
+      runHasQtyHint: !!(createdPanel.qty && (window.CAApi&&window.CAApi.runQtyHint) && window.CAApi.runQtyHint(rf.qty, createdPanel.qty, cpUnallocated)),
       // Scheduled Start/End dropdown options -- see ca-api.js's TIME_OPTIONS
       // (15-minute increments, matching Salesforce's own time picker for
       // these fields).
@@ -2529,12 +2556,19 @@ class Component extends DCLogic {
       // runEditFieldsFromRecord(r) if a run just arrived from the fetch and
       // hasn't been seeded into runEdits yet (shouldn't normally happen --
       // loadRunsForCard() seeds both together -- but keeps render safe).
+      /* Order total minus this method's committed garments. null when either
+         half is unknown, so the hint omits the tail rather than implying zero
+         spare -- see CAApi.runQtyHint. */
+      const methodDone = st.methodCommitted[src.id];
+      const orderTotalNum = Number(src.qty);
+      const unallocated = (methodDone == null || !Number.isFinite(orderTotalNum))
+        ? null : (orderTotalNum - methodDone);
       const rawRuns = st.runsByMethod[src.id] || [];
       const runsView = rawRuns.map(r=>{
         const f = st.runEdits[r.id] || this.runEditFieldsFromRecord(r);
         const pressResults = (st.runRowPressResults && st.runRowPressResults[r.id]) || [];
         const saving = !!(st.runRowSaving && st.runRowSaving[r.id]);
-        const qtyHint = (api&&api.runQtyHint) ? api.runQtyHint(f.qty, src.qty) : '';
+        const qtyHint = (api&&api.runQtyHint) ? api.runQtyHint(f.qty, src.qty, unallocated) : '';
         const rowSched = window.CAApi.runScheduleStatus(r.schedStatus);
         /* Allocation grid (E1.3). Same shared model as index.html -- the run's
            total is the SUM of these rows, not the typed Total Garments field. */
