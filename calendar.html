@@ -4,6 +4,31 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Production Calendar · Culture Apparel</title>
+<script>
+/* Self-hosted React (E4.4, 2026-08-31). support.js loads React and ReactDOM
+   from unpkg.com; unpkg being down or blocked made every board a white page,
+   with no fallback and nothing in the app's control.
+
+   support.js is GENERATED and must not be hand-edited, and dc-runtime/ is not
+   in this repo -- but it does not need editing. Its cdnScriptFor() checks
+   window.__resources[url] first and uses that value when it is a non-empty
+   string, so this map redirects both files to ./vendor/ copies with no change
+   to the generated file. Must run BEFORE support.js below.
+
+   The vendor files are byte-identical to what unpkg served: both were verified
+   against the SRI hashes support.js already pins. Note the override path drops
+   the integrity attribute (cdnScriptFor returns {src} only) -- acceptable
+   because these are now same-origin and travel under the same TLS and
+   Cloudflare Access boundary as the page itself.
+
+   Babel is deliberately NOT self-hosted: support.js only fetches it for
+   `jsx` script blocks and no page has one (every block is type="text/x-dc"),
+   so it is never requested. Add it here if a JSX page is ever introduced. */
+window.__resources = Object.assign({}, window.__resources, {
+  "https://unpkg.com/react@18.3.1/umd/react.production.min.js": "./vendor/react-18.3.1.production.min.js",
+  "https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js": "./vendor/react-dom-18.3.1.production.min.js"
+});
+</script>
 <script src="./support.js"></script>
 <script src="./ca-api.js"></script>
 </head>
