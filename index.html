@@ -850,7 +850,7 @@ class Component extends DCLogic {
   // dashboards". Every later refresh, save and drawer-open stays silent.
   // See the header comment in ca-api.js.
   fg(fn){ const a=window.CAApi; return (a&&a.foregroundLoad) ? a.foregroundLoad(fn) : fn(); }
-  componentDidMount(){ this._t = setInterval(()=>this.setState({ now:new Date() }), 1000); this.fg(()=>this.load()); this.bg(()=>this.loadSfEnv()); this.bg(()=>this.loadPrep()); this.bg(()=>this.loadShortfall()); this._ar = setInterval(()=>{ if(this.state.connection==='live' && !this.state.openId && !this.state.dragId) this.bg(()=>this.load()); }, 15000); this._pr = setInterval(()=>this.bg(()=>this.loadPrep()), 30000); this._sr = setInterval(()=>this.bg(()=>this.loadShortfall()), 30000); }
+  componentDidMount(){ this._t = setInterval(()=>this.setState({ now:new Date() }), 1000); this.fg(()=>this.load()); this.bg(()=>this.loadSfEnv()); this.bg(()=>this.loadPrep()); this.bg(()=>this.loadShortfall()); this._ar = setInterval(()=>{ /* shouldPoll(): demo boards retry every 5th tick so a board that lost the API recovers on its own -- see ca-api.js */ if(!this.state.openId && !this.state.dragId && ((window.CAApi&&window.CAApi.shouldPoll)?window.CAApi.shouldPoll(this.state.connection,'index'):this.state.connection==='live')) this.bg(()=>this.load()); }, 15000); this._pr = setInterval(()=>this.bg(()=>this.loadPrep()), 30000); this._sr = setInterval(()=>this.bg(()=>this.loadShortfall()), 30000); }
   componentWillUnmount(){ clearInterval(this._t); clearInterval(this._ar); clearInterval(this._pr); clearInterval(this._sr); this.clearPoll(); }
   // Independent fetch/failure path from load() -- a hiccup fetching the
   // Pre-Production queue shouldn't flip this board's own "Live · Salesforce"
