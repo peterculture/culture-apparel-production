@@ -841,6 +841,12 @@ class Component extends DCLogic {
            { open, loading, lines, allocatedElsewhere, orderItems,
              edits:{lineId: '<string>'}, saving, err, msg } */
       runAlloc:{},
+      /* How many garments every run on a method has committed between them,
+         keyed by methodId. Fetched when a card's drawer opens (see
+         loadRunsForCard). Order total minus this is what is still unallocated,
+         which is the third argument to CAApi.runQtyHint. null = not known yet,
+         and the hint deliberately says nothing rather than implying zero. */
+      methodCommitted:{},
       // "Production Methods" section of the card drawer -- fresh per-order
       // fetch (methodsByOrder, keyed by orderId) so a manager can see, edit,
       // and remove every sibling method on the order the open card belongs
@@ -1457,7 +1463,22 @@ class Component extends DCLogic {
       this.patchAlloc(runId,{saving:false, err: det || 'Could not save the allocation.'});
     }
   }
+  /* The method's committed total, for the "N unallocated" tail on the garment
+     hint. Best-effort and independent of the run list: a failure just leaves
+     the hint as it was rather than blocking the drawer. */
+  loadMethodCommitted(methodId){
+    if(!methodId || !this._api || !this._api.getMethodAllocation) return;
+    if(this.state.connection!=='live') return;
+    this._api.getMethodAllocation(methodId)
+      .then(d=>{
+        const n = d && d.available !== false ? Number(d.methodCommitted) : NaN;
+        this.setState(st=>({ methodCommitted:Object.assign({}, st.methodCommitted,
+          {[methodId]: Number.isFinite(n) ? n : null}) }));
+      })
+      .catch(()=>this.setState(st=>({ methodCommitted:Object.assign({}, st.methodCommitted, {[methodId]:null}) })));
+  }
   loadRunsForCard(methodId){
+    this.loadMethodCommitted(methodId);
     if(!methodId || !this._api || this.state.connection!=='live') return;
     this.setState({runsLoadingFor:methodId});
     this._api.getProductionRuns(methodId).then(recs=>{
@@ -2429,6 +2450,14 @@ class Component extends DCLogic {
       // every stage this board covers (Ready for Print/In Production/
       // Post-Production/Completed) since a card here lives on this board for
       // all of those statuses.
+      /* Order total minus everything this method's runs have committed. null
+         when either half is unknown -- runQtyHint then omits the tail rather
+         than reading as "fully allocated", which is the one thing worse than
+         saying nothing. */
+      const methodDone = st.methodCommitted[src.id];
+      const orderTotalNum = Number(src.qty);
+      const unallocated = (methodDone == null || !Number.isFinite(orderTotalNum))
+        ? null : (orderTotalNum - methodDone);
       const rawRuns = st.runsByMethod[src.id] || [];
       const runsView = rawRuns.map(r=>{
         const f = st.runEdits[r.id] || this.runEditFieldsFromRecord(r);
@@ -2456,7 +2485,7 @@ class Component extends DCLogic {
            (pivotItems), already loaded, so this costs no extra request.
            Empty string when the order has no sized line items; hasQtyHint
            then hides the line rather than printing "of 0". */
-        const qtyHint = (window.CAApi&&window.CAApi.runQtyHint) ? window.CAApi.runQtyHint(f.qty, src.qty) : '';
+        const qtyHint = (window.CAApi&&window.CAApi.runQtyHint) ? window.CAApi.runQtyHint(f.qty, src.qty, unallocated) : '';
         return {
           id:r.id, name:r.name, qtyHint, hasQtyHint: !!qtyHint,
           pressQ:f.pressQ, pressPicked:!!f.pressId, pressName:f.pressName,
@@ -2518,7 +2547,7 @@ class Component extends DCLogic {
       const methodRecords = st.methodsByOrder[src.orderId] || [];
       const methodsView = methodRecords.map(r=>this.methodRowView(r, src.orderId));
       const rc = (st.runCreateMethodId===src.id) ? (st.runCreateForm||{}) : null;
-      const rcQtyHint = (rc && window.CAApi && window.CAApi.runQtyHint) ? window.CAApi.runQtyHint(rc.qty, src.qty) : '';
+      const rcQtyHint = (rc && window.CAApi && window.CAApi.runQtyHint) ? window.CAApi.runQtyHint(rc.qty, src.qty, unallocated) : '';
       const runCreate = rc ? {
         pressQ:rc.pressQ||'', pressPicked:!!rc.pressId, pressName:rc.pressName||'',
         onPressSearch:(e)=>this.runCreatePressSearch(e.target.value),
