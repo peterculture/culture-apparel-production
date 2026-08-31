@@ -1,9 +1,16 @@
 /**
  * GET   /api/run-line-items?runId=<15/18-char SF Id>
+ * GET   /api/run-line-items?methodId=<15/18-char SF Id>
  * PATCH /api/run-line-items
  *
  * The allocation grid behind a production run: which sizes of the parent order
  * this run is printing, and how many of each.
+ *
+ * Two GET shapes. `runId` answers "what is THIS run printing, and what have the
+ * others taken" -- the grid. `methodId` answers only "how much of the order has
+ * this method committed in total", which is what the New Run form needs to tell
+ * a manager how many garments are still unallocated BEFORE any run exists to
+ * ask about. Both return `methodCommitted`, so the grid gets it for free.
  *
  * ── WHO OWNS THESE ROWS ────────────────────────────────────────────────────
  * NOT this endpoint. The Salesforce Flow `Production_Run_Generate_Line_Item_
@@ -143,6 +150,34 @@ async function loadRun(env, runId) {
   return { run, methodId, lines: linesRes.records };
 }
 
+/**
+ * Every line on one METHOD, without needing a run to hang the question on.
+ * Method__c is a CASESAFEID formula on the line item, which is what lets this
+ * reach every line across every run in one query.
+ */
+async function loadMethodLines(env, methodId) {
+  const res = await runQuery(
+    env,
+    `SELECT ${LINE_FIELDS.join(", ")} FROM ${LINE_OBJECT} ` +
+      `WHERE Method__c = ${q(methodId)} ORDER BY Name ASC`,
+  );
+  if (!res.ok) return { error: notAvailable(describeQueryFailure(res)) };
+  return { lines: res.records };
+}
+
+/**
+ * How much of the order this METHOD has committed, across every one of its
+ * runs: planned MINUS incomplete, the skeleton Flow's own arithmetic. The
+ * caller subtracts it from the order's own garment total to get what is still
+ * unallocated -- see CAApi.runQtyHint's third argument.
+ */
+function methodCommittedTotal(lines) {
+  return (lines || []).reduce(function (a, l) {
+    if (!l.Order_Product__c) return a;             // non-size row
+    return a + (Number(l[PLANNED_FIELD]) || 0) - (Number(l.Incomplete_Qty__c) || 0);
+  }, 0);
+}
+
 /** The parent order's Id, for the caller to pair with /api/order-sizes. */
 async function orderIdForMethod(env, methodId) {
   const res = await runQuery(
@@ -175,7 +210,27 @@ function allocationByOrderProduct(lines, excludeRunId) {
 
 export async function onRequestGet({ env, request }) {
   try {
-    const runId = (new URL(request.url).searchParams.get("runId") || "").trim();
+    const params = new URL(request.url).searchParams;
+    const runId = (params.get("runId") || "").trim();
+    const methodOnly = (params.get("methodId") || "").trim();
+
+    /* methodId form: no run, no grid -- just the committed total. Used by the
+       New Run form, which has to say what is unallocated before a run exists. */
+    if (!runId && methodOnly) {
+      if (!SF_ID.test(methodOnly)) return jsonError("invalid_method_id", 400);
+      const ml = await loadMethodLines(env, methodOnly);
+      if (ml.error) return ml.error;
+      return Response.json(
+        {
+          available: true,
+          methodId: methodOnly,
+          orderId: await orderIdForMethod(env, methodOnly),
+          methodCommitted: methodCommittedTotal(ml.lines),
+        },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
+
     if (!SF_ID.test(runId)) return jsonError("invalid_run_id", 400);
 
     const loaded = await loadRun(env, runId);
@@ -211,6 +266,9 @@ export async function onRequestGet({ env, request }) {
           orderProductId,
           qty,
         })),
+        /* Every run on the method, this one included -- the figure the qty hint
+           subtracts from the order total. */
+        methodCommitted: methodCommittedTotal(lines),
       },
       { headers: { "Cache-Control": "no-store" } },
     );
