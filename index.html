@@ -498,6 +498,8 @@ window.__resources = Object.assign({}, window.__resources, {
                   </div>
                 </div>
 
+                <div style="font:400 10px/1.3 'Archivo';color:{{run.statusColor}}">{{run.statusLabel}}</div>
+                <sc-if value="{{run.notPublished}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:flex-start;gap:7px;font:400 10px/1.35 'Archivo';color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:8px;padding:9px 11px"><i class="ti ti-alert-triangle" style="margin-top:1px"></i><span>Not on the shop calendar. Runs publish when they&rsquo;re created, so this one&rsquo;s publish failed &mdash; save any change to it to retry.</span></div></sc-if>
                 <sc-if value="{{run.hasMsg}}" hint-placeholder-val="{{ false }}"><div style="font:600 10px/1 'Oswald';letter-spacing:.04em;text-transform:uppercase;color:#BBD382">{{run.msg}}</div></sc-if>
                 <sc-if value="{{run.hasErr}}" hint-placeholder-val="{{ false }}"><div style="font:600 10px/1.3 'Oswald';letter-spacing:.04em;text-transform:uppercase;color:#E8A89F">{{run.err}}</div></sc-if>
 
@@ -1300,47 +1302,25 @@ class Component extends DCLogic {
     return view;
   }
   // ── Production Runs section of the card drawer (mirrors pre-production.html) ──
-  buildRunDateTime(dateStr,timeStr){
-    if(!dateStr || !timeStr) return null;
-    const d=new Date(dateStr+'T'+timeStr+':00');
-    return isNaN(d.getTime()) ? null : d.toISOString();
-  }
-  splitDT(iso){
-    if(!iso) return {date:'', time:''};
-    const d=new Date(iso); if(isNaN(d.getTime())) return {date:'', time:''};
-    const pad=(n)=>String(n).padStart(2,'0');
-    return { date: d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()), time: pad(d.getHours())+':'+pad(d.getMinutes()) };
-  }
-  runEditFieldsFromRecord(r){
-    const ss=this.splitDT(r.scheduledStart), se=this.splitDT(r.scheduledEnd);
-    const as=this.splitDT(r.actualStart), ae=this.splitDT(r.actualEnd);
-    return {
-      pressId:r.pressId||null, pressName:r.pressName||'', pressQ:r.pressName||'',
-      startDate:ss.date, startTime:ss.time, endDate:se.date, endTime:se.time,
-      actualStartDate:as.date, actualStartTime:as.time, actualEndDate:ae.date, actualEndTime:ae.time,
-      qty: r.qty!=null ? String(r.qty) : '',
-      printLocation: r.printLocation || '',
-      // Carried through from loadRunsForCard's mapped record so saveRunRow can
-      // send it back as ifUnmodifiedSince -- see ca-api.js's patchProductionRun.
-      loadedAt: r.lastModifiedDate || null,
-    };
-  }
+  /* ── run-row shape: delegated to ca-api.js (E10.1) ────────────────────
+     These four were duplicated verbatim on both boards and had already
+     drifted -- see the run-row block in ca-api.js for what that cost. They
+     stay as thin methods so every existing `this.splitDT(...)` call site keeps
+     working; the SHAPE now has exactly one definition. Local fallbacks are
+     deliberately absent: ca-api.js is a hard dependency of every board
+     (identity, the loader, buildNavBoards), so a missing CAApi is a broken
+     page long before it reaches here. */
+  splitDT(iso){ return window.CAApi.splitDT(iso); }
+  buildRunDateTime(dateStr,timeStr){ return window.CAApi.buildRunDateTime(dateStr,timeStr); }
+  runEditFieldsFromRecord(r){ return window.CAApi.runEditFieldsFromRecord(r); }
   loadRunsForCard(methodId){
     if(!methodId || !this._api || this.state.connection!=='live') return;
     this.setState({runsLoadingFor:methodId});
     this._api.getProductionRuns(methodId).then(recs=>{
-      const runs=(recs||[]).map(r=>({
-        id:r.Id, name:r.Name,
-        pressId:r.Press__c||null, pressName:(r.Press__r&&r.Press__r.Name)||'',
-        scheduledStart:r.Scheduled_Start__c||null, scheduledEnd:r.Scheduled_End__c||null,
-        actualStart:r.Actual_Start__c||null, actualEnd:r.Actual_End__c||null,
-        qty: r.Quantity_Planned_c__c!=null ? r.Quantity_Planned_c__c : null,
-        // Print_Location__c comes back null both when the run has no
-        // location and when the org doesn't have the field -- the row treats
-        // the two identically, so neither needs its own branch.
-        printLocation: r.Print_Location__c || '',
-        lastModifiedDate: r.LastModifiedDate || null,
-      }));
+      /* One mapping, in ca-api.js (E10.1). index.html's private copy used to
+         omit schedStatus, so this board could not tell a published run from
+         one whose calendar publish had failed. */
+      const runs=(recs||[]).map(r=>window.CAApi.runRecordFromApi(r));
       this.setState(st=>{
         const edits=Object.assign({}, st.runEdits);
         runs.forEach(r=>{ edits[r.id]=this.runEditFieldsFromRecord(r); });
@@ -2276,6 +2256,12 @@ class Component extends DCLogic {
       const rawRuns = st.runsByMethod[src.id] || [];
       const runsView = rawRuns.map(r=>{
         const f = st.runEdits[r.id] || this.runEditFieldsFromRecord(r);
+        /* Where this run stands on the shop calendar. This board did not show
+           it at all until 2026-08-31 -- it never mapped schedStatus, so a run
+           whose calendar publish had failed looked completely normal here
+           while pre-production.html flagged it. Same helper, same wording,
+           both boards. See runScheduleStatus in ca-api.js. */
+        const rowSched = window.CAApi.runScheduleStatus(r.schedStatus);
         const pressResults = (st.runRowPressResults && st.runRowPressResults[r.id]) || [];
         const saving = !!(st.runRowSaving && st.runRowSaving[r.id]);
         /* Order total alongside this run's planned count -- see
@@ -2308,6 +2294,7 @@ class Component extends DCLogic {
           onPrintLocation:(e)=>this.setRunRowField(r.id,{printLocation:e.target.value}),
           onSave:()=>this.saveRunRow(r.id, src.id), saving, saveLabel: saving?'Saving…':'Save Changes',
           onRemove:()=>this.removeRun(r.id, src.id),
+          statusLabel: rowSched.label, statusColor: rowSched.color, notPublished: rowSched.notPublished,
           err:(st.runRowErr&&st.runRowErr[r.id])||'', msg:(st.runRowMsg&&st.runRowMsg[r.id])||'',
           hasErr:!!(st.runRowErr&&st.runRowErr[r.id]), hasMsg:!!(st.runRowMsg&&st.runRowMsg[r.id]),
         };
