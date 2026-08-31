@@ -1575,6 +1575,101 @@
     };
   }
 
+  /* ── the run allocation grid (E1.3) ───────────────────────────────────
+     One pure function that turns the three inputs the grid needs -- the
+     order's OrderItem rows, this run's line items, and what the other runs on
+     the method have committed -- into rows ready to render. Lives here because
+     index.html and pre-production.html both render run rows, and W5 was the
+     story about these two boards keeping private copies of the same shape.
+
+     `edits` is the manager's in-progress typing, keyed by LINE id, values as
+     STRINGS so a field can be emptied while it is being retyped. A size with
+     no edit falls back to what Salesforce holds.
+
+     remaining = orderQty - committedElsewhere, where committedElsewhere is
+     planned MINUS incomplete across every OTHER run on the method -- the
+     skeleton Flow's own arithmetic, so the grid and the Flow can never
+     disagree about what is left. An incomplete garment was planned but never
+     reached the press, so it gives its capacity back. */
+  function runAllocRows(orderItems, lines, allocatedElsewhere, edits){
+    edits = edits || {};
+    var elsewhere = {};
+    (allocatedElsewhere || []).forEach(function (a) { elsewhere[a.orderProductId] = Number(a.qty) || 0; });
+    var lineByOp = {};
+    (lines || []).forEach(function (l) { if (l.orderProductId) lineByOp[l.orderProductId] = l; });
+
+    var rows = (orderItems || [])
+      // A row with no Size__c is a non-garment line (a setup fee, a rush
+      // charge) -- order-sizes returns them intact and the front end keeps
+      // them out of the grid. Same rule the drawer's size breakdown uses.
+      .filter(function (it) { return it && it.Id && it.Size__c; })
+      .map(function (it) {
+        var line = lineByOp[it.Id] || null;
+        var orderQty = Number(it.Quantity) || 0;
+        var committed = elsewhere[it.Id] || 0;
+        var remaining = orderQty - committed;
+        var saved = line && line.plannedQty != null ? Number(line.plannedQty) : 0;
+        var raw = (line && Object.prototype.hasOwnProperty.call(edits, line.id))
+          ? edits[line.id]
+          : (line && line.plannedQty != null ? String(line.plannedQty) : '');
+        var typed = String(raw === null || raw === undefined ? '' : raw).trim();
+        var value = typed === '' ? 0 : Number(typed);
+        var bad = typed !== '' && (!Number.isFinite(value) || value < 0 || Math.floor(value) !== value);
+        var over = !bad && value > remaining;
+        return {
+          orderProductId: it.Id,
+          lineId: line ? line.id : null,
+          /* No line item for this size. The skeleton Flow creates one per
+             OrderItem, so this means the run predates the Flow or the product
+             was added to the order afterwards. Shown, but not editable -- the
+             app deliberately has no create path (see run-line-items' header). */
+          missing: !line,
+          label: [it.Size__c, it.Color__c].filter(Boolean).join(' · '),
+          size: it.Size__c, color: it.Color__c || '',
+          orderQty: orderQty,
+          committedElsewhere: committed,
+          remaining: remaining,
+          saved: saved,
+          raw: typed,
+          value: bad ? saved : value,
+          bad: bad,
+          over: over,
+          /* Named and numbered, so the refusal is actionable at the press. The
+             server refuses this too -- this is the fast copy, not the only
+             one. */
+          message: bad ? 'Whole numbers only.'
+                 : over ? ('Only ' + remaining + ' left for ' + (it.Size__c || 'this size') +
+                           ' — ' + orderQty + ' ordered, ' + committed + ' planned on other runs.')
+                 : '',
+          dirty: !!line && !bad && value !== saved,
+        };
+      });
+
+    rows.sort(function (a, b) {
+      var ia = SIZE_ORDER.indexOf(a.size), ib = SIZE_ORDER.indexOf(b.size);
+      if (ia !== ib) return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+      return String(a.color).localeCompare(String(b.color));
+    });
+    return rows;
+  }
+
+  /** The run's total. DERIVED from the grid, never typed -- see D3. */
+  function runAllocTotal(rows){
+    return (rows || []).reduce(function (a, r) { return a + (r.bad ? r.saved : r.value); }, 0);
+  }
+
+  /** Only the rows that actually changed, in the shape the PATCH wants. */
+  function runAllocUpdates(rows){
+    return (rows || [])
+      .filter(function (r) { return r.dirty && r.lineId && !r.bad && !r.over; })
+      .map(function (r) { return { id: r.lineId, plannedQty: r.value }; });
+  }
+
+  /** Anything the grid must refuse before it will save. */
+  function runAllocBlockers(rows){
+    return (rows || []).filter(function (r) { return r.bad || r.over; });
+  }
+
   /** What is TRUE of this run's place on the shop calendar, in one vocabulary
    *  shared by every surface that shows a run.
    *
@@ -1776,17 +1871,31 @@
    * failed to load, or one with no sized line items. Callers hide the line
    * entirely on '' rather than printing "of 0", which reads as a real zero.
    */
-  function runQtyHint(runQty, orderTotal){
+  /* `unallocated` (optional, E1.3) is what the ORDER still has spare across
+     every run on this method -- orderTotal minus what all runs have committed,
+     planned minus incomplete, the skeleton Flow's own arithmetic. Passing it
+     turns "150 of 300" into "150 of 300 · 40 unallocated", which is the number
+     a manager sizing the NEXT run actually needs; without it the hint is
+     exactly as it was. Omitted, negative, or non-finite -> the original text,
+     because a remainder we cannot compute must not read as zero spare. */
+  function runQtyHint(runQty, orderTotal, unallocated){
     var total = Number(orderTotal);
     if (!Number.isFinite(total) || total <= 0) return '';
     var planned = Number(runQty);
+    /* == null catches BOTH null and undefined before Number() gets a chance:
+       Number(null) is 0, which would render an UNKNOWN remainder as "fully
+       allocated" -- the one reading worse than saying nothing. */
+    var spare = (unallocated == null) ? NaN : Number(unallocated);
+    var tail = (Number.isFinite(spare) && spare >= 0)
+      ? (spare === 0 ? ' · fully allocated' : ' · ' + spare + ' unallocated')
+      : '';
     // Blank/'' input while a manager is mid-edit: still show the order total,
     // just without a subset claim we can't back up yet.
-    if (!Number.isFinite(planned) || planned <= 0) return total + ' garments on this order';
+    if (!Number.isFinite(planned) || planned <= 0) return total + ' garments on this order' + tail;
     // >= rather than ===: a planned count above the order total is bad data,
     // but "All N" is still the honest read and beats "350 of 300".
-    if (planned >= total) return 'All ' + total + ' garments on this order';
-    return planned + ' of ' + total + ' garments on this order';
+    if (planned >= total) return 'All ' + total + ' garments on this order' + tail;
+    return planned + ' of ' + total + ' garments on this order' + tail;
   }
   function pivotItems(rec){
     var items = (rec.OrderItems && rec.OrderItems.records) || [];
@@ -1825,6 +1934,7 @@
     SUBSTATUS_VALUE: SUBSTATUS_VALUE, SUBSTATUS_LABEL: SUBSTATUS_LABEL, STAGE_KEY: STAGE_KEY, STAGE_SUBSTATUS: STAGE_SUBSTATUS, stageOf: stageOf, stageOfMethod: stageOfMethod,
     DELIVERY_LABEL: DELIVERY_LABEL, DELIVERY_METHODS: DELIVERY_METHODS, deliveryOptions: deliveryOptions, shouldPoll: shouldPoll, formatAddress: formatAddress,
     runRecordFromApi: runRecordFromApi, runEditFieldsFromRecord: runEditFieldsFromRecord, runScheduleStatus: runScheduleStatus, splitDT: splitDT, buildRunDateTime: buildRunDateTime,
+    runAllocRows: runAllocRows, runAllocTotal: runAllocTotal, runAllocUpdates: runAllocUpdates, runAllocBlockers: runAllocBlockers,
     NAV_BOARDS: NAV_BOARDS, buildNavBoards: buildNavBoards,
     getShippingOrders: getShippingOrders, completeOrder: completeOrder, getStatsTrend: getStatsTrend,
     CHECK_FIELD: CHECK_FIELD, RECV_FROM_SF: RECV_FROM_SF, RECV_TO_SF: RECV_TO_SF, TIME_OPTIONS: TIME_OPTIONS,
