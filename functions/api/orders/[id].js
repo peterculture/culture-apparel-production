@@ -91,12 +91,23 @@ const ALLOWED_SUBSTATUSES = new Set([
   "Pre-Production", "Ready for Print", "Production", "Post-Production", "Completed",
 ]);
 
-// Shipping_Delivery__c picklist values, confirmed 2026-07-14. "Delivery" added
-// 2026-07-22 -- must exist on the Shipping_Delivery__c picklist in Salesforce
-// (Setup -> Object Manager -> Order -> Fields) before this ships, or a PATCH
-// sending it fails with INVALID_OR_NULL_FOR_RESTRICTED_PICKLIST.
+/* Shipping_Delivery__c STORED picklist values. Confirmed live in Setup
+   (Object Manager -> Order -> Fields) 2026-08-10 -- five, not six.
+
+   "Local Dropoff" was removed from this set on 2026-08-28. It is NOT a stored
+   value: it is the on-screen LABEL of the entry stored as "Delivery" (the same
+   label/value split as Order_Substatus__c's "In Production"/"Production" pair
+   above). Accepting it here let the browser send a display label all the way to
+   Salesforce, which then rejected the whole PATCH with
+   INVALID_OR_NULL_FOR_RESTRICTED_PICKLIST -- a failed save reported as a
+   Salesforce error rather than as the bad input it was. Rejecting it here
+   returns bad_delivery_method and names the caller as the problem.
+
+   The browser no longer has a way to send it either: index.html's drawer builds
+   its options from CAApi.deliveryOptions(). This set is the backstop, not the
+   only guard. */
 const ALLOWED_DELIVERY_METHODS = new Set([
-  "Shipping", "Local Dropoff", "Pickup", "Order Fulfillment", "Split Ship", "Delivery",
+  "Shipping", "Delivery", "Pickup", "Order Fulfillment", "Split Ship",
 ]);
 
 // Salesforce IDs are 15 or 18 chars, alphanumeric. Validate before using in a URL.
