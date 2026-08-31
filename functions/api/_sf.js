@@ -193,6 +193,48 @@ export function apiVersion(env) {
  * returns what was already collected rather than losing it -- callers that
  * care can inspect `ok`/`status` from that failed page.
  */
+/* ── SOQL string literals ──────────────────────────────────────────────────
+   Every query in this app is built by concatenation, so anything that reaches a
+   quoted literal has to be escaped. Until 2026-08-31 there were SEVEN copies of
+   that job and they did not agree:
+
+     - `q()` in _rework.js, rework-check.js, run-results/index.js,
+       shortfalls/index.js and run-line-items/index.js STRIPPED apostrophes
+       (replace(/'/g, "")) and passed backslashes straight through.
+     - `soqlEscape()` in plans/index.js and presses/index.js escaped both,
+       correctly.
+
+   Stripping is safe against breakout -- you cannot reopen a literal with no
+   quotes in it -- but it is lossy, and it left a real hole: a value ending in a
+   BACKSLASH escapes the closing quote, so `WHERE OrderNumber = 'x\'` runs off
+   the end of the literal and the whole query dies as a parse error. The one
+   caller-reachable path was /api/rework-check?orderNumber=..., which takes free
+   text and (unlike orderId) has no shape check to hide behind.
+
+   ORDER MATTERS: backslash first, then apostrophe. Escaping the quote first
+   would then have its own backslash doubled and the escape would be undone.
+
+   Escaping rather than stripping also fixes a quiet bug: an order number or
+   press name containing an apostrophe used to be silently mangled into
+   something that matched nothing. It now matches itself.
+
+   This is NOT a licence to interpolate user input. Ids still get shape-checked
+   against SF_ID before they go anywhere near a WHERE clause -- see
+   production-methods/index.js. This is the second lock, not the first. */
+export function soqlEscape(value) {
+  return String(value == null ? "" : value).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+/** One escaped, quoted SOQL literal. */
+export function soqlQuote(value) {
+  return `'${soqlEscape(value)}'`;
+}
+
+/** A quoted, comma-separated list for `WHERE Id IN (...)`. */
+export function soqlQuoteList(values) {
+  return (values || []).map(soqlQuote).join(",");
+}
+
 export async function runQuery(env, soql) {
   const path = `/services/data/${apiVersion(env)}/query/?q=${encodeURIComponent(soql)}`;
   let resp = await sfFetch(env, path);
