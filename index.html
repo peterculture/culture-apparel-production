@@ -3,6 +3,31 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+/* Self-hosted React (E4.4, 2026-08-31). support.js loads React and ReactDOM
+   from unpkg.com; unpkg being down or blocked made every board a white page,
+   with no fallback and nothing in the app's control.
+
+   support.js is GENERATED and must not be hand-edited, and dc-runtime/ is not
+   in this repo -- but it does not need editing. Its cdnScriptFor() checks
+   window.__resources[url] first and uses that value when it is a non-empty
+   string, so this map redirects both files to ./vendor/ copies with no change
+   to the generated file. Must run BEFORE support.js below.
+
+   The vendor files are byte-identical to what unpkg served: both were verified
+   against the SRI hashes support.js already pins. Note the override path drops
+   the integrity attribute (cdnScriptFor returns {src} only) -- acceptable
+   because these are now same-origin and travel under the same TLS and
+   Cloudflare Access boundary as the page itself.
+
+   Babel is deliberately NOT self-hosted: support.js only fetches it for
+   `jsx` script blocks and no page has one (every block is type="text/x-dc"),
+   so it is never requested. Add it here if a JSX page is ever introduced. */
+window.__resources = Object.assign({}, window.__resources, {
+  "https://unpkg.com/react@18.3.1/umd/react.production.min.js": "./vendor/react-18.3.1.production.min.js",
+  "https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js": "./vendor/react-dom-18.3.1.production.min.js"
+});
+</script>
 <script src="./support.js"></script>
 <script src="./ca-api.js"></script>
 </head>
@@ -1076,14 +1101,40 @@ class Component extends DCLogic {
   }
   // Per-method write (Production_Method__c.Status__c) -- drives this board's
   // stage columns now.
-  pushMethod(cardId,statusLabel,orderId){ if(this._api && this.state.connection==='live') this._api.patchMethodStatus(cardId,statusLabel,orderId).catch(()=>{}); }
+  /* ── writes (E4.3, 2026-08-31) ────────────────────────────────────────
+     These three used to be `if (live) api.x().catch(()=>{})` -- so a write was
+     skipped in demo, or failed on the server, and either way the optimistic
+     local change stayed on screen looking saved. Both halves now report:
+     canWrite() decides, reportBlockedWrite()/reportFailedWrite() say so. The
+     local update is deliberately still optimistic (the board must feel
+     instant); what changed is that a lie is now impossible to miss. */
+  canWriteNow(what){
+    const a=window.CAApi;
+    if(this._api && a && a.canWrite && a.canWrite(this.state.connection)) return true;
+    if(a && a.reportBlockedWrite) a.reportBlockedWrite(what);
+    return false;
+  }
+  writeFailed(what,e){
+    const a=window.CAApi;
+    if(a && a.reportFailedWrite) a.reportFailedWrite(what,e); else console.error(what,e);
+  }
+  pushMethod(cardId,statusLabel,orderId){
+    if(!this.canWriteNow('Status change')) return;
+    this._api.patchMethodStatus(cardId,statusLabel,orderId).catch(e=>this.writeFailed('The status change',e));
+  }
   // Generic per-method write, reusing the same PATCH endpoint as the
   // checklist fields (production-methods/[id].js accepts any allow-listed
   // field). Used for this card's own timer fields.
-  pushMethodFields(cardId,fields){ if(this._api && this.state.connection==='live') this._api.patchMethodChecklist(cardId,fields).catch(()=>{}); }
+  pushMethodFields(cardId,fields){
+    if(!this.canWriteNow('Method update')) return;
+    this._api.patchMethodChecklist(cardId,fields).catch(e=>this.writeFailed('That method update',e));
+  }
   // Per-order write -- everything else on the drawer (specs, notes,
   // packaging, shipments, misprints, delivery) still lives on the Order.
-  pushOrder(orderId,fields){ if(this._api && this.state.connection==='live') this._api.patchOrder(orderId,fields).catch(()=>{}); }
+  pushOrder(orderId,fields){
+    if(!this.canWriteNow('Order update')) return;
+    this._api.patchOrder(orderId,fields).catch(e=>this.writeFailed('That change',e));
+  }
   // Applies a field change to EVERY card sharing an orderId, so editing an
   // order-level field (notes, misprint count, etc.) from one method's
   // drawer stays in sync if the sibling method's drawer is opened next.
@@ -1422,13 +1473,30 @@ class Component extends DCLogic {
   // Removing this was therefore the fix, not a tidy-up. If a reprint ever needs
   // to be created by hand again, do it in Salesforce; do not restore this
   // modal without first giving reprints a record of what they cover.
-  removePkg(orderId,idx){ const cur=(this.state.pkg[orderId]||[])[idx]; this.setState(st=>{ const arr=(st.pkg[orderId]||[]).slice(); arr.splice(idx,1); const p=Object.assign({},st.pkg); p[orderId]=arr; return {pkg:p}; }); if(this._api && this.state.connection==='live' && cur && cur.id) this._api.deletePackaging(cur.id).catch(()=>{}); }
+  /* Optimistic remove, but REVERSIBLE: if the delete fails the row goes back
+     where it was rather than staying gone on screen and present in Salesforce.
+     Same shape for removePPItem and removeShipment below. */
+  removePkg(orderId,idx){
+    const cur=(this.state.pkg[orderId]||[])[idx];
+    const restore=()=>this.setState(st=>{ const arr=(st.pkg[orderId]||[]).slice(); arr.splice(idx,0,cur); const p=Object.assign({},st.pkg); p[orderId]=arr; return {pkg:p}; });
+    this.setState(st=>{ const arr=(st.pkg[orderId]||[]).slice(); arr.splice(idx,1); const p=Object.assign({},st.pkg); p[orderId]=arr; return {pkg:p}; });
+    // A row with no id was never on the server (added in demo, or its create
+    // is still in flight) -- nothing to delete, and nothing to report.
+    if(!cur || !cur.id) return;
+    if(!this.canWriteNow('Packaging removal')){ restore(); return; }
+    this._api.deletePackaging(cur.id).catch(e=>{ restore(); this.writeFailed('That packaging row',e); });
+  }
   async removePPItem(orderId,itemId){
     const api=this._api||window.CAApi;
     // await: confirmManager returns a Promise, and `!promise` is always false.
     if(api && !(await api.confirmManager('Removing a production item'))) return;
     if(!window.confirm('Remove this production item? This can’t be undone.')) return;
-    this.setState(st=>{ const pp=Object.assign({},st.ppItemsById); pp[orderId]=(pp[orderId]||[]).filter(x=>x.Id!==itemId); return {ppItemsById:pp}; }); if(this._api && this.state.connection==='live' && itemId) this._api.deleteItem(itemId).catch(()=>{});
+    const prevItems=((this.state.ppItemsById||{})[orderId]||[]).slice();
+    const restore=()=>this.setState(st=>({ ppItemsById:Object.assign({},st.ppItemsById,{[orderId]:prevItems}) }));
+    this.setState(st=>{ const pp=Object.assign({},st.ppItemsById); pp[orderId]=(pp[orderId]||[]).filter(x=>x.Id!==itemId); return {ppItemsById:pp}; });
+    if(!itemId) return;
+    if(!this.canWriteNow('Item removal')){ restore(); return; }
+    this._api.deleteItem(itemId).catch(e=>{ restore(); this.writeFailed('That production item',e); });
   }
   // ── Add Item quick-create (Production Items section) -- for a method that
   // already exists but Management forgot to add an item under, straight from
@@ -1628,8 +1696,11 @@ class Component extends DCLogic {
     // Only the one field -- deliberately NOT the whole edited row. The press
     // operator may have half-typed something else into that row, and pressing
     // Start should never commit it.
-    if(this._api && this.state.connection==='live'){
-      this._api.patchProductionRun(runId, {[which]:iso}).catch(err=>console.error('stamping '+which+' failed for run', runId, err));
+    if(this.canWriteNow(which==='actualStart'?'Run start time':'Run end time')){
+      this._api.patchProductionRun(runId, {[which]:iso}).catch(err=>{
+        console.error('stamping '+which+' failed for run', runId, err);
+        this.writeFailed(which==='actualStart'?"That run's actual start time":"That run's actual end time", err);
+      });
     }
     return iso;
   }
@@ -1697,7 +1768,9 @@ class Component extends DCLogic {
     }
   }
   setMis(orderId,val){ const v=Math.max(0,val); this.updateOrderFieldLocally(orderId,{mis:v}); this.pushOrder(orderId,{TotalQtyMisprints__c:v, Misprint__c:v>0}); }
-  addPkg(orderId){ const type=this.state.pkgType||'Standard Culture Box'; const qty=Math.max(1,parseInt(this.state.pkgQty,10)||1); const localKey='local-'+Date.now()+'-'+Math.random(); this.setState(st=>{ const p=Object.assign({},st.pkg); p[orderId]=(p[orderId]||[]).concat([{type,qty,_local:localKey}]); return {pkg:p}; }); if(this._api && this.state.connection==='live') this._api.postPackaging(orderId,type,qty).then(res=>{ const newId=res&&res.id; if(!newId) return; this.setState(st=>{ const p=Object.assign({},st.pkg); p[orderId]=(p[orderId]||[]).map(x=>x._local===localKey?Object.assign({},x,{id:newId}):x); return {pkg:p}; }); }).catch(()=>{}); }
+  addPkg(orderId){ const type=this.state.pkgType||'Standard Culture Box'; const qty=Math.max(1,parseInt(this.state.pkgQty,10)||1); const localKey='local-'+Date.now()+'-'+Math.random(); this.setState(st=>{ const p=Object.assign({},st.pkg); p[orderId]=(p[orderId]||[]).concat([{type,qty,_local:localKey}]); return {pkg:p}; }); const drop=()=>this.setState(st=>{ const p=Object.assign({},st.pkg); p[orderId]=(p[orderId]||[]).filter(x=>x._local!==localKey); return {pkg:p}; });
+    if(!this.canWriteNow('Packaging')){ drop(); return; }
+    this._api.postPackaging(orderId,type,qty).then(res=>{ const newId=res&&res.id; if(!newId) return; this.setState(st=>{ const p=Object.assign({},st.pkg); p[orderId]=(p[orderId]||[]).map(x=>x._local===localKey?Object.assign({},x,{id:newId}):x); return {pkg:p}; }); }).catch(e=>{ drop(); this.writeFailed('That packaging row',e); }); }
   // Fetches the Zenkraft wizard URL from the server (org-specific pieces are
   // resolved there, see functions/api/orders/[id]/zk-wizard-url.js) and opens
   // it in a new tab. Replaces the old client-built, hardcoded-to-dev2 zkUrl().
@@ -1841,11 +1914,12 @@ class Component extends DCLogic {
       if(!isFinite(n) || n<=0){ this.setState({shipFormErr:'Weight must be a positive number (lbs), or leave it blank.'}); return; }
       weight = n;
     }
-    if(!this._api || this.state.connection!=='live'){
-      // Demo mode: show the row locally so the form is still explorable,
-      // exactly like addPkg's demo behaviour. Nothing is written anywhere.
-      this.setState(st=>{ const s=Object.assign({},st.ship); s[orderId]=(s[orderId]||[]).concat([{carrier,tracking}]); return {ship:s}; });
-      this.closeShipForm();
+    /* Demo mode: the form stays explorable, but REFUSE rather than showing a
+       row that reads as logged. Adding it locally and closing the form was
+       indistinguishable from a real save on a board that had silently fallen
+       back -- the phantom save E4.3 is about. */
+    if(!this.canWriteNow('Shipment')){
+      this.setState({shipFormErr:'Not saved — this board is on demo data, not connected to Salesforce.'});
       return;
     }
     this.setState({shipFormSubmitting:true, shipFormErr:''});
@@ -1857,7 +1931,11 @@ class Component extends DCLogic {
         this.closeShipForm();
         return this.refreshShipments(orderId);
       })
-      .catch(()=>{ this.setState({shipFormSubmitting:false, shipFormErr:'Could not log this shipment — try again.'}); });
+      .catch(e=>{
+        const a=window.CAApi, d=(a&&a.errText)?a.errText(e):'';
+        // The real reason now that jsend attaches it (E4.2), not "try again".
+        this.setState({shipFormSubmitting:false, shipFormErr:'Could not log this shipment' + (d ? ' — '+d : ' — try again.')});
+      });
   }
   // Removes ONE shipment (zkmulti__MCShipment__c). The backend DELETE
   // endpoint (functions/api/shipments/[id].js) has existed since shipments
@@ -1877,10 +1955,16 @@ class Component extends DCLogic {
     // replace every row OBJECT, so a refresh landing between render and this
     // click would leave a reference-only filter matching nothing and the row
     // visibly lingering. Fall back to reference matching for id-less demo rows.
+    const prev=((this.state.ship||{})[orderId]||[]).slice();
+    const restore=()=>this.setState(st=>({ ship:Object.assign({},st.ship,{[orderId]:prev}) }));
     this.setState(st=>{ const s=Object.assign({},st.ship); s[orderId]=(s[orderId]||[]).filter(x=> shipmentId ? x.id!==shipmentId : x!==shipment); return {ship:s}; });
-    if(this._api && this.state.connection==='live' && shipmentId) {
-      this._api.deleteShipment(shipmentId).catch(()=>{ window.alert('Could not remove this shipment — try again.'); });
-    }
+    // No id -- a demo row that never existed server-side. Nothing to delete.
+    if(!shipmentId) return;
+    /* Was: alert() on failure but the row stayed gone, so a failed delete read
+       as a successful one the moment the dialog was dismissed. Restore first,
+       then report. */
+    if(!this.canWriteNow('Shipment removal')){ restore(); return; }
+    this._api.deleteShipment(shipmentId).catch(e=>{ restore(); this.writeFailed('That shipment',e); });
   }
   assign(cardId,w){ this.setState(st=>({ orders: st.orders.map(o=>o.id===cardId?Object.assign({},o,{worker: o.worker===w?null:w}):o) })); }
 
