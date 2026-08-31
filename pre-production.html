@@ -3,6 +3,31 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+/* Self-hosted React (E4.4, 2026-08-31). support.js loads React and ReactDOM
+   from unpkg.com; unpkg being down or blocked made every board a white page,
+   with no fallback and nothing in the app's control.
+
+   support.js is GENERATED and must not be hand-edited, and dc-runtime/ is not
+   in this repo -- but it does not need editing. Its cdnScriptFor() checks
+   window.__resources[url] first and uses that value when it is a non-empty
+   string, so this map redirects both files to ./vendor/ copies with no change
+   to the generated file. Must run BEFORE support.js below.
+
+   The vendor files are byte-identical to what unpkg served: both were verified
+   against the SRI hashes support.js already pins. Note the override path drops
+   the integrity attribute (cdnScriptFor returns {src} only) -- acceptable
+   because these are now same-origin and travel under the same TLS and
+   Cloudflare Access boundary as the page itself.
+
+   Babel is deliberately NOT self-hosted: support.js only fetches it for
+   `jsx` script blocks and no page has one (every block is type="text/x-dc"),
+   so it is never requested. Add it here if a JSX page is ever introduced. */
+window.__resources = Object.assign({}, window.__resources, {
+  "https://unpkg.com/react@18.3.1/umd/react.production.min.js": "./vendor/react-18.3.1.production.min.js",
+  "https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js": "./vendor/react-dom-18.3.1.production.min.js"
+});
+</script>
 <script src="./support.js"></script>
 <script src="./ca-api.js"></script>
 </head>
@@ -1054,7 +1079,8 @@ class Component extends DCLogic {
     const card=(this.state.orders||[]).find(o=>o.id===cardId); if(!card) return;
     const nv=!card[field];
     this.setState(st=>({orders:st.orders.map(o=>o.id===cardId?Object.assign({},o,{[field]:nv}):o)}));
-    if(this._api && this.state.connection==='live') this._api.patchMethodChecklist(cardId,{[field]:nv}).catch(()=>{});
+    if(!this.canWriteNow('Checklist')) return;
+    this._api.patchMethodChecklist(cardId,{[field]:nv}).catch(e=>this.writeFailed('That checklist change',e));
   }
   // Also clears the stored role (not just the name) -- otherwise a stale
   // 'manager' role from a prior login could combine with re-picking
@@ -1140,9 +1166,24 @@ class Component extends DCLogic {
   // -- shared across every card from the same order, so these apply the
   // change to ALL sibling cards, not just the one whose drawer is open.
   updateOrderFieldLocally(orderId,fields){ this.setState(st=>({ orders: st.orders.map(o=>o.orderId===orderId?Object.assign({},o,fields):o) })); }
-  setRecv(orderId,v){ this.updateOrderFieldLocally(orderId,{recv:v}); if(this._api && this.state.connection==='live') this._api.patchOrder(orderId,{Receiving_Status__c:(this._api.RECV_TO_SF[v]||'Not Received')}).catch(()=>{}); }
-  setSpecs(orderId,v){ this.updateOrderFieldLocally(orderId,{printSpecs:v}); clearTimeout(this._specsT); this._specsT=setTimeout(()=>{ if(this._api && this.state.connection==='live') this._api.patchOrder(orderId,{Specifications_for_Printing__c:v}).catch(()=>{}); },600); }
-  setSpecial(orderId,v){ this.updateOrderFieldLocally(orderId,{specialNotes:v}); clearTimeout(this._specialT); this._specialT=setTimeout(()=>{ if(this._api && this.state.connection==='live') this._api.patchOrder(orderId,{Special_Notes__c:v}).catch(()=>{}); },600); }
+  /* ── writes (E4.3, 2026-08-31) — see index.html's matching pair ────────
+     canWriteNow() replaces the inline `this._api && connection==='live'` test
+     that used to silently skip a write; writeFailed() replaces `.catch(()=>{})`.
+     The local update stays optimistic; the difference is that a skipped or
+     failed save now says so instead of looking identical to success. */
+  canWriteNow(what){
+    const a=window.CAApi;
+    if(this._api && a && a.canWrite && a.canWrite(this.state.connection)) return true;
+    if(a && a.reportBlockedWrite) a.reportBlockedWrite(what);
+    return false;
+  }
+  writeFailed(what,e){
+    const a=window.CAApi;
+    if(a && a.reportFailedWrite) a.reportFailedWrite(what,e); else console.error(what,e);
+  }
+  setRecv(orderId,v){ this.updateOrderFieldLocally(orderId,{recv:v}); if(!this.canWriteNow('Receiving status')) return; this._api.patchOrder(orderId,{Receiving_Status__c:(this._api.RECV_TO_SF[v]||'Not Received')}).catch(e=>this.writeFailed('The receiving status',e)); }
+  setSpecs(orderId,v){ this.updateOrderFieldLocally(orderId,{printSpecs:v}); clearTimeout(this._specsT); this._specsT=setTimeout(()=>{ if(!this.canWriteNow('Print specs')) return; this._api.patchOrder(orderId,{Specifications_for_Printing__c:v}).catch(e=>this.writeFailed('The print specs',e)); },600); }
+  setSpecial(orderId,v){ this.updateOrderFieldLocally(orderId,{specialNotes:v}); clearTimeout(this._specialT); this._specialT=setTimeout(()=>{ if(!this.canWriteNow('Special notes')) return; this._api.patchOrder(orderId,{Special_Notes__c:v}).catch(e=>this.writeFailed('The special notes',e)); },600); }
   assign(cardId,w){ this.setState(st=>({ orders: st.orders.map(o=>o.id===cardId?Object.assign({},o,{worker:o.worker===w?null:w}):o) })); }
   // "Send to Production" -- advances THIS ONE method's Status__c to Ready
   // for Print, so it leaves this board and shows up on the Production floor
@@ -1154,7 +1195,7 @@ class Component extends DCLogic {
     const card=(this.state.orders||[]).find(o=>o.id===cardId);
     this.setState(st=>({ sent:Object.assign({},st.sent,{[cardId]:true}), openId:null }));
     if(!this._api || this.state.connection!=='live' || !card) return;
-    this._api.patchMethodStatus(cardId,'Ready for Print',card.orderId).catch(()=>{});
+    this._api.patchMethodStatus(cardId,'Ready for Print',card.orderId).catch(e=>this.writeFailed('The status change',e));
   }
 
   defaultForm(){ return { method:'', placements:[], planMode:'new', planId:null, planName:'', planQ:'', status:'Pre-Production', items:[] }; }
@@ -1257,8 +1298,8 @@ class Component extends DCLogic {
   // cards never saw the edit until the next 15s poll. Now mirrors
   // setSpecs/setSpecial: updates every sibling card immediately (a no-op
   // .map() if mgrId isn't actually an order id with cards yet).
-  setMgrSpecs(v){ const oid=this.state.mgrId; this.setForm({specs:v}); if(!oid) return; this.updateOrderFieldLocally(oid,{printSpecs:v}); clearTimeout(this._mgrSpecsT); this._mgrSpecsT=setTimeout(()=>{ if(this._api && this.state.connection==='live') this._api.patchOrder(oid,{Specifications_for_Printing__c:v}).catch(()=>{}); },600); }
-  setMgrSpecial(v){ const oid=this.state.mgrId; this.setForm({notes:v}); if(!oid) return; this.updateOrderFieldLocally(oid,{specialNotes:v}); clearTimeout(this._mgrSpecialT); this._mgrSpecialT=setTimeout(()=>{ if(this._api && this.state.connection==='live') this._api.patchOrder(oid,{Special_Notes__c:v}).catch(()=>{}); },600); }
+  setMgrSpecs(v){ const oid=this.state.mgrId; this.setForm({specs:v}); if(!oid) return; this.updateOrderFieldLocally(oid,{printSpecs:v}); clearTimeout(this._mgrSpecsT); this._mgrSpecsT=setTimeout(()=>{ if(!this.canWriteNow('Print specs')) return; this._api.patchOrder(oid,{Specifications_for_Printing__c:v}).catch(e=>this.writeFailed('The print specs',e)); },600); }
+  setMgrSpecial(v){ const oid=this.state.mgrId; this.setForm({notes:v}); if(!oid) return; this.updateOrderFieldLocally(oid,{specialNotes:v}); clearTimeout(this._mgrSpecialT); this._mgrSpecialT=setTimeout(()=>{ if(!this.canWriteNow('Special notes')) return; this._api.patchOrder(oid,{Special_Notes__c:v}).catch(e=>this.writeFailed('The special notes',e)); },600); }
   backToInbox(){ this.setState({mgrId:null, mgrMultiMethod:false, mgrErr:'', mgrMsg:''}); }
   // Pre_Production_Item__c records come back per ORDER (one fetch covers
   // every sibling method's items), cached under ppItemsById[orderId] and
@@ -1506,13 +1547,20 @@ class Component extends DCLogic {
       this.setState(st=>({ runsByMethod:Object.assign({}, st.runsByMethod, {[methodId]:(st.runsByMethod[methodId]||[]).filter(r=>r.id!==runId)}) }));
     }).catch(()=>{ window.alert('Could not remove this run — try again.'); });
   }
-  setItemField(orderId,itemId,field,val){ this.setState(st=>{ const pp=Object.assign({},st.ppItemsById); pp[orderId]=(pp[orderId]||[]).map(it=>it.Id===itemId?Object.assign({},it,{[field]:val}):it); return {ppItemsById:pp}; }); if(this._api && this.state.connection==='live') this._api.patchItem(itemId,{[field]:val}).catch(()=>{}); }
+  setItemField(orderId,itemId,field,val){ this.setState(st=>{ const pp=Object.assign({},st.ppItemsById); pp[orderId]=(pp[orderId]||[]).map(it=>it.Id===itemId?Object.assign({},it,{[field]:val}):it); return {ppItemsById:pp}; }); if(!this.canWriteNow('Item update')) return; this._api.patchItem(itemId,{[field]:val}).catch(e=>this.writeFailed('That item change',e)); }
   async removePPItem(orderId,itemId){
     const api=this._api||window.CAApi;
     // await: confirmManager returns a Promise, and `!promise` is always false.
     if(api && !(await api.confirmManager('Removing a production item'))) return;
     if(!window.confirm('Remove this production item? This can’t be undone.')) return;
-    this.setState(st=>{ const pp=Object.assign({},st.ppItemsById); pp[orderId]=(pp[orderId]||[]).filter(it=>it.Id!==itemId); return {ppItemsById:pp}; }); if(this._api && this.state.connection==='live' && itemId) this._api.deleteItem(itemId).catch(()=>{});
+    const prevItems=((this.state.ppItemsById||{})[orderId]||[]).slice();
+    const restore=()=>this.setState(st=>({ ppItemsById:Object.assign({},st.ppItemsById,{[orderId]:prevItems}) }));
+    this.setState(st=>{ const pp=Object.assign({},st.ppItemsById); pp[orderId]=(pp[orderId]||[]).filter(it=>it.Id!==itemId); return {ppItemsById:pp}; });
+    if(!itemId) return;
+    // Reversible: a failed delete puts the row back rather than leaving it
+    // gone on screen and present in Salesforce.
+    if(!this.canWriteNow('Item removal')){ restore(); return; }
+    this._api.deleteItem(itemId).catch(e=>{ restore(); this.writeFailed('That production item',e); });
   }
   // ── Add Item quick-create (Production Items section) -- for a method that
   // already exists but Management forgot to add an item under, straight from
@@ -1589,8 +1637,12 @@ class Component extends DCLogic {
     clearTimeout(this._mgrSpecsT); clearTimeout(this._mgrSpecialT);
     if(oid){
       const flushes=[];
-      if(f.specs!=null) flushes.push(this._api.patchOrder(oid,{Specifications_for_Printing__c:f.specs}).catch(()=>{}));
-      if(f.notes!=null) flushes.push(this._api.patchOrder(oid,{Special_Notes__c:f.notes}).catch(()=>{}));
+      // Swallowed on purpose here and ONLY here: these two are a best-effort
+      // flush of pending debounced edits immediately before createMethod(), and
+      // failing them must not block the create. Their own debounced writers
+      // (setMgrSpecs/setMgrSpecial) report failures on their normal path.
+      if(f.specs!=null) flushes.push(this._api.patchOrder(oid,{Specifications_for_Printing__c:f.specs}).catch(e=>{ this.writeFailed('The print specs',e); }));
+      if(f.notes!=null) flushes.push(this._api.patchOrder(oid,{Special_Notes__c:f.notes}).catch(e=>{ this.writeFailed('The special notes',e); }));
       if(flushes.length) await Promise.all(flushes);
     }
     const body={ orderId:oid, status:f.status, type:f.method, placements:f.placements, items:f.items||[] };
