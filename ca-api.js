@@ -1461,6 +1461,109 @@
   function postInventory(type, items){ return jsend('/api/inventory', 'POST', { type: type, items: items }); }
   function stationLogin(station, pin){ return jsend('/api/station-login', 'POST', { station: station, pin: pin }); }
 
+  /* ── production run rows (E10.1, 2026-08-31) ──────────────────────────
+     The Production Runs row is rendered by index.html AND pre-production.html,
+     and both boards had their own private copy of every piece of it: the
+     record mapping, the edit-buffer shape, the date splitting/joining, and the
+     schedule-status wording. That is what this module ends.
+
+     It had already drifted, which is why the story existed:
+       - `schedStatus` was mapped on pre-production and NOT on index, so the
+         production dashboard could not tell a published run from one whose
+         calendar publish had failed -- even though production-runs/index.js's
+         own comment says "every board reads it ... to warn when a run never
+         made it onto the calendar". It didn't.
+       - The status wording itself existed in THREE places (twice inside
+         pre-production.html alone), which is three chances to disagree about
+         what 'Planned' means.
+     Q2 was the same failure in a different function (saveMethodEdit).
+
+     These are all PURE. The boards keep their own setState handlers -- what
+     they no longer keep is their own idea of the shape. */
+
+  /** One Production_Run__c record from /api/production-runs -> the local shape
+   *  both boards' state and view models are written against. */
+  function runRecordFromApi(r){
+    r = r || {};
+    return {
+      id: r.Id, name: r.Name,
+      pressId: r.Press__c || null,
+      pressName: (r.Press__r && r.Press__r.Name) || '',
+      scheduledStart: r.Scheduled_Start__c || null,
+      scheduledEnd: r.Scheduled_End__c || null,
+      actualStart: r.Actual_Start__c || null,
+      actualEnd: r.Actual_End__c || null,
+      qty: r.Quantity_Planned_c__c != null ? r.Quantity_Planned_c__c : null,
+      /* Print_Location__c comes back null both when the run has no location
+         and when the org doesn't have the field -- the row treats the two
+         identically, so neither needs its own branch. */
+      printLocation: r.Print_Location__c || '',
+      /* The calendar publish state. Selected by the endpoint since 2026-08-19;
+         only pre-production.html used to map it. */
+      schedStatus: r.Auto_Scheduling_Status__c || null,
+      lastModifiedDate: r.LastModifiedDate || null,
+    };
+  }
+
+  /** Split an ISO datetime into the {date,time} pair <input type=date> and
+   *  <input type=time> need. Local-time components on both sides of the round
+   *  trip, so this always matches what buildRunDateTime() rebuilds. */
+  function splitDT(iso){
+    if (!iso) return { date:'', time:'' };
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return { date:'', time:'' };
+    var pad = function (n) { return String(n).padStart(2, '0'); };
+    return {
+      date: d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()),
+      time: pad(d.getHours()) + ':' + pad(d.getMinutes()),
+    };
+  }
+
+  /** The inverse: a date+time pair (both browser-local) -> the ISO string
+   *  Salesforce expects. null when either half is missing/unparseable. */
+  function buildRunDateTime(dateStr, timeStr){
+    if (!dateStr || !timeStr) return null;
+    var d = new Date(dateStr + 'T' + timeStr + ':00');
+    return isNaN(d.getTime()) ? null : d.toISOString();
+  }
+
+  /** A mapped run -> the editable form buffer a run row diverges into as a
+   *  manager types, until Save writes it back. */
+  function runEditFieldsFromRecord(r){
+    r = r || {};
+    var ss = splitDT(r.scheduledStart), se = splitDT(r.scheduledEnd);
+    var as = splitDT(r.actualStart), ae = splitDT(r.actualEnd);
+    return {
+      pressId: r.pressId || null, pressName: r.pressName || '', pressQ: r.pressName || '',
+      startDate: ss.date, startTime: ss.time, endDate: se.date, endTime: se.time,
+      actualStartDate: as.date, actualStartTime: as.time,
+      actualEndDate: ae.date, actualEndTime: ae.time,
+      qty: r.qty != null ? String(r.qty) : '',
+      printLocation: r.printLocation || '',
+      /* Carried through so saveRunRow can send it back as ifUnmodifiedSince --
+         see patchProductionRun above. */
+      loadedAt: r.lastModifiedDate || null,
+    };
+  }
+
+  /** What is TRUE of this run's place on the shop calendar, in one vocabulary
+   *  shared by every surface that shows a run.
+   *
+   *  'Planned' means the publish FAILED, not that someone still has to act --
+   *  runs publish at creation now, so notPublished drives a warning rather
+   *  than a button. See functions/api/_run-schedule-status.js. */
+  function runScheduleStatus(schedStatus){
+    var published = schedStatus === 'Confirmed';
+    return {
+      published: published,
+      notPublished: !published,
+      label: published ? 'On the shop calendar'
+           : schedStatus === 'Planned' ? 'Not on the shop calendar — publishing failed'
+           : 'Suggested by the auto-scheduler — it may move again',
+      color: published ? '#9878C0' : '#6C665C',
+    };
+  }
+
   /* ── mapping helpers ── */
   var SIZE_ORDER = ['YXS','YS','YM','YL','YXL','OS','XS','S','M','L','XL','2XL','3XL','4XL','5XL'];
   var WORKER_COLORS = ['#C6372B','#5E9B9A','#C9923A','#7FA644','#8E6FB0','#3E7CB1'];
@@ -1692,6 +1795,7 @@
     VALID_NAMES: VALID_NAMES, ROLE_KEY: ROLE_KEY, NAME_KEY: NAME_KEY, STATION_NAME_KEY: STATION_NAME_KEY, role: role, workerName: workerName, anyWorkerName: anyWorkerName, setRole: setRole, setWorkerName: setWorkerName, setIdentity: setIdentity, clearIdentity: clearIdentity, endServerSession: endServerSession, readParam: readParam, writeParams: writeParams, logout: logout, isManager: isManager, isAdmin: isAdmin, canAccessManagement: canAccessManagement, confirmManager: confirmManager, MANAGER_NAMES: MANAGER_NAMES, workerLogin: workerLogin,
     SUBSTATUS_VALUE: SUBSTATUS_VALUE, SUBSTATUS_LABEL: SUBSTATUS_LABEL, STAGE_KEY: STAGE_KEY, STAGE_SUBSTATUS: STAGE_SUBSTATUS, stageOf: stageOf, stageOfMethod: stageOfMethod,
     DELIVERY_LABEL: DELIVERY_LABEL, DELIVERY_METHODS: DELIVERY_METHODS, deliveryOptions: deliveryOptions, shouldPoll: shouldPoll, formatAddress: formatAddress,
+    runRecordFromApi: runRecordFromApi, runEditFieldsFromRecord: runEditFieldsFromRecord, runScheduleStatus: runScheduleStatus, splitDT: splitDT, buildRunDateTime: buildRunDateTime,
     NAV_BOARDS: NAV_BOARDS, buildNavBoards: buildNavBoards,
     getShippingOrders: getShippingOrders, completeOrder: completeOrder, getStatsTrend: getStatsTrend,
     CHECK_FIELD: CHECK_FIELD, RECV_FROM_SF: RECV_FROM_SF, RECV_TO_SF: RECV_TO_SF, TIME_OPTIONS: TIME_OPTIONS,
