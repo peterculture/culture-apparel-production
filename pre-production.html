@@ -1436,43 +1436,23 @@ class Component extends DCLogic {
   // <input type=time> need -- the inverse of buildRunDateTime(). Local-time
   // components on both sides of the round trip, so this always matches what
   // buildRunDateTime() would produce from the same wall-clock values.
-  splitDT(iso){
-    if(!iso) return {date:'', time:''};
-    const d=new Date(iso); if(isNaN(d.getTime())) return {date:'', time:''};
-    const pad=(n)=>String(n).padStart(2,'0');
-    return { date: d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()), time: pad(d.getHours())+':'+pad(d.getMinutes()) };
-  }
-  runEditFieldsFromRecord(r){
-    const ss=this.splitDT(r.scheduledStart), se=this.splitDT(r.scheduledEnd);
-    const as=this.splitDT(r.actualStart), ae=this.splitDT(r.actualEnd);
-    return {
-      pressId:r.pressId||null, pressName:r.pressName||'', pressQ:r.pressName||'',
-      startDate:ss.date, startTime:ss.time, endDate:se.date, endTime:se.time,
-      actualStartDate:as.date, actualStartTime:as.time, actualEndDate:ae.date, actualEndTime:ae.time,
-      qty: r.qty!=null ? String(r.qty) : '',
-      printLocation: r.printLocation || '',
-      // Carried through from loadRunsForCard's mapped record so saveRunRow can
-      // send it back as ifUnmodifiedSince -- see ca-api.js's patchProductionRun.
-      loadedAt: r.lastModifiedDate || null,
-    };
-  }
+  /* ── run-row shape: delegated to ca-api.js (E10.1) ────────────────────
+     These four were duplicated verbatim on both boards and had already
+     drifted -- see the run-row block in ca-api.js for what that cost. They
+     stay as thin methods so every existing `this.splitDT(...)` call site keeps
+     working; the SHAPE now has exactly one definition. Local fallbacks are
+     deliberately absent: ca-api.js is a hard dependency of every board
+     (identity, the loader, buildNavBoards), so a missing CAApi is a broken
+     page long before it reaches here. */
+  splitDT(iso){ return window.CAApi.splitDT(iso); }
+  buildRunDateTime(dateStr,timeStr){ return window.CAApi.buildRunDateTime(dateStr,timeStr); }
+  runEditFieldsFromRecord(r){ return window.CAApi.runEditFieldsFromRecord(r); }
   loadRunsForCard(methodId){
     if(!methodId || !this._api || this.state.connection!=='live') return;
     this.setState({runsLoadingFor:methodId});
     this._api.getProductionRuns(methodId).then(recs=>{
-      const runs=(recs||[]).map(r=>({
-        id:r.Id, name:r.Name,
-        pressId:r.Press__c||null, pressName:(r.Press__r&&r.Press__r.Name)||'',
-        scheduledStart:r.Scheduled_Start__c||null, scheduledEnd:r.Scheduled_End__c||null,
-        actualStart:r.Actual_Start__c||null, actualEnd:r.Actual_End__c||null,
-        qty: r.Quantity_Planned_c__c!=null ? r.Quantity_Planned_c__c : null,
-        // Print_Location__c comes back null both when the run has no
-        // location and when the org doesn't have the field -- the row treats
-        // the two identically, so neither needs its own branch.
-        printLocation: r.Print_Location__c || '',
-        schedStatus: r.Auto_Scheduling_Status__c || null,
-        lastModifiedDate: r.LastModifiedDate || null,
-      }));
+      // One mapping, in ca-api.js (E10.1) -- shared with index.html.
+      const runs=(recs||[]).map(r=>window.CAApi.runRecordFromApi(r));
       this.setState(st=>{
         const edits=Object.assign({}, st.runEdits);
         runs.forEach(r=>{ edits[r.id]=this.runEditFieldsFromRecord(r); });
@@ -1905,11 +1885,6 @@ class Component extends DCLogic {
   // Combines a <input type=date> + <input type=time> pair (both in the
   // browser's local time) into the ISO string Salesforce expects for a
   // Date/Time field. Returns null if either half is missing/unparseable.
-  buildRunDateTime(dateStr,timeStr){
-    if(!dateStr || !timeStr) return null;
-    const d=new Date(dateStr+'T'+timeStr+':00');
-    return isNaN(d.getTime()) ? null : d.toISOString();
-  }
   async submitRun(mode){
     // mode: 'shopfloor' (create the run + leave Management, back to the
     // board) or 'new' (create + reset the form for another run under this
@@ -2127,7 +2102,9 @@ class Component extends DCLogic {
        multi-method: the same rows now render under each method, and two copies
        of this mapping would drift the moment a status label changed. */
     const runsViewFor = (pmId) => (st.runsByMethod[pmId] || []).map(r=>{
-      const pub = r.schedStatus === 'Confirmed';
+      // One vocabulary for a run's calendar state -- see runScheduleStatus in
+      // ca-api.js. This wording used to exist three times (twice in this file).
+      const sched = window.CAApi.runScheduleStatus(r.schedStatus);
       return {
         id:r.id, name:r.name,
         press: r.pressName || 'No press set',
@@ -2136,14 +2113,7 @@ class Component extends DCLogic {
           : 'No schedule set',
         qtyLabel: r.qty!=null ? (r.qty+' pcs') : '', hasQty: r.qty!=null,
         locationLabel: r.printLocation || '', hasLocation: !!r.printLocation,
-        /* Same vocabulary as the drawer and the calendar: the label says what
-           is TRUE of the run. 'Planned' now means the publish failed, not that
-           someone still has to act -- see _run-schedule-status.js. */
-        statusLabel: pub ? 'On the shop calendar'
-                   : r.schedStatus === 'Planned' ? 'Not on the shop calendar — publishing failed'
-                   : 'Suggested by the auto-scheduler — it may move again',
-        statusColor: pub ? '#9878C0' : '#6C665C',
-        notPublished: !pub,
+        statusLabel: sched.label, statusColor: sched.color, notPublished: sched.notPublished,
         err:(st.runRowErr&&st.runRowErr[r.id])||'', hasErr:!!(st.runRowErr&&st.runRowErr[r.id]),
       };
     });
@@ -2456,6 +2426,7 @@ class Component extends DCLogic {
         const pressResults = (st.runRowPressResults && st.runRowPressResults[r.id]) || [];
         const saving = !!(st.runRowSaving && st.runRowSaving[r.id]);
         const qtyHint = (api&&api.runQtyHint) ? api.runQtyHint(f.qty, src.qty) : '';
+        const rowSched = window.CAApi.runScheduleStatus(r.schedStatus);
         return {
           id:r.id, name:r.name,
           pressQ:f.pressQ, pressPicked:!!f.pressId, pressName:f.pressName,
@@ -2490,11 +2461,7 @@ class Component extends DCLogic {
              own suggestion or a publish that failed; neither is something a
              manager can resolve from this row, so it reads as a warning rather
              than an offer. */
-          statusLabel: r.schedStatus==='Confirmed' ? 'On the shop calendar'
-                     : r.schedStatus==='Planned' ? 'Not on the shop calendar — publishing failed'
-                     : 'Suggested by the auto-scheduler — it may move again',
-          statusColor: r.schedStatus==='Confirmed' ? '#9878C0' : '#6C665C',
-          notPublished: r.schedStatus!=='Confirmed',
+          statusLabel: rowSched.label, statusColor: rowSched.color, notPublished: rowSched.notPublished,
           onSave:()=>this.saveRunRow(r.id, src.id), saving, saveLabel: saving?'Saving…':'Save Changes',
           onRemove:()=>this.removeRun(r.id, src.id),
           err:(st.runRowErr&&st.runRowErr[r.id])||'', msg:(st.runRowMsg&&st.runRowMsg[r.id])||'',
