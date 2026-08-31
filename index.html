@@ -781,6 +781,10 @@ class Component extends DCLogic {
       // copy of the same feature, since a card here is the SAME
       // Production_Method__c record once it's advanced past Pre-Production.
       // See openCard()/loadRunsForCard()/saveRunRow().
+      /* Shipped/completed in the last 7 WEEKDAYS, from /api/stats-trend --
+         the same series the Stats page charts. null until it lands (and in
+         demo), which the tile renders as an em dash rather than a number. */
+      shipped7d:null,
       runsByMethod:{}, runsLoadingFor:null, runEdits:{}, runRowPressResults:{}, runRowSaving:{}, runRowErr:{}, runRowMsg:{},
       // Which run each method's Set-up/Production timers act on, chosen by the
       // worker rather than derived. See selectedRunId()/selectRun() and the
@@ -877,7 +881,7 @@ class Component extends DCLogic {
   // dashboards". Every later refresh, save and drawer-open stays silent.
   // See the header comment in ca-api.js.
   fg(fn){ const a=window.CAApi; return (a&&a.foregroundLoad) ? a.foregroundLoad(fn) : fn(); }
-  componentDidMount(){ this._t = setInterval(()=>this.setState({ now:new Date() }), 1000); this.fg(()=>this.load()); this.bg(()=>this.loadSfEnv()); this.bg(()=>this.loadPrep()); this.bg(()=>this.loadShortfall()); this._ar = setInterval(()=>{ /* shouldPoll(): demo boards retry every 5th tick so a board that lost the API recovers on its own -- see ca-api.js */ if(!this.state.openId && !this.state.dragId && ((window.CAApi&&window.CAApi.shouldPoll)?window.CAApi.shouldPoll(this.state.connection,'index'):this.state.connection==='live')) this.bg(()=>this.load()); }, 15000); this._pr = setInterval(()=>this.bg(()=>this.loadPrep()), 30000); this._sr = setInterval(()=>this.bg(()=>this.loadShortfall()), 30000); }
+  componentDidMount(){ this._t = setInterval(()=>this.setState({ now:new Date() }), 1000); this.fg(()=>this.load()); this.bg(()=>this.loadSfEnv()); this.bg(()=>this.loadPrep()); this.bg(()=>this.loadShipped7d()); this.bg(()=>this.loadShortfall()); this._ar = setInterval(()=>{ /* shouldPoll(): demo boards retry every 5th tick so a board that lost the API recovers on its own -- see ca-api.js */ if(!this.state.openId && !this.state.dragId && ((window.CAApi&&window.CAApi.shouldPoll)?window.CAApi.shouldPoll(this.state.connection,'index'):this.state.connection==='live')) this.bg(()=>this.load()); }, 15000); this._pr = setInterval(()=>{ this.bg(()=>this.loadPrep()); this.bg(()=>this.loadShipped7d()); }, 30000); this._sr = setInterval(()=>this.bg(()=>this.loadShortfall()), 30000); }
   componentWillUnmount(){ clearInterval(this._t); clearInterval(this._ar); clearInterval(this._pr); clearInterval(this._sr); this.clearPoll(); }
   // Independent fetch/failure path from load() -- a hiccup fetching the
   // Pre-Production queue shouldn't flip this board's own "Live · Salesforce"
@@ -1057,6 +1061,24 @@ class Component extends DCLogic {
     }
   }
   // ── Salesforce environment switcher (global -- affects every tablet) ──
+  /* Shipped - 7d. Reuses /api/stats-trend rather than adding a query: that
+     endpoint already returns completed-per-weekday, and its own header says it
+     is "the same convention the long-standing (but previously hardcoded)
+     'Shipped - 7d' KPI on index.html was always meant to reflect". Summing its
+     `shipped` series is that KPI.
+
+     Best-effort: a failure leaves shipped7d null and the tile shows an em
+     dash. A KPI that cannot be computed must read as unknown, never as a
+     plausible number -- which is exactly what was wrong with it before. */
+  loadShipped7d(){
+    if(!this._api || !this._api.getStatsTrend) return;
+    this._api.getStatsTrend()
+      .then(d=>{
+        const arr=(d && Array.isArray(d.shipped)) ? d.shipped : null;
+        this.setState({ shipped7d: arr ? arr.reduce((a,b)=>a+(Number(b)||0),0) : null });
+      })
+      .catch(()=>this.setState({shipped7d:null}));
+  }
   loadSfEnv(){
     if(!this._api) return;
     this._api.getSfEnv().then(d=>{
@@ -2074,6 +2096,15 @@ class Component extends DCLogic {
     const inProdUnits = inProd.reduce((a,o)=>a+(parseInt(o.qty,10)||0),0);
     const rushCount = st.orders.filter(o=>o.urg==='today'||o.urg==='over').length + st.orders.filter(o=>o.urg==='soon').length;
     const pipeline = st.orders.filter(o=>o.stage!=='done').length;
+    /* Orders (not cards) past their print date and not yet finished. Counted
+       per ORDER because a two-method job is one late job to the floor, not
+       two -- the same reason misprints are deduped below. */
+    const overdueOrders = new Set(st.orders.filter(o=>o.stage!=='done' && o.urg==='over').map(o=>o.orderId)).size;
+    /* Misprint pieces across the orders currently on this board, deduped per
+       order -- see the Misprints tile note below. */
+    const misprintByOrder = new Map();
+    st.orders.forEach(o=>{ if(o.orderId!=null) misprintByOrder.set(o.orderId, Number(o.mis)||0); });
+    const misprintPcs = Array.from(misprintByOrder.values()).reduce((a,b)=>a+b, 0);
 
     // Prep Time: worst-case days of runway left before Print_Date__c across
     // every order still in Pre-Production -- see CAApi.prepBufferStats()
@@ -2088,9 +2119,32 @@ class Component extends DCLogic {
       { label:'In Pipeline', value:String(pipeline), unit:'orders', sub:'across four stages', accent:'#ECEAE4', hasTrend:false, hasGlow:false },
       { label:'Prep Time', value:fmtDays(st.prep.worst), unit:'days', sub: st.prep.knownCount ? ('worst case · avg '+fmtDays(st.prep.avg)+'d · '+st.prep.count+' in prep') : 'prep queue empty', accent:prepMeta.color, hasTrend:false, hasGlow:true, glowColor:prepMeta.color, glowLabel:prepMeta.label },
       { label:'On Press Now', value:String(inProdUnits), unit:'pcs', sub:inProd.length+' orders in production', accent:accent, hasTrend:false, hasGlow:false },
-      { label:'On-Time', value:'96', unit:'%', sub:'trailing 30 days', accent:'#7FA644', hasTrend:true, trendIcon:'ti-trending-up', trendColor:'#7FA644', trendVal:'+2 pts', hasGlow:false },
-      { label:'Misprint Rate', value:'1.8', unit:'%', sub:'6 of 328 pcs', accent:'#7FA644', hasTrend:true, trendIcon:'ti-trending-down', trendColor:'#7FA644', trendVal:'−0.4', hasGlow:false },
-      { label:'Shipped · 7d', value:'14', unit:'orders', sub:'3,120 pcs out', accent:'#ECEAE4', hasTrend:true, trendIcon:'ti-trending-up', trendColor:'#7FA644', trendVal:'+9%', hasGlow:false },
+      /* ── these three were HARDCODED until 2026-08-31 ────────────────────
+         They rendered '96%', '1.8%' and '14 orders' -- with trend arrows --
+         in LIVE mode, on the board the floor runs the day from. Two are now
+         computed; the third could not be, and was replaced rather than
+         guessed. The fake day-over-day deltas are gone entirely: nothing here
+         has a previous period to compare against, so every trend arrow was
+         decoration.
+
+         ON-TIME % IS NOT COMPUTABLE and is deliberately absent. It needs
+         "delivered by the promised date", and there is no completion/ship date
+         on Order -- /api/stats-trend's header says so explicitly and uses
+         LastModifiedDate as a proxy for its chart. A proxy is fine for a
+         trend line; it is not fine for a headline percentage a manager acts
+         on, because it silently skews for any order edited after completion.
+         Overdue takes the slot: real, from the same dueInfo() the cards use,
+         and actionable in a way an aggregate percentage never was. Bringing
+         On-Time back needs a real Shipped/Completed date field. */
+      { label:'Overdue', value:String(overdueOrders), unit:'orders', sub:'past print date, still on the floor', accent: overdueOrders>0?'#E24A3A':'#6C665C', hasTrend:false, hasGlow:false },
+      /* Deduped per ORDER: TotalQtyMisprints__c is an Order-level rollup
+         repeated onto every sibling method card, so summing per card
+         double-counts a multi-method order. Same rule and same wording as
+         stats.html's Misprints tile, so the two pages cannot disagree. A RATE
+         is not shown: the denominator would be this board's current cards, not
+         the 30-day window "1.8%" implied. */
+      { label:'Misprints', value:String(misprintPcs), unit:'pcs', sub:'across orders on this board', accent: misprintPcs>0?'#C9923A':'#6C665C', hasTrend:false, hasGlow:false },
+      { label:'Shipped · 7d', value: st.shipped7d==null?'—':String(st.shipped7d), unit:'orders', sub: st.shipped7d==null?'waiting on Salesforce':'completed, last 7 weekdays', accent:'#ECEAE4', hasTrend:false, hasGlow:false },
     ];
 
     const methodFilters = ['sp','em','hp','promo'].map(k=>{ const on=st.methods[k]; return { key:k, label:M[k].label, color:M[k].color, onToggle:()=>this.setState(s2=>({methods:Object.assign({},s2.methods,{[k]:!s2.methods[k]})})), bg:on?'#1a1a1e':'transparent', border:on?'#3a3a40':'#242428', textColor:on?'#ECEAE4':'#6C665C' }; });
