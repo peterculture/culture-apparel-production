@@ -837,6 +837,116 @@
     return _pollTicks[k] % DEMO_RETRY_EVERY === 0;
   }
 
+  /* ── telling the worker a write did not happen (2026-08-31, E4.3) ─────
+     THE PROBLEM this exists to solve: ~20 write paths across the boards ran
+     their optimistic local update and then either skipped the server call
+     (`if (connection === 'live')`) or swallowed its failure (`.catch(()=>{})`).
+     Both look identical on screen to a save that worked. A worker taps, the
+     tile moves, and Salesforce never hears about it -- and because a board
+     falls back to demo silently, "not live" is a state a tablet can be in for
+     hours without anyone noticing.
+
+     The reason every board swallowed is that there was nowhere to PUT the
+     news: alert() is modal and unusable for a background save, and no board
+     had a notification surface. So this module owns one, the same way it
+     already owns the loading overlay.
+
+     Deliberately NOT alert(): these fire from debounced background saves, and
+     a modal dialog on every keystroke's failed autosave would be worse than
+     the silence it replaces. */
+  var TOAST_MS = { info: 4000, warn: 7000, error: 11000 };
+  var _toastEl = null, _toasts = {};
+  function toastCss(){
+    return '.ca-toasts{position:fixed;z-index:2147483000;left:50%;transform:translateX(-50%);bottom:22px;'
+      + 'display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;max-width:min(560px,92vw)}'
+      + '.ca-toast{pointer-events:none;display:flex;align-items:flex-start;gap:9px;font:500 13px/1.45 Archivo,system-ui,sans-serif;'
+      + 'border-radius:11px;padding:12px 15px;box-shadow:0 18px 40px -14px rgba(0,0,0,.75);border:1px solid;'
+      + 'animation:ca-toast-in .16s ease}'
+      + '.ca-toast-info{background:#101013;border-color:#2a2a2f;color:#ECEAE4}'
+      + '.ca-toast-warn{background:#241a09;border-color:#5E4214;color:#E0B870}'
+      + '.ca-toast-error{background:#2A100D;border-color:#7A241C;color:#E8A89F}'
+      + '.ca-toast-x{pointer-events:auto;margin-left:6px;background:none;border:0;color:inherit;opacity:.6;cursor:pointer;font-size:15px;line-height:1}'
+      + '@keyframes ca-toast-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}';
+  }
+  function toastHost(){
+    if (typeof document === 'undefined' || !document.body) return null;
+    if (_toastEl && _toastEl.parentNode) return _toastEl;
+    if (!document.getElementById('ca-toast-style')) {
+      var st = document.createElement('style');
+      st.id = 'ca-toast-style'; st.textContent = toastCss();
+      document.head.appendChild(st);
+    }
+    var host = document.createElement('div');
+    host.className = 'ca-toasts';
+    host.setAttribute('role', 'status');
+    host.setAttribute('aria-live', 'polite');
+    document.body.appendChild(host);
+    _toastEl = host;
+    return host;
+  }
+  /* Deduped by message text: a debounced autosave that fails on every keystroke
+     must not stack forty identical strips down the screen -- the repeat just
+     restarts the existing one's timer. */
+  function toast(kind, message){
+    var msg = String(message == null ? '' : message).trim();
+    if (!msg) return;
+    var host = toastHost();
+    if (!host) return;
+    var k = (kind === 'error' || kind === 'warn') ? kind : 'info';
+    var existing = _toasts[msg];
+    if (existing && existing.el.parentNode) {
+      clearTimeout(existing.timer);
+      existing.timer = setTimeout(function () { dismissToast(msg); }, TOAST_MS[k]);
+      return;
+    }
+    var el = document.createElement('div');
+    el.className = 'ca-toast ca-toast-' + k;
+    var span = document.createElement('span');
+    span.textContent = msg;
+    el.appendChild(span);
+    var x = document.createElement('button');
+    x.className = 'ca-toast-x'; x.type = 'button';
+    x.setAttribute('aria-label', 'Dismiss');
+    x.textContent = '×';
+    x.onclick = function () { dismissToast(msg); };
+    el.appendChild(x);
+    host.appendChild(el);
+    _toasts[msg] = { el: el, timer: setTimeout(function () { dismissToast(msg); }, TOAST_MS[k]) };
+  }
+  function dismissToast(msg){
+    var t = _toasts[msg];
+    if (!t) return;
+    clearTimeout(t.timer);
+    if (t.el.parentNode) t.el.parentNode.removeChild(t.el);
+    delete _toasts[msg];
+  }
+
+  /* The most useful human string we can get out of a failed write. Reads the
+     `detail` httpError() attaches (see jget/jsend/jdel above) before falling
+     back to the bare message. */
+  function errText(e){
+    if (!e) return '';
+    if (e.detail) return String(e.detail);
+    if (e.data && (e.data.detail || e.data.error)) return String(e.data.detail || e.data.error);
+    if (e.status) return 'server returned ' + e.status;
+    return e.message ? String(e.message) : '';
+  }
+
+  /* May this board write to Salesforce right now? The single decision point --
+     boards used to inline `this._api && this.state.connection === 'live'` and
+     then just return, which is the silent half of the bug. Callers should say
+     something when this is false; reportBlockedWrite() is the standard way. */
+  function canWrite(connection){ return connection === 'live'; }
+  function reportBlockedWrite(what){
+    toast('warn', (what ? what + ': ' : '') + 'not saved — this board is on demo data, not connected to Salesforce.');
+  }
+  /* Standard failure report for a write that DID reach the server and lost.
+     `what` names the action in the worker's words, not the endpoint's. */
+  function reportFailedWrite(what, e){
+    var d = errText(e);
+    toast('error', (what || 'That change') + ' was NOT saved' + (d ? ' — ' + d : '') + '.');
+  }
+
   function jget(url){
     return trackRequest(fetch(url, { headers: { Accept:'application/json' } }).then(function (r) {
       if (!r.ok) return httpError('GET', url, r);
@@ -1598,6 +1708,7 @@
     getInventory: getInventory, postInventory: postInventory, stationLogin: stationLogin,
     SIZE_ORDER: SIZE_ORDER, text: text, initials: initials, colorForName: colorForName, methodOf: methodOf, dueInfo: dueInfo, parseSfDate: parseSfDate, pivotItems: pivotItems, runQtyHint: runQtyHint,
     backgroundLoad: backgroundLoad, foregroundLoad: foregroundLoad,
+    toast: toast, errText: errText, canWrite: canWrite, reportBlockedWrite: reportBlockedWrite, reportFailedWrite: reportFailedWrite,
     trackRequest: trackRequest, hideLoader: hideLoader, showLoaderNow: showLoaderNow,
     STATUS_HELP: STATUS_HELP, statusHelp: statusHelp,
     locationAvailable: locationAvailable, locationsForMethod: locationsForMethod,
