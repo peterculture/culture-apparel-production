@@ -33,7 +33,7 @@
  * leaves the run in Draft, which is exactly the recoverable state: the counter
  * sees it still in the list and enters it again.
  */
-import { runQuery, sfFetch, apiVersion, jsonError } from "../_sf.js";
+import { runQuery, sfFetch, apiVersion, jsonError, soqlQuote, soqlQuoteList } from "../_sf.js";
 import { requireCap } from "../_session.js";
 import { orderIdForMethod } from "../_print-date-rollup.js";
 import { createReworkIfNeeded } from "../_rework.js";
@@ -69,8 +69,12 @@ const COMPOSITE_LIMIT = 25;
 const MAX_QTY = 99999;
 const LIST_LIMIT = 200;
 
-const q = (v) => `'${String(v).replace(/'/g, "")}'`;
-const quoteList = (ids) => ids.map(q).join(",");
+/* Escaping lives in _sf.js now. These were five diverging copies that
+   stripped apostrophes and let backslashes through -- a trailing "\\"
+   escaped the closing quote and killed the query. Local aliases so every
+   call site below reads unchanged. */
+const q = soqlQuote;
+const quoteList = soqlQuoteList;
 
 /**
  * Every field this endpoint needs on Production_Run__c that did not exist
