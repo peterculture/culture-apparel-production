@@ -45,7 +45,7 @@
  * Order Product across every method gives one replacement per ruined garment,
  * with all of its decorations rebuilt.
  */
-import { sfFetch, apiVersion, runQuery } from "./_sf.js";
+import { sfFetch, apiVersion, runQuery, soqlQuote, soqlQuoteList } from "./_sf.js";
 import { rollupMisprintsToOrder } from "./_pm-rollup.js";
 
 const SF_ID = /^[a-zA-Z0-9]{15,18}$/;
@@ -109,8 +109,12 @@ const ITEM_FIELDS_BY_TYPE = {
   Transfer: ["Transfer_Type__c"],
 };
 
-const q = (id) => `'${String(id).replace(/'/g, "")}'`;
-const quoteList = (ids) => ids.map(q).join(",");
+/* Escaping lives in _sf.js now. These were five diverging copies that
+   stripped apostrophes and let backslashes through -- a trailing "\\"
+   escaped the closing quote and killed the query. Local aliases so every
+   call site below reads unchanged. */
+const q = soqlQuote;
+const quoteList = soqlQuoteList;
 
 /**
  * Something failed. Log it and say which thing, in the RESPONSE, not just the
