@@ -1322,6 +1322,13 @@
      (err.status / err.detail) -- over-allocation comes back 409 with a message
      naming the size and the remainder. */
   function getRunLineItems(runId){ return jget('/api/run-line-items?runId=' + encodeURIComponent(runId)); }
+  /* Just `methodCommitted` -- how many garments every run on this method has
+     committed between them (planned minus incomplete). Subtract it from the
+     order's own garment total and you have what is still unallocated, which is
+     what runQtyHint's third argument wants. Separate from getRunLineItems
+     because the New Run form needs the number BEFORE a run exists to ask
+     about. */
+  function getMethodAllocation(methodId){ return jget('/api/run-line-items?methodId=' + encodeURIComponent(methodId)); }
   function patchRunLineItems(runId, updates){ return jsend('/api/run-line-items', 'PATCH', { runId: runId, updates: updates }); }
 
   function getCountableRuns(){ return jget('/api/run-results'); }
@@ -1941,7 +1948,7 @@
     PLACEMENTS: PLACEMENTS, methodsList: methodsList, METHOD_META: METHOD_META,
     getOrders: getOrders, getProductionOrders: getProductionOrders, getInbox: getInbox, getPreProductionItems: getPreProductionItems, patchItem: patchItem, deleteItem: deleteItem, createItem: createItem, searchPlans: searchPlans, searchPresses: searchPresses, createMethod: createMethod, createProductionRun: createProductionRun, getProductionRuns: getProductionRuns, patchProductionRun: patchProductionRun, deleteProductionRun: deleteProductionRun, getProposedRuns: getProposedRuns, patchProposedRun: patchProposedRun, patchMethodStatus: patchMethodStatus, patchMethodChecklist: patchMethodChecklist, getMethodsForOrder: getMethodsForOrder, patchMethodFields: patchMethodFields, deleteMethod: deleteMethod, patchOrder: patchOrder, getOrderSizes: getOrderSizes,
     getCountableRuns: getCountableRuns, getRunResults: getRunResults, submitRunResults: submitRunResults,
-    getRunLineItems: getRunLineItems, patchRunLineItems: patchRunLineItems,
+    getRunLineItems: getRunLineItems, getMethodAllocation: getMethodAllocation, patchRunLineItems: patchRunLineItems,
     getShortfalls: getShortfalls,
     mockupThumb: mockupThumb, THUMB_CARD: THUMB_CARD, THUMB_PANEL: THUMB_PANEL,
     getPackaging: getPackaging, postPackaging: postPackaging, deletePackaging: deletePackaging,
