@@ -2280,7 +2280,16 @@ class Component extends DCLogic {
         hasMockup:!!d.mockupUrl, noMockup:!d.mockupUrl, mockupNode: d.mockupUrl?React.createElement('img',{src:d.mockupUrl,alt:'Production mockup',onClick:(window.CAApi&&window.CAApi.mockupClick)?window.CAApi.mockupClick(d.mockupUrl,(d.customer||'')+' - '+(d.num||'')):null, title:'Click to inspect', style:{cursor:'zoom-in',width:96,height:96,flexShrink:0,borderRadius:11,border:'1px solid #232327',objectFit:'cover',background:'#121215'}}):null, onZk:()=>this.openZk(src.orderId,src.num), zkErrMsg:(st.zkErr&&st.zkErr[src.orderId])||'', hasZkErr:!!(st.zkErr&&st.zkErr[src.orderId]),
         specs:d.printSpecs||'', onSpecs:(e)=>this.setSpecs(src.orderId,e.target.value), special:d.specialNotes||'', onSpecial:(e)=>this.setSpecial(src.orderId,e.target.value), orderSheetUrl:'order-sheet.html?orderId='+encodeURIComponent(src.orderId),
         isPP, notPP:!isPP, runResultsUrl,
-        delivery:d.shipDelivery||'', deliveryOptions:[{value:'',label:'— not set —'},{value:'Shipping',label:'Shipping'},{value:'Local Dropoff',label:'Local Dropoff'},{value:'Pickup',label:'Pickup'},{value:'Order Fulfillment',label:'Order Fulfillment'},{value:'Split Ship',label:'Split Ship'},{value:'Delivery',label:'Delivery'}], onDelivery:(e)=>this.setDelivery(src.orderId,e.target.value),
+        delivery:d.shipDelivery||'', /* One option per STORED picklist value, labelled through CAApi.DELIVERY_LABEL
+           -- so the entry a human reads as "Local Dropoff" writes "Delivery", which
+           is the only value the restricted picklist accepts. This list used to be
+           hand-written here and offered BOTH: picking "Local Dropoff" wrote the
+           display label and the PATCH failed. See the trap note on DELIVERY_LABEL
+           in ca-api.js. Falls back to the stored values unlabelled if ca-api.js is
+           somehow absent, which is wrong-looking but never wrong-saving. */
+        deliveryOptions:(window.CAApi&&window.CAApi.deliveryOptions)
+          ? window.CAApi.deliveryOptions('— not set —')
+          : [{value:'',label:'— not set —'}].concat(['Shipping','Delivery','Pickup','Split Ship','Order Fulfillment'].map(function(v){return {value:v,label:v};})), onDelivery:(e)=>this.setDelivery(src.orderId,e.target.value),
         labelPrinted:!!d.labelPrinted, onToggleLabel:()=>this.toggleLabel(src.orderId), labelBg:d.labelPrinted?'#18230D':'#16161a', labelBorder:d.labelPrinted?'#3D5418':'#2a2a2f', labelColor:d.labelPrinted?'#BBD382':'#9C978C', labelIcon:d.labelPrinted?'ti-checkbox':'ti-square',
         // Pre_Production_Item__c records come back per ORDER (an order-wide
         // fetch), so filter down to just this card's own method here --
