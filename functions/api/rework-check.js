@@ -30,11 +30,15 @@
  * integration user's profile is not the profile anyone checks in the UI.
  * A `false` next to one query name here is the whole diagnosis.
  */
-import { runQuery, jsonError } from "./_sf.js";
+import { runQuery, jsonError, soqlQuote, soqlQuoteList } from "./_sf.js";
 
 const SF_ID = /^[a-zA-Z0-9]{15,18}$/;
-const q = (v) => `'${String(v).replace(/'/g, "")}'`;
-const quoteList = (ids) => ids.map(q).join(",");
+/* Escaping lives in _sf.js now. These were five diverging copies that
+   stripped apostrophes and let backslashes through -- a trailing "\\"
+   escaped the closing quote and killed the query. Local aliases so every
+   call site below reads unchanged. */
+const q = soqlQuote;
+const quoteList = soqlQuoteList;
 
 // Same ranks as _pm-rollup.js -- kept local on purpose so this diagnostic
 // still reports the truth even if that file is mid-edit.
