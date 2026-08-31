@@ -337,7 +337,9 @@ class Component extends DCLogic {
     if(this.state.runId) this.openRun(this.state.runId);
     // Only refresh the LIST in the background. Refreshing while someone is
     // mid-count would blow away half-typed numbers.
-    this._ar=setInterval(()=>{ if(this.state.connection==='live' && !this.state.runId) this.bg(()=>this.load()); },15000);
+    // See ca-api.js's shouldPoll(): a demo board retries every 5th tick so it
+    // can recover on its own. Still never while a run is open mid-count.
+    this._ar=setInterval(()=>{ if(!this.state.runId && ((window.CAApi&&window.CAApi.shouldPoll)?window.CAApi.shouldPoll(this.state.connection,'counting'):this.state.connection==='live')) this.bg(()=>this.load()); },15000);
   }
   componentWillUnmount(){ clearInterval(this._t); clearInterval(this._ar); }
 
