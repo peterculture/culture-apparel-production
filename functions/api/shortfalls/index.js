@@ -39,11 +39,15 @@
  * set by whoever schedules the make-up run; this endpoint would then read that
  * instead, and nothing on the client side would need to change.
  */
-import { runQuery, jsonError } from "../_sf.js";
+import { runQuery, jsonError, soqlQuote, soqlQuoteList } from "../_sf.js";
 
 const RUN_OBJECT = "Production_Run__c";
-const q = (v) => `'${String(v).replace(/'/g, "")}'`;
-const quoteList = (ids) => ids.map(q).join(",");
+/* Escaping lives in _sf.js now. These were five diverging copies that
+   stripped apostrophes and let backslashes through -- a trailing "\\"
+   escaped the closing quote and killed the query. Local aliases so every
+   call site below reads unchanged. */
+const q = soqlQuote;
+const quoteList = soqlQuoteList;
 
 /** The org has not had the production-result fields deployed yet. */
 function notAvailable(detail) {
