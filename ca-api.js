@@ -1295,6 +1295,35 @@
   // envelope rather than unwrapping .records, because `available:false` (the
   // org has not had the production-result fields deployed yet) is a state the
   // page has to render differently, not an empty list.
+  /* ── the run allocation grid (E1.3) ───────────────────────────────────
+     Which sizes of the parent order a run is printing, and how many.
+
+     getRunLineItems() returns the run's own rows PLUS `allocatedElsewhere` --
+     what the OTHER runs on the same method have already committed per
+     OrderItem, computed as planned MINUS incomplete exactly the way the
+     skeleton Flow computes it. Pair it with getOrderSizes() (the OrderItem
+     quantities) to show what is left for a size:
+
+         remaining = orderQty - allocatedElsewhere
+
+     The endpoint does NOT return the OrderItem rows itself -- the drawer
+     already fetches them, and a second copy of that SELECT is a second place
+     to get the field list wrong.
+
+     patchRunLineItems() writes Planned_Qty__c and nothing else. Note what is
+     NOT here: any way to delete a row. Un-allocating a size is
+     `plannedQty: 0`. See CLAUDE.md rule 10 -- the skeleton Flow's only guard
+     is "does this run have any rows", so emptying a run makes it regenerate
+     the whole skeleton on that run's next save and silently overwrite the
+     manager. Nor is there a setter for the three count fields: those belong to
+     the person counting (/api/run-results), not the manager allocating.
+
+     Both throw via jget/jsend on a non-2xx, so the caller sees a real reason
+     (err.status / err.detail) -- over-allocation comes back 409 with a message
+     naming the size and the remainder. */
+  function getRunLineItems(runId){ return jget('/api/run-line-items?runId=' + encodeURIComponent(runId)); }
+  function patchRunLineItems(runId, updates){ return jsend('/api/run-line-items', 'PATCH', { runId: runId, updates: updates }); }
+
   function getCountableRuns(){ return jget('/api/run-results'); }
 
   // One run plus the rows to count. Same envelope shape as above.
@@ -1802,6 +1831,7 @@
     PLACEMENTS: PLACEMENTS, methodsList: methodsList, METHOD_META: METHOD_META,
     getOrders: getOrders, getProductionOrders: getProductionOrders, getInbox: getInbox, getPreProductionItems: getPreProductionItems, patchItem: patchItem, deleteItem: deleteItem, createItem: createItem, searchPlans: searchPlans, searchPresses: searchPresses, createMethod: createMethod, createProductionRun: createProductionRun, getProductionRuns: getProductionRuns, patchProductionRun: patchProductionRun, deleteProductionRun: deleteProductionRun, getProposedRuns: getProposedRuns, patchProposedRun: patchProposedRun, patchMethodStatus: patchMethodStatus, patchMethodChecklist: patchMethodChecklist, getMethodsForOrder: getMethodsForOrder, patchMethodFields: patchMethodFields, deleteMethod: deleteMethod, patchOrder: patchOrder, getOrderSizes: getOrderSizes,
     getCountableRuns: getCountableRuns, getRunResults: getRunResults, submitRunResults: submitRunResults,
+    getRunLineItems: getRunLineItems, patchRunLineItems: patchRunLineItems,
     getShortfalls: getShortfalls,
     mockupThumb: mockupThumb, THUMB_CARD: THUMB_CARD, THUMB_PANEL: THUMB_PANEL,
     getPackaging: getPackaging, postPackaging: postPackaging, deletePackaging: deletePackaging,
