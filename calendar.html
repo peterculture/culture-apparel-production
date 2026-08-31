@@ -821,7 +821,9 @@ class Component extends DCLogic {
       // Never refresh mid-drag or with a drawer open -- a re-render underneath a
       // drag cancels it, and under a drawer it silently swaps what you're reading.
       // bg() also keeps the centre-screen loading overlay down for these ticks.
-      if (this.state.conn==='live' && !this.state.openId && !this.state.dragging) this.bg(()=>this.load());
+      // shouldPoll() (ca-api.js) keeps a live board on every tick and retries a
+      // demo board every 5th, so losing the API is no longer permanent.
+      if (!this.state.openId && !this.state.dragging && ((window.CAApi&&window.CAApi.shouldPoll)?window.CAApi.shouldPoll(this.state.conn,'calendar'):this.state.conn==='live')) this.bg(()=>this.load());
     }, REFRESH_MS);
     /* Escape during a drag. The browser fires dragend for a cancelled drag, but
        only once the pointer is released -- a worker who hits Escape and then
