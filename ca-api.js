@@ -256,12 +256,8 @@
   var SUBSTATUS_VALUE = { 'Pre-Production':'Pre-Production', 'Ready for Print':'Ready for Print', 'In Production':'Production', 'Post-Production':'Post-Production', 'Completed':'Completed' };
   var SUBSTATUS_LABEL = {}; Object.keys(SUBSTATUS_VALUE).forEach(function (label) { SUBSTATUS_LABEL[SUBSTATUS_VALUE[label]] = label; });
 
-  /* ── Shipping_Delivery__c ("Delivery Method"): same label/value trap as
-     above, confirmed live in Setup 2026-08-10 -- the picklist entry shown
-     on screen as "Local Dropoff" is stored under the API value "Delivery".
-     DELIVERY_LABEL maps the real stored value -> what to show a human;
-     DELIVERY_METHODS is the fixed tab order the Shipping/Receiving
-     Dashboard (shipping.html) uses, stored-value keyed. */
+  /* Shipping_Delivery__c's label/value trap is documented on DELIVERY_LABEL
+     below, next to the data itself. */
   /* ── all-boards sidebar (added 2026-08-11) ──
      Single source of truth for the "jump to any board" sidebar every page
      now shares, so the list/order/icons/colors can't drift board to board
@@ -312,8 +308,39 @@
       });
     });
   }
-  var DELIVERY_LABEL = { 'Shipping':'Shipping', 'Delivery':'Delivery', 'Pickup':'Pick-up', 'Split Ship':'Split Ship', 'Order Fulfillment':'Order Fulfillment' };
+  /* ── Shipping_Delivery__c ("Delivery Method" in Setup) ────────────────
+     THE TRAP, and the one place it is written down: the picklist entry shown
+     on screen as "Local Dropoff" is STORED as "Delivery". Label and value do
+     not match, exactly like Order_Substatus__c's "In Production"/"Production"
+     pair above. Confirmed live in Setup (Object Manager -> Order -> Fields)
+     2026-08-10; the same finding is recorded in
+     functions/api/shipping-orders/index.js's header.
+
+     There are FIVE methods, and "Local Dropoff" is NOT one of the five stored
+     values -- it is what "Delivery" is called on screen. The field is a
+     RESTRICTED picklist, so writing the literal "Local Dropoff" does not
+     quietly store a wrong value: Salesforce rejects the PATCH with
+     INVALID_OR_NULL_FOR_RESTRICTED_PICKLIST and the save fails. Until
+     2026-08-28 index.html's drawer offered "Local Dropoff" and "Delivery" as
+     two separate options, so picking the first one -- the one that reads
+     correctly to a human -- was the one that could not save.
+
+     DELIVERY_METHODS is the stored-value list, in the tab order
+     shipping.html uses. DELIVERY_LABEL is the ONLY map from a stored value to
+     what a human should see; every board renders through it (see
+     deliveryOptions() below, shipping.html's tabDefs/methodLabel). Never
+     hand-write a delivery option list anywhere else. */
   var DELIVERY_METHODS = ['Shipping', 'Delivery', 'Pickup', 'Split Ship', 'Order Fulfillment'];
+  var DELIVERY_LABEL = { 'Shipping':'Shipping', 'Delivery':'Local Dropoff', 'Pickup':'Pick-up', 'Split Ship':'Split Ship', 'Order Fulfillment':'Order Fulfillment' };
+  /* Options for a delivery-method <select>: one entry per STORED value,
+     labelled through DELIVERY_LABEL. Exists so no board can grow its own copy
+     of the list and reintroduce the label-as-value bug. */
+  function deliveryOptions(blankLabel){
+    var out = blankLabel == null ? [] : [{ value:'', label:blankLabel }];
+    return out.concat(DELIVERY_METHODS.map(function (v) {
+      return { value:v, label:(DELIVERY_LABEL[v] || v) };
+    }));
+  }
   var STAGE_KEY = { 'Ready for Print':'rfp', 'In Production':'ip', 'Post-Production':'pp', 'Completed':'done' };
   var STAGE_SUBSTATUS = { rfp:'Ready for Print', ip:'In Production', pp:'Post-Production', done:'Completed' };
   function stageOf(rec){ return STAGE_KEY[SUBSTATUS_LABEL[rec.Order_Substatus__c] || rec.Order_Substatus__c] || null; }
@@ -1518,7 +1545,7 @@
   window.CAApi = {
     VALID_NAMES: VALID_NAMES, ROLE_KEY: ROLE_KEY, NAME_KEY: NAME_KEY, STATION_NAME_KEY: STATION_NAME_KEY, role: role, workerName: workerName, anyWorkerName: anyWorkerName, setRole: setRole, setWorkerName: setWorkerName, setIdentity: setIdentity, clearIdentity: clearIdentity, endServerSession: endServerSession, readParam: readParam, writeParams: writeParams, logout: logout, isManager: isManager, isAdmin: isAdmin, canAccessManagement: canAccessManagement, confirmManager: confirmManager, MANAGER_NAMES: MANAGER_NAMES, workerLogin: workerLogin,
     SUBSTATUS_VALUE: SUBSTATUS_VALUE, SUBSTATUS_LABEL: SUBSTATUS_LABEL, STAGE_KEY: STAGE_KEY, STAGE_SUBSTATUS: STAGE_SUBSTATUS, stageOf: stageOf, stageOfMethod: stageOfMethod,
-    DELIVERY_LABEL: DELIVERY_LABEL, DELIVERY_METHODS: DELIVERY_METHODS, formatAddress: formatAddress,
+    DELIVERY_LABEL: DELIVERY_LABEL, DELIVERY_METHODS: DELIVERY_METHODS, deliveryOptions: deliveryOptions, formatAddress: formatAddress,
     NAV_BOARDS: NAV_BOARDS, buildNavBoards: buildNavBoards,
     getShippingOrders: getShippingOrders, completeOrder: completeOrder, getStatsTrend: getStatsTrend,
     CHECK_FIELD: CHECK_FIELD, RECV_FROM_SF: RECV_FROM_SF, RECV_TO_SF: RECV_TO_SF, TIME_OPTIONS: TIME_OPTIONS,
