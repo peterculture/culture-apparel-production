@@ -13,12 +13,9 @@
  * With no q (or q shorter than 2 chars) it returns the 20 most recently
  * created plans, so the dropdown isn't empty on first open.
  */
-import { runQuery, jsonError } from "../_sf.js";
+import { runQuery, jsonError, soqlEscape } from "../_sf.js";
 
 // SOQL string-literal escape: backslash and single-quote only.
-function soqlEscape(s) {
-  return String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-}
 
 export async function onRequestGet({ env, request }) {
   try {
