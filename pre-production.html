@@ -974,7 +974,9 @@ class Component extends DCLogic {
       else if (openCard && (this.state.orders||[]).some(o=>o.id===openCard)) this.openOrder(openCard);
     });
     this.bg(()=>this.loadSfEnv());
-    this._ar=setInterval(()=>{ if(this.state.connection==='live' && !this.state.openId && this.state.view!=='mgr') this.bg(()=>this.load()); },15000);
+    // shouldPoll() keeps live boards on every tick and retries a demo board
+    // every 5th, so a board that lost the API recovers on its own. See ca-api.js.
+    this._ar=setInterval(()=>{ if(!this.state.openId && this.state.view!=='mgr' && ((window.CAApi&&window.CAApi.shouldPoll)?window.CAApi.shouldPoll(this.state.connection,'pre-production'):this.state.connection==='live')) this.bg(()=>this.load()); },15000);
   }
   // Marks everything a callback starts as background work so the centre-screen
   // loading overlay (ca-api.js) stays down for it. The first load() is left
