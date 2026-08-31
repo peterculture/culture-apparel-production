@@ -3,6 +3,31 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+/* Self-hosted React (E4.4, 2026-08-31). support.js loads React and ReactDOM
+   from unpkg.com; unpkg being down or blocked made every board a white page,
+   with no fallback and nothing in the app's control.
+
+   support.js is GENERATED and must not be hand-edited, and dc-runtime/ is not
+   in this repo -- but it does not need editing. Its cdnScriptFor() checks
+   window.__resources[url] first and uses that value when it is a non-empty
+   string, so this map redirects both files to ./vendor/ copies with no change
+   to the generated file. Must run BEFORE support.js below.
+
+   The vendor files are byte-identical to what unpkg served: both were verified
+   against the SRI hashes support.js already pins. Note the override path drops
+   the integrity attribute (cdnScriptFor returns {src} only) -- acceptable
+   because these are now same-origin and travel under the same TLS and
+   Cloudflare Access boundary as the page itself.
+
+   Babel is deliberately NOT self-hosted: support.js only fetches it for
+   `jsx` script blocks and no page has one (every block is type="text/x-dc"),
+   so it is never requested. Add it here if a JSX page is ever introduced. */
+window.__resources = Object.assign({}, window.__resources, {
+  "https://unpkg.com/react@18.3.1/umd/react.production.min.js": "./vendor/react-18.3.1.production.min.js",
+  "https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js": "./vendor/react-dom-18.3.1.production.min.js"
+});
+</script>
 <script src="./support.js"></script>
 <script src="./ca-api.js"></script>
 </head>
@@ -526,10 +551,27 @@ class Component extends DCLogic {
       this.setState({sfEnvSubmitting:false, sfEnvErr:msg, sfEnvMsg:''});
     }
   }
+  /* ── writes (E4.3, 2026-08-31) — see index.html's matching pair ────────
+     canWriteNow() replaces the inline live test that silently skipped a write;
+     writeFailed() replaces `.catch(()=>{})`. Local updates stay optimistic. */
+  canWriteNow(what){
+    const a=window.CAApi;
+    if(this._api && a && a.canWrite && a.canWrite(this.state.connection)) return true;
+    if(a && a.reportBlockedWrite) a.reportBlockedWrite(what);
+    return false;
+  }
+  writeFailed(what,e){
+    const a=window.CAApi;
+    if(a && a.reportFailedWrite) a.reportFailedWrite(what,e); else console.error(what,e);
+  }
   resetStage(id){
     const stn=this.state.station, cfg=this.STATIONS[stn], first=cfg.stages[0];
     this.setState(st=>{ const items=st.items[stn].map(o=>o.id===id?Object.assign({},o,{stage:first}):o); return {items:Object.assign({},st.items,{[stn]:items}), modalId:null}; });
-    if(this._api && this.state.connection==='live'){ if(cfg.source==='order') this._api.updateOrderReceiving(id,first).catch(()=>{}); else this._api.updateItemStatus(stn,id,first).catch(()=>{}); }
+    if(!this.canWriteNow('Recount')) return;
+    // Two args on updateOrderReceiving on purpose: a Recount is not a note
+    // edit and must not touch Partial_Check_in_Missing_Items__c (see Q4).
+    const p = cfg.source==='order' ? this._api.updateOrderReceiving(id,first) : this._api.updateItemStatus(stn,id,first);
+    p.catch(e=>this.writeFailed('That recount',e));
   }
   // Free status pick -- jumps straight to whatever status the worker tapped,
   // in any direction, no forced order. Every station's modal uses this now
@@ -563,8 +605,8 @@ class Component extends DCLogic {
       if(isNoteEdit) this.setState({ missingSaving:false, missingErr:'Demo mode — not connected to Salesforce.' });
       return;
     }
-    if(cfg.source!=='order'){ this._api.updateItemStatus(stn,id,stage).catch(()=>{}); return; }
-    if(!isNoteEdit){ this._api.updateOrderReceiving(id,stage).catch(()=>{}); return; }
+    if(cfg.source!=='order'){ this._api.updateItemStatus(stn,id,stage).catch(e=>this.writeFailed('That status change',e)); return; }
+    if(!isNoteEdit){ this._api.updateOrderReceiving(id,stage).catch(e=>this.writeFailed('That status change',e)); return; }
     this._api.updateOrderReceiving(id,stage,missing)
       .then(()=>{
         /* The item's own copy moves ONLY once Salesforce has taken it. Updating
@@ -584,7 +626,7 @@ class Component extends DCLogic {
   invAdj(i,delta){
     const key=this.STATIONS[this.state.station].inventory; if(!key) return;
     this.setState(st=>{ const arr=st.inv[key].map((x,ix)=>ix===i?Object.assign({},x,{qty:Math.max(0,x.qty+delta)}):x); return {inv:Object.assign({},st.inv,{[key]:arr})}; });
-    clearTimeout(this._iv); this._iv=setTimeout(()=>{ if(this._api && this.state.connection==='live') this._api.postInventory(key,this.state.inv[key]).catch(()=>{}); },500);
+    clearTimeout(this._iv); this._iv=setTimeout(()=>{ if(!this.canWriteNow('Inventory')) return; this._api.postInventory(key,this.state.inv[key]).catch(e=>this.writeFailed('That inventory change',e)); },500);
   }
 
   renderVals(){
