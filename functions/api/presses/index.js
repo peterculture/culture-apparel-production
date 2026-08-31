@@ -19,12 +19,9 @@
  * sorted alphabetically -- there are only a handful of these, so a stable
  * A-Z list is more useful than "recently used".
  */
-import { runQuery, jsonError } from "../_sf.js";
+import { runQuery, jsonError, soqlEscape } from "../_sf.js";
 
 // SOQL string-literal escape: backslash and single-quote only.
-function soqlEscape(s) {
-  return String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-}
 
 export async function onRequestGet({ env, request }) {
   try {
