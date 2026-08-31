@@ -53,9 +53,17 @@
  * ── WHAT IS DELIBERATELY ABSENT ────────────────────────────────────────────
  * No create path. Every OrderItem gets a row from the Flow, so a missing row is
  * a signal that something is wrong (a run created before the Flow existed, or a
- * product added to the order afterwards) -- the GET reports those as
- * `missingOrderProductIds` rather than quietly inventing rows behind the Flow's
- * back. If creates are ever needed, the row must match the Flow's own shape:
+ * product added to the order afterwards) rather than something to paper over by
+ * inventing rows behind the Flow's back.
+ *
+ * This endpoint does NOT report which OrderItems lack a row, because it never
+ * loads the OrderItem list -- that is /api/order-sizes' job and duplicating its
+ * SELECT here would be a second place to get the field list wrong. The CLIENT
+ * spots them: CAApi.runAllocRows joins the order's sizes against these lines and
+ * marks any size with no line as `missing`, which the grid renders as "no row"
+ * and refuses to make editable.
+ *
+ * If creates are ever needed, the row must match the Flow's own shape:
  * ProductionRun__c, Order_Product__c, Size__c, Color__c, Planned_Qty__c.
  * Method__c must NOT be written -- it is a CASESAFEID formula (see
  * rework-check.js) and resolves itself.
@@ -71,7 +79,7 @@
  * quantity is re-validated against the order's own remainder -- the browser's
  * arithmetic is never trusted.
  */
-import { runQuery, sfFetch, apiVersion, jsonError } from "../_sf.js";
+import { runQuery, sfFetch, apiVersion, jsonError, soqlQuote, soqlQuoteList } from "../_sf.js";
 
 const RUN_OBJECT = "Production_Run__c";
 const LINE_OBJECT = "Production_Run_Line_Items__c";
@@ -83,8 +91,12 @@ const SF_ID = /^[a-zA-Z0-9]{15,18}$/;
 const COMPOSITE_LIMIT = 25;   // hard Salesforce ceiling -- chunk beyond this
 const MAX_QTY = 99999;
 
-const q = (v) => `'${String(v).replace(/'/g, "")}'`;
-const quoteList = (ids) => ids.map(q).join(",");
+/* Escaping lives in _sf.js now. These were five diverging copies that
+   stripped apostrophes and let backslashes through -- a trailing "\\"
+   escaped the closing quote and killed the query. Local aliases so every
+   call site below reads unchanged. */
+const q = soqlQuote;
+const quoteList = soqlQuoteList;
 
 /* Every one of these is already selected by run-results/index.js or
    rework-check.js against the same object, so all are proven visible to the
