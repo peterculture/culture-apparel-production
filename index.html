@@ -477,8 +477,14 @@ window.__resources = Object.assign({}, window.__resources, {
                 </sc-if>
                 <div>
                   <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Total Garments</div>
+                  <sc-if value="{{run.qtyReadOnly}}" hint-placeholder-val="{{ false }}">
+                    <div style="font:600 15px/1 'Oswald';color:#ECEAE4;background:#121215;border:1px solid #232327;border-radius:7px;padding:10px 12px;max-width:140px">{{run.allocTotal}}</div>
+                    <div style="font:400 10px/1.35 'Archivo';color:#8a8378;margin-top:6px">Summed from the sizes below — one source of truth, so this is not typed here.</div>
+                  </sc-if>
+                  <sc-if value="{{run.qtyTyped}}" hint-placeholder-val="{{ true }}">
                   <input type="number" min="1" value="{{run.qty}}" onInput="{{ run.onQty }}" style="width:100%;max-width:140px;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:12px;color:#ECEAE4;outline:none">
                   <sc-if value="{{run.hasQtyHint}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:5px;font:400 10px/1.3 'Archivo';color:#8a8378;margin-top:6px"><i class="ti ti-shirt" style="font-size:12px;color:#6C665C"></i>{{run.qtyHint}}</div></sc-if>
+                  </sc-if>
                 </div>
 
                 <div style="display:flex;gap:8px;padding-top:2px;border-top:1px dashed #232327">
@@ -498,6 +504,43 @@ window.__resources = Object.assign({}, window.__resources, {
                   </div>
                 </div>
 
+                <div style="border-top:1px dashed #232327;padding-top:10px">
+                  <button onClick="{{ run.onToggleAlloc }}" style="width:100%;min-height:44px;display:flex;align-items:center;justify-content:center;gap:7px;font:700 10px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#5E9B9A;background:transparent;border:1px dashed #3D5418;border-radius:9px;padding:12px;cursor:pointer" style-hover="background:#18230D"><i class="ti ti-ruler-measure"></i>{{run.allocToggleLabel}}</button>
+                  <sc-if value="{{run.allocOpen}}" hint-placeholder-val="{{ false }}">
+                    <div style="margin-top:10px">
+                      <sc-if value="{{run.allocHasErr}}" hint-placeholder-val="{{ false }}"><div style="font:400 10px/1.45 'Archivo';color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:8px;padding:9px 11px;margin-top:9px">{{run.allocErr}}</div></sc-if>
+                      <sc-if value="{{run.allocHasMsg}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:#BBD382;margin-top:9px"><i class="ti ti-check"></i>{{run.allocMsg}}</div></sc-if>
+                      <sc-if value="{{run.allocLoading}}" hint-placeholder-val="{{ false }}"><div style="font:400 11px/1 'Archivo';color:#6C665C;padding:8px 2px">Loading sizes…</div></sc-if>
+                      <sc-if value="{{run.allocEmpty}}" hint-placeholder-val="{{ false }}"><div style="font:400 11px/1.5 'Archivo';color:#8a8378;padding:8px 2px">No sizes on this order to allocate.</div></sc-if>
+                      <sc-if value="{{run.allocHasRows}}" hint-placeholder-val="{{ true }}">
+                        <div style="display:flex;align-items:center;gap:8px;font:600 8px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#6C665C;padding:0 2px 7px">
+                          <span style="flex:1">Size</span><span style="width:58px;text-align:center">Left</span><span style="width:88px;text-align:center">This run</span>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:6px">
+                          <sc-for list="{{run.allocRows}}" as="a" hint-placeholder-count="3">
+                            <div style="background:{{a.rowBg}};border-radius:9px;padding:4px 2px">
+                              <div style="display:flex;align-items:center;gap:8px">
+                                <div style="flex:1;min-width:0">
+                                  <div style="font:500 12px/1.2 'Archivo';color:#ECEAE4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{a.label}}</div>
+                                  <div style="font:400 9px/1 'Archivo';color:#4d483f;margin-top:3px">{{a.orderQty}} ordered</div>
+                                </div>
+                                <div style="width:58px;text-align:center;font:600 12px/1 'Oswald';color:#8a8378">{{a.remaining}}</div>
+                                <sc-if value="{{a.editable}}" hint-placeholder-val="{{ true }}">
+                                  <input type="number" min="0" inputmode="numeric" value="{{a.value}}" onInput="{{ a.onQty }}" placeholder="0" style="width:88px;height:44px;flex-shrink:0;text-align:center;background:#16161a;border:1px solid {{a.border}};border-radius:9px;font:600 16px/1 'Oswald';color:#ECEAE4;outline:none">
+                                </sc-if>
+                                <sc-if value="{{a.missing}}" hint-placeholder-val="{{ false }}">
+                                  <div title="No line item on this run for this size" style="width:88px;flex-shrink:0;text-align:center;font:400 9px/1.3 'Archivo';color:#4d483f">no row</div>
+                                </sc-if>
+                              </div>
+                              <sc-if value="{{a.hasMessage}}" hint-placeholder-val="{{ false }}"><div style="font:400 10px/1.4 'Archivo';color:#E8A89F;padding:5px 2px 2px">{{a.message}}</div></sc-if>
+                            </div>
+                          </sc-for>
+                        </div>
+                        <button onClick="{{ run.onSaveAlloc }}" disabled="{{run.allocSaveDisabled}}" style="width:100%;min-height:44px;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:7px;font:700 11px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#ECEAE4;background:#18230D;border:1px solid #3D5418;border-radius:9px;padding:12px;cursor:pointer"><i class="ti ti-device-floppy"></i>{{run.allocSaveLabel}}</button>
+                      </sc-if>
+                    </div>
+                  </sc-if>
+                </div>
                 <div style="font:400 10px/1.3 'Archivo';color:{{run.statusColor}}">{{run.statusLabel}}</div>
                 <sc-if value="{{run.notPublished}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:flex-start;gap:7px;font:400 10px/1.35 'Archivo';color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:8px;padding:9px 11px"><i class="ti ti-alert-triangle" style="margin-top:1px"></i><span>Not on the shop calendar. Runs publish when they&rsquo;re created, so this one&rsquo;s publish failed &mdash; save any change to it to retry.</span></div></sc-if>
                 <sc-if value="{{run.hasMsg}}" hint-placeholder-val="{{ false }}"><div style="font:600 10px/1 'Oswald';letter-spacing:.04em;text-transform:uppercase;color:#BBD382">{{run.msg}}</div></sc-if>
@@ -790,6 +833,14 @@ class Component extends DCLogic {
       // worker rather than derived. See selectedRunId()/selectRun() and the
       // RUN_SEL_KEY block above.
       runSelByMethod: loadRunSel(),
+      /* ── the run allocation grid (E1.3) ─────────────────────────────────
+         Keyed by runId. Fetched ON DEMAND when a manager opens the grid on a
+         run row -- a drawer can hold several runs and eagerly loading every
+         one's line items would be N round trips for a panel most people never
+         open. Shape per run:
+           { open, loading, lines, allocatedElsewhere, orderItems,
+             edits:{lineId: '<string>'}, saving, err, msg } */
+      runAlloc:{},
       // "Production Methods" section of the card drawer -- fresh per-order
       // fetch (methodsByOrder, keyed by orderId) so a manager can see, edit,
       // and remove every sibling method on the order the open card belongs
@@ -1335,6 +1386,77 @@ class Component extends DCLogic {
   splitDT(iso){ return window.CAApi.splitDT(iso); }
   buildRunDateTime(dateStr,timeStr){ return window.CAApi.buildRunDateTime(dateStr,timeStr); }
   runEditFieldsFromRecord(r){ return window.CAApi.runEditFieldsFromRecord(r); }
+  /* ── run allocation grid ─────────────────────────────────────────────
+     Opens (and lazily loads) the size grid under one run row. The two fetches
+     are the run's own line items and the ORDER's OrderItem rows -- the latter
+     from /api/order-sizes, which the endpoint deliberately does not duplicate.
+     See CAApi.runAllocRows for how they are combined. */
+  toggleRunAlloc(runId, orderId){
+    const cur = this.state.runAlloc[runId];
+    if(cur && cur.open){ this.patchAlloc(runId,{open:false}); return; }
+    this.patchAlloc(runId,{open:true, err:'', msg:''});
+    if(cur && cur.lines) return;                    // already loaded once
+    /* A READ gate, not a write gate. Looking at how a run is allocated must not
+       require permission to change it -- only saveRunAlloc() asks canWriteNow().
+       There is nothing to read in demo mode, so say that rather than refusing. */
+    const a=window.CAApi;
+    if(!this._api || !(a && a.canWrite && a.canWrite(this.state.connection))){
+      this.patchAlloc(runId,{loading:false, err:'Sizes come from Salesforce — this board is on demo data.'});
+      return;
+    }
+    this.patchAlloc(runId,{loading:true, err:''});
+    Promise.all([
+      this._api.getRunLineItems(runId),
+      this._api.getOrderSizes(orderId),
+    ]).then(([d, items])=>{
+      if(d && d.available === false){
+        this.patchAlloc(runId,{loading:false, err:'This org does not have the production-result fields yet.'});
+        return;
+      }
+      this.patchAlloc(runId,{ loading:false, lines:(d&&d.lines)||[],
+        allocatedElsewhere:(d&&d.allocatedElsewhere)||[], orderItems:items||[], edits:{} });
+    }).catch(e=>{
+      const a=window.CAApi, det=(a&&a.errText)?a.errText(e):'';
+      this.patchAlloc(runId,{loading:false, err:'Could not load the sizes'+(det?' — '+det:'.')});
+    });
+  }
+  patchAlloc(runId, patch){
+    this.setState(st=>({ runAlloc:Object.assign({}, st.runAlloc, {
+      [runId]: Object.assign({}, st.runAlloc[runId]||{}, patch) }) }));
+  }
+  setAllocQty(runId, lineId, val){
+    this.setState(st=>{
+      const cur=st.runAlloc[runId]||{};
+      return { runAlloc:Object.assign({}, st.runAlloc, {
+        [runId]: Object.assign({}, cur, { edits:Object.assign({}, cur.edits, {[lineId]:val}), err:'', msg:'' }) }) };
+    });
+  }
+  /* Save. Only the rows that changed are sent, and only when nothing is over
+     or malformed -- the server re-checks both regardless (its arithmetic is
+     the one that counts), this just avoids a round trip that will be refused.
+     Clearing a box sends 0; nothing here can delete a row. */
+  async saveRunAlloc(runId){
+    const a=window.CAApi, st=this.state.runAlloc[runId]||{};
+    const rows=a.runAllocRows(st.orderItems, st.lines, st.allocatedElsewhere, st.edits);
+    if(a.runAllocBlockers(rows).length){ this.patchAlloc(runId,{err:'Fix the highlighted sizes first.'}); return; }
+    const updates=a.runAllocUpdates(rows);
+    if(!updates.length){ this.patchAlloc(runId,{msg:'Nothing to save.'}); return; }
+    if(!this.canWriteNow('Allocation')) return;
+    this.patchAlloc(runId,{saving:true, err:'', msg:''});
+    try{
+      await this._api.patchRunLineItems(runId, updates);
+      // Re-read rather than patching state by hand: the run's own roll-up and
+      // every other run's remainder move when this lands.
+      const d=await this._api.getRunLineItems(runId);
+      this.patchAlloc(runId,{ saving:false, edits:{}, lines:(d&&d.lines)||[],
+        allocatedElsewhere:(d&&d.allocatedElsewhere)||[],
+        msg:'Saved — '+updates.length+(updates.length===1?' size':' sizes')+' updated.' });
+      this.loadRunsForCard(this.state.openId);
+    }catch(e){
+      const det=(a&&a.errText)?a.errText(e):'';
+      this.patchAlloc(runId,{saving:false, err: det || 'Could not save the allocation.'});
+    }
+  }
   loadRunsForCard(methodId){
     if(!methodId || !this._api || this.state.connection!=='live') return;
     this.setState({runsLoadingFor:methodId});
@@ -2316,6 +2438,17 @@ class Component extends DCLogic {
            while pre-production.html flagged it. Same helper, same wording,
            both boards. See runScheduleStatus in ca-api.js. */
         const rowSched = window.CAApi.runScheduleStatus(r.schedStatus);
+        /* ── allocation grid (E1.3) ────────────────────────────────────────
+           Built from the shared model so this board and pre-production.html
+           cannot drift -- see CAApi.runAllocRows. The run's total is the SUM
+           of these rows and is NOT the typed Total Garments field: D3 says one
+           source of truth, so once line items exist the typed box is shown
+           read-only and the derived figure is what a manager reads. */
+        const al = st.runAlloc[r.id] || {};
+        const allocRows = al.lines ? window.CAApi.runAllocRows(al.orderItems, al.lines, al.allocatedElsewhere, al.edits) : [];
+        const allocTotal = window.CAApi.runAllocTotal(allocRows);
+        const allocBlocked = window.CAApi.runAllocBlockers(allocRows).length > 0;
+        const hasLines = allocRows.length > 0;
         const pressResults = (st.runRowPressResults && st.runRowPressResults[r.id]) || [];
         const saving = !!(st.runRowSaving && st.runRowSaving[r.id]);
         /* Order total alongside this run's planned count -- see
@@ -2349,6 +2482,31 @@ class Component extends DCLogic {
           onSave:()=>this.saveRunRow(r.id, src.id), saving, saveLabel: saving?'Saving…':'Save Changes',
           onRemove:()=>this.removeRun(r.id, src.id),
           statusLabel: rowSched.label, statusColor: rowSched.color, notPublished: rowSched.notPublished,
+          allocOpen: !!al.open, allocLoading: !!al.loading,
+          onToggleAlloc: ()=>this.toggleRunAlloc(r.id, src.orderId),
+          allocToggleLabel: al.open ? 'Hide sizes' : 'Allocate sizes',
+          allocRows: allocRows.map(row=>({
+            label: row.label, orderQty: String(row.orderQty), remaining: String(row.remaining),
+            value: row.raw,
+            onQty: row.lineId ? ((e)=>this.setAllocQty(r.id, row.lineId, e.target.value)) : null,
+            editable: !row.missing, missing: row.missing,
+            bad: row.bad || row.over, hasMessage: !!row.message, message: row.message,
+            border: (row.bad||row.over) ? '#7A241C' : '#2a2a2f',
+            rowBg: (row.bad||row.over) ? '#160D0C' : 'transparent',
+          })),
+          allocHasRows: hasLines,
+          allocEmpty: !!al.lines && !hasLines,
+          /* Derived, never typed -- D3. Shown next to the grid so the manager
+             sees the two agree. */
+          allocTotal: String(allocTotal),
+          allocSaveLabel: al.saving ? 'Saving…' : 'Save Allocation',
+          allocSaveDisabled: !!al.saving || allocBlocked,
+          allocHasErr: !!al.err, allocErr: al.err||'',
+          allocHasMsg: !!al.msg, allocMsg: al.msg||'',
+          onSaveAlloc: ()=>this.saveRunAlloc(r.id),
+          /* Once line items exist they ARE the total, so the typed box stops
+             being an independent input. */
+          qtyReadOnly: hasLines, qtyTyped: !hasLines,
           err:(st.runRowErr&&st.runRowErr[r.id])||'', msg:(st.runRowMsg&&st.runRowMsg[r.id])||'',
           hasErr:!!(st.runRowErr&&st.runRowErr[r.id]), hasMsg:!!(st.runRowMsg&&st.runRowMsg[r.id]),
         };
