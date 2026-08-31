@@ -413,7 +413,7 @@ class Component extends DCLogic {
   // dashboards". Every later refresh, save and drawer-open stays silent.
   // See the header comment in ca-api.js.
   fg(fn){ const a=window.CAApi; return (a&&a.foregroundLoad) ? a.foregroundLoad(fn) : fn(); }
-  componentDidMount(){ this._t=setInterval(()=>this.setState({now:new Date()}),1000); this.fg(()=>this.loadStation(this.state.station)); this.bg(()=>this.loadSfEnv()); this._ar=setInterval(()=>{ if(this.state.connection==='live' && !this.state.modalId) this.bg(()=>this.loadStation(this.state.station)); },15000); }
+  componentDidMount(){ this._t=setInterval(()=>this.setState({now:new Date()}),1000); this.fg(()=>this.loadStation(this.state.station)); this.bg(()=>this.loadSfEnv()); this._ar=setInterval(()=>{ /* shouldPoll(): retries a demo board every 5th tick -- see ca-api.js */ if(!this.state.modalId && ((window.CAApi&&window.CAApi.shouldPoll)?window.CAApi.shouldPoll(this.state.connection,'station'):this.state.connection==='live')) this.bg(()=>this.loadStation(this.state.station)); },15000); }
   componentWillUnmount(){ clearInterval(this._t); clearInterval(this._ar); }
   async loadStation(station){
     try {
