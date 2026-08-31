@@ -452,7 +452,9 @@ class Component extends DCLogic {
   componentDidMount(){
     this._t=setInterval(()=>this.setState({now:new Date()}),1000);
     this.fg(()=>this.load()); this.bg(()=>this.loadSfEnv());
-    this._ar=setInterval(()=>{ if(this.state.connection==='live' && !this.state.modalId) this.bg(()=>this.load()); },20000);
+    // See ca-api.js's shouldPoll(): demo boards retry every 5th tick instead
+    // of never, so a board that fell back recovers without a reload.
+    this._ar=setInterval(()=>{ if(!this.state.modalId && ((window.CAApi&&window.CAApi.shouldPoll)?window.CAApi.shouldPoll(this.state.connection,'shipping'):this.state.connection==='live')) this.bg(()=>this.load()); },20000);
   }
   componentWillUnmount(){ clearInterval(this._t); clearInterval(this._ar); this.clearPoll(); }
 
