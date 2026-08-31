@@ -791,36 +791,72 @@
   try { installNavLoader(); } catch (_) {}
 
   /* ── low-level fetch ── */
+  /* Turn a failed Response into an Error carrying the server's own words.
+     Every endpoint here answers {error, detail, ...} on failure (see
+     jsonError in functions/api/_sf.js, and production-methods' richer
+     {error, failedRef, detail, all}), and until 2026-08-31 only jsend() read
+     it -- jget and jdel threw a bare 'GET /api/x -> 500' with no status and no
+     body, so a caller could not tell a 401 from a 502 from an FLS gap, and the
+     boards' catch blocks had nothing to show but a generic string.
+
+     Best-effort on purpose: a non-JSON body (an HTML error page from the edge,
+     an empty 502) must not turn into a parse exception on top of the failure
+     being reported. */
+  function httpError(method, url, r){
+    return r.json().catch(function () { return null; }).then(function (data) {
+      var err = new Error(method + ' ' + url + ' -> ' + r.status);
+      err.status = r.status;
+      err.data = data;
+      // The most specific human-usable string the server gave us, if any.
+      err.detail = (data && (data.detail || data.error)) || '';
+      throw err;
+    });
+  }
+  /* ── demo-mode recovery (2026-08-31) ────────────────────────────────
+     Every board's auto-refresh used to be gated on `connection === 'live'`,
+     which meant the refresh that would RESTORE a board was itself unreachable
+     the moment that board fell back to demo. One failed query and the tablet
+     showed plausible fake numbers behind an amber chip until a human noticed
+     and reloaded -- and nobody reloads a wall-mounted tablet.
+
+     shouldPoll() replaces that gate. Live boards poll every tick as before;
+     a board sitting in demo retries every DEMO_RETRY_EVERY-th tick instead of
+     never. Slower on purpose: the API being down is the common reason to be in
+     demo, and hammering it from six boards helps nobody.
+
+     `key` just namespaces the tick counter so two boards (or two intervals on
+     one board) don't share one. Callers keep their own "is a drawer open"
+     guards -- this only answers "may I talk to the server right now". */
+  var DEMO_RETRY_EVERY = 5;
+  var _pollTicks = {};
+  function shouldPoll(connection, key){
+    if (connection === 'live') return true;
+    if (connection !== 'demo') return false;          // 'loading' -- first load is still in flight
+    var k = key || 'default';
+    _pollTicks[k] = (_pollTicks[k] || 0) + 1;
+    return _pollTicks[k] % DEMO_RETRY_EVERY === 0;
+  }
+
   function jget(url){
     return trackRequest(fetch(url, { headers: { Accept:'application/json' } }).then(function (r) {
-      if (!r.ok) throw new Error('GET ' + url + ' -> ' + r.status);
+      if (!r.ok) return httpError('GET', url, r);
       return r.json();
     }));
   }
   function jsend(url, method, body){
     return trackRequest(fetch(url, { method: method, headers: { 'Content-Type':'application/json' }, body: JSON.stringify(body || {}) }).then(function (r) {
-      if (!r.ok && r.status !== 204) {
-        // FIXED 2026-07-28: this used to throw a bare "POST /api/x -> 502"
-        // Error and never touch the response body, so callers (e.g.
-        // pre-production.html's Create Production Plan handler) had no way
-        // to show the real Salesforce error -- endpoints like
-        // /api/production-methods already return detailed JSON on failure
-        // ({error, failedRef, detail, all}), it just never got read. Parse
-        // that body (best-effort) and attach it to the thrown Error so
-        // callers can surface the actual cause instead of a generic message.
-        return r.json().catch(function () { return null; }).then(function (data) {
-          var err = new Error(method + ' ' + url + ' -> ' + r.status);
-          err.status = r.status;
-          err.data = data;
-          throw err;
-        });
-      }
+      // FIXED 2026-07-28: this used to throw a bare "POST /api/x -> 502" Error
+      // and never touch the response body, so callers (e.g. pre-production's
+      // Create Production Plan handler) had no way to show the real Salesforce
+      // error. Extracted to httpError() on 2026-08-31 and shared with jget/jdel,
+      // which still had the original bug.
+      if (!r.ok && r.status !== 204) return httpError(method, url, r);
       return r.status === 204 ? null : r.json().catch(function () { return null; });
     }));
   }
   function jdel(url){
     return trackRequest(fetch(url, { method: 'DELETE' }).then(function (r) {
-      if (!r.ok && r.status !== 204) throw new Error('DELETE ' + url + ' -> ' + r.status);
+      if (!r.ok && r.status !== 204) return httpError('DELETE', url, r);
       return r.status === 204 ? null : r.json().catch(function () { return null; });
     }));
   }
@@ -1545,7 +1581,7 @@
   window.CAApi = {
     VALID_NAMES: VALID_NAMES, ROLE_KEY: ROLE_KEY, NAME_KEY: NAME_KEY, STATION_NAME_KEY: STATION_NAME_KEY, role: role, workerName: workerName, anyWorkerName: anyWorkerName, setRole: setRole, setWorkerName: setWorkerName, setIdentity: setIdentity, clearIdentity: clearIdentity, endServerSession: endServerSession, readParam: readParam, writeParams: writeParams, logout: logout, isManager: isManager, isAdmin: isAdmin, canAccessManagement: canAccessManagement, confirmManager: confirmManager, MANAGER_NAMES: MANAGER_NAMES, workerLogin: workerLogin,
     SUBSTATUS_VALUE: SUBSTATUS_VALUE, SUBSTATUS_LABEL: SUBSTATUS_LABEL, STAGE_KEY: STAGE_KEY, STAGE_SUBSTATUS: STAGE_SUBSTATUS, stageOf: stageOf, stageOfMethod: stageOfMethod,
-    DELIVERY_LABEL: DELIVERY_LABEL, DELIVERY_METHODS: DELIVERY_METHODS, deliveryOptions: deliveryOptions, formatAddress: formatAddress,
+    DELIVERY_LABEL: DELIVERY_LABEL, DELIVERY_METHODS: DELIVERY_METHODS, deliveryOptions: deliveryOptions, shouldPoll: shouldPoll, formatAddress: formatAddress,
     NAV_BOARDS: NAV_BOARDS, buildNavBoards: buildNavBoards,
     getShippingOrders: getShippingOrders, completeOrder: completeOrder, getStatsTrend: getStatsTrend,
     CHECK_FIELD: CHECK_FIELD, RECV_FROM_SF: RECV_FROM_SF, RECV_TO_SF: RECV_TO_SF, TIME_OPTIONS: TIME_OPTIONS,
