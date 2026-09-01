@@ -457,11 +457,33 @@ class Component extends DCLogic {
       navOpen: st.navOpen, onOpenNav:()=>this.setState({navOpen:true}), onCloseNav:()=>this.setState({navOpen:false}),
       navBoards: api.buildNavBoards ? api.buildNavBoards('stats') : [],
       // Sidebar footer -- this page has no in-page worker-name gate of its
-      // own (it's a passive aggregate view), so unlike the other 4 boards
-      // "Switch Account" has no in-place modal to reopen -- both actions
-      // route through login.html here, Log Out just also clears identity
-      // first.
-      onSwitchAccount:()=>{ window.location.href='login.html'; },
+      // own (it's a passive aggregate view), so unlike the other boards
+      // "Switch Account" has no in-place modal to reopen. Both actions route
+      // through login.html, and BOTH must clear identity first.
+      //
+      // Switch Account used to just navigate (E4.8). That did not merely
+      // "leave the old identity lying around" -- it made the button a
+      // complete no-op, because login.html's componentDidMount (:125)
+      // auto-admits when a role and a valid name are already in
+      // localStorage: it sets screen:'done' and never shows the PIN pad. So
+      // the person tapping Switch Account was handed straight back the
+      // PREVIOUS person's session, having never been asked for a PIN, on a
+      // screen that looked like a successful switch. On a shared tablet that
+      // silently misattributes everything the next person does, which is the
+      // entire reason the PIN exists.
+      //
+      // clearIdentity() -- not logout() -- is the canonical call here; see
+      // ca-api.js, where it is documented as "what Switch Account wants on
+      // every board". It drops both name keys AND the role (leaving the role
+      // set kept isAdmin() true for a tablet with nobody signed in) and fires
+      // /api/worker-logout to kill the server's ca_sess cookie, which
+      // otherwise outlives the person who earned it and hands the next person
+      // their capabilities on every API call. That fetch uses keepalive:true
+      // precisely so it survives the navigation on the very next line.
+      //
+      // Every other board reaches the same call: counting/index/pre-production
+      // /shipping/station via switchUser(), calendar via onSwitchUser().
+      onSwitchAccount:()=>{ if(api.clearIdentity) api.clearIdentity(); window.location.href='login.html'; },
       onLogout:()=>{ if(api.logout) api.logout(); window.location.href='login.html'; },
     };
   }
