@@ -235,6 +235,50 @@ export function soqlQuoteList(values) {
   return (values || []).map(soqlQuote).join(",");
 }
 
+/**
+ * How many Ids to put in one SOQL `IN (...)` list.
+ *
+ * Salesforce takes the query in the GET /query URL, and that URL has a length
+ * ceiling. A list of 18-char Ids reaches it somewhere around 700-800 entries,
+ * and the failure is not a friendly SOQL error -- it is an HTTP-level rejection
+ * of a request that never became a query. Callers that build an IN list from a
+ * result set therefore have to chunk, because a result set is only ever
+ * "small enough" until the day it isn't.
+ *
+ * 200 x 18 chars plus quoting and commas is about 4KB of query, comfortably
+ * inside the limit with room for the rest of the SELECT.
+ */
+export const SOQL_IN_CHUNK = 200;
+
+/**
+ * Run one query per chunk of Ids and concatenate the records.
+ *
+ * `runForChunk` receives the already-quoted list ("'a','b'") and returns
+ * whatever a query helper returns -- {ok, status, records}. Taking a callback
+ * rather than a SOQL string is what lets this serve both runQuery and
+ * runQueryOptionalField, whose signatures differ.
+ *
+ * Stops at the first failing chunk and hands back what was collected, with
+ * ok:false -- the same contract runQuery uses for a mid-pagination failure, so
+ * a caller can serve partial data or fail loudly as it prefers.
+ *
+ * Note this concatenates; it does not dedupe. Callers whose chunks can overlap
+ * (an `A OR B IN (...)` shape, where the A half re-matches on every chunk) must
+ * dedupe by Id themselves -- see calendar/index.js's run fetch.
+ */
+export async function runChunkedIdQuery(ids, runForChunk, chunk = SOQL_IN_CHUNK) {
+  const all = [];
+  const list = ids || [];
+  for (let i = 0; i < list.length; i += chunk) {
+    const res = await runForChunk(soqlQuoteList(list.slice(i, i + chunk)));
+    if (!res || !res.ok) {
+      return { ok: false, status: res && res.status, records: all };
+    }
+    all.push(...(res.records || []));
+  }
+  return { ok: true, status: 200, records: all };
+}
+
 export async function runQuery(env, soql) {
   const path = `/services/data/${apiVersion(env)}/query/?q=${encodeURIComponent(soql)}`;
   let resp = await sfFetch(env, path);
