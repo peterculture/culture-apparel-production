@@ -23,10 +23,13 @@
  * Body (all optional): { by: "Worker Name" }
  */
 import { sfFetch, apiVersion, jsonError } from "../../_sf.js";
+import { requireCap } from "../../_session.js";
 
 const SF_ID = /^[a-zA-Z0-9]{15,18}$/;
 
 export async function onRequestPost({ params, request, env }) {
+  const gate = await requireCap(request, env, "orders.edit");
+  if (gate.denied) return gate.response;
   try {
     const id = params && params.id;
     if (!SF_ID.test(id)) return jsonError("invalid_id", 400);
