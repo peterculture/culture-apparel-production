@@ -1,0 +1,149 @@
+/* Culture Apparel — shared design tokens and base chrome.  (E10.2, 2026-09-01)
+ * ===========================================================================
+ *
+ * WHY THIS FILE EXISTS
+ *
+ * There was no shared stylesheet. Every one of the nine pages repeated the same
+ * base block -- reset, body, links, scrollbars, the PIN-gate shake keyframes --
+ * and then spelled every colour as a hex literal inline. 2,754 hex literals,
+ * 102 distinct values, across nine files. A colour could be fixed once per
+ * board, or not at all, and calendar.html carried a standing warning about it:
+ *
+ *     Do not "tidy" this into variables unless the other five boards move at
+ *     the same time.
+ *
+ * This is those boards moving at the same time.
+ *
+ * TOKENS ARE NAMED BY ROLE, NOT BY VALUE. That distinction is the whole point,
+ * and #232327 is why. It is used 108 times as a BORDER, where a 1.1:1 contrast
+ * against the page is exactly right, and once as TEXT -- calendar.html's
+ * "nothing scheduled" -- where 1.1:1 makes it invisible. A token named for the
+ * hex would force those to move together and E9.4 could not fix one without
+ * wrecking the other. Named for the role, --text-ghost can be lightened and
+ * --border-subtle left alone.
+ *
+ * E9.4 (contrast under shop lighting) LANDED HERE on 2026-09-01, and it was a
+ * five-line edit to this file -- which is what E10.2 existed to make possible.
+ * See the text scale below for what moved and why. Changing a colour here still
+ * changes every board; nothing that merely shares an old hex value follows it.
+ *
+ * HOW IT IS LOADED. A plain <link> in each page's real <head>, before
+ * support.js -- not inside <helmet>, which is hoisted at runtime and would
+ * paint the page unstyled first. Page-specific rules stay in each page's own
+ * <style> and still win, because they are parsed after this file.
+ *
+ * CUSTOM PROPERTIES WORK IN INLINE STYLES HERE. dc-runtime's cssToObj() splits
+ * a style attribute on ";" and ":" and passes values through untouched, and
+ * keeps `--x` keys as-is, so `style="color:var(--text-muted)"` reaches React
+ * intact. Verified in support.js before this was written. Two things it cannot
+ * take: a semicolon inside a value, and a quoted hex -- `color:'#6C665C'` is
+ * JavaScript (Chart.js config in stats.html), NOT a style attribute, and must
+ * keep its literal.
+ */
+
+:root {
+  /* ── Surfaces ─────────────────────────────────────────────────────────── */
+  --surface-page:    #08080A;  /* body */
+  --surface-sunken:  #0A0A0C;  /* calendar grid wells */
+  --surface-raised:  #0D0D0F;
+  --surface-card:    #121215;
+  --surface-panel:   #141417;
+  --surface-input:   #16161a;
+
+  /* ── Borders. Decoration, not reading matter -- these are NOT held to a
+        text contrast ratio, which is exactly why they are separate from the
+        text scale below. ───────────────────────────────────────────────── */
+  --border-subtle:   #232327;
+  --border-quiet:    #242428;
+  --border:          #2a2a2f;
+  --border-strong:   #3a3a40;
+
+  /* ── Text. The scale runs bright to dim; the bottom three are the ones the
+        shop actually struggles with. ──────────────────────────────────── */
+  --text-primary:    #ECEAE4;
+  --text-secondary:  #B9B4A6;   /* 9.03:1 on cards */
+  --text-tertiary:   #A49B8E;   /* 6.82:1 on cards */
+
+  /* Raised for legibility on the floor (E9.4, 2026-09-01). Every tier now
+     clears 4.5:1 against --surface-card, which is the WORST surface any of
+     them sits on -- cards are lighter than the page, so measuring against
+     --surface-page alone (as the original story did) understated the problem
+     by about 0.2. Run `node tools/contrast.mjs` to re-check.
+
+     WHY THE WHOLE RAMP MOVED, not just the two failing tokens. --text-tertiary
+     was 4.98:1 on cards -- passing, but only just. Raising --text-muted to
+     clear 4.5 would have put it LIGHTER than tertiary and inverted the
+     hierarchy. Fitting both muted and faint into the 4.5-4.98 gap instead made
+     three tiers that were indistinguishable from each other. You cannot have
+     five separable greys above 4.5:1 on a near-black background; the ramp had
+     to be re-spaced upward to make room. Steps are now 19.3 / 9.0 / 7.0 / 4.6
+     in L*, so each tier reads as a real step rather than a shade.
+
+     Old values, for reference: secondary #9C978C, tertiary #8a8378,
+     muted #6C665C (3.29:1 on cards), faint #4d483f (2.06:1),
+     ghost #232327 (1.26:1 on --surface-sunken -- effectively invisible; it is
+     calendar.html's "nothing scheduled" and the only TEXT use of that value).
+
+     Do NOT raise --border-subtle to match --text-ghost. They shared a value and
+     nothing else: a border at 1.1:1 is correct, a label at 1.1:1 is invisible.
+
+     AA IS THE FLOOR, NOT THE SIGN-OFF. These are computed ratios on a desk
+     monitor. The real test is a tablet at arm's length under shop lights, and
+     tuning them is one line each. */
+  --text-muted:      #91897B;   /* 5.40:1 on cards, 5.78:1 on page */
+  --text-faint:      #867D6D;   /* 4.60:1 on cards, 4.92:1 on page */
+  --text-ghost:      #797986;   /* 4.36:1 on cards, 4.61:1 on --surface-sunken */
+
+  /* ── Brand and status ─────────────────────────────────────────────────── */
+  --accent:          #C6372B;  /* brand red */
+  --accent-hot:      #E24A3A;
+  --ok:              #7FA644;
+  --ok-border:       #3D5418;
+  --ok-bg:           #18230D;
+  --warn:            #C9923A;
+  --warn-soft:       #E0B870;
+  --danger-text:     #E8A89F;
+  --danger-border:   #7A241C;
+  --danger-bg:       #2A100D;
+  --teal:            #5E9B9A;
+  --purple:          #9878C0;
+}
+
+/* ── Base chrome ─────────────────────────────────────────────────────────
+   Byte-identical to the block that was repeated across the boards; it lived in
+   seven to nine copies depending on the rule. Page-specific rules stay in each
+   page and still override, being parsed later. */
+* { box-sizing: border-box }
+
+body {
+  margin: 0;
+  background: var(--surface-page);
+  font-family: 'Archivo', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  color: var(--text-primary);
+}
+
+a { color: var(--accent-hot); text-decoration: none }
+a:hover { color: var(--accent) }
+
+.ti { font-size: inherit; line-height: 1; display: inline-block }
+
+input, textarea { font-family: inherit }
+input::placeholder, textarea::placeholder { color: var(--text-faint) }
+
+::-webkit-scrollbar { width: 9px; height: 9px }
+::-webkit-scrollbar-thumb { background: #2a2a2e; border-radius: 6px }
+::-webkit-scrollbar-track { background: transparent }
+
+/* The PIN gate's wrong-code shake, and the nav drawer's slide-in. Both were
+   repeated in seven pages. */
+@keyframes ca-shake {
+  10%, 90% { transform: translateX(-2px) }
+  20%, 80% { transform: translateX(4px) }
+  30%, 50%, 70% { transform: translateX(-7px) }
+  40%, 60% { transform: translateX(7px) }
+}
+@keyframes ca-slide-left {
+  from { transform: translateX(-30px); opacity: 0 }
+  to   { transform: translateX(0); opacity: 1 }
+}
