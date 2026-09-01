@@ -580,7 +580,7 @@ class Component extends DCLogic {
         orders: st.orders.map(o=>o.Id===orderId?Object.assign({},o,{ShipmentCount:list.length}):o),
       }));
       return list;
-    }).catch(()=>[]);
+    }).catch(()=>null);   // null == "could not tell", which is NOT the same as zero (E5.6)
   }
 
   // ── Ship Now -> Zenkraft wizard, then poll for the real shipment it creates ──
@@ -590,16 +590,44 @@ class Component extends DCLogic {
       this.setState(st=>({ shipBusy:Object.assign({},st.shipBusy,{[order.Id]:false}), zkErr:Object.assign({},st.zkErr,{[order.Id]:'Not connected to Salesforce (demo mode)'}) }));
       return;
     }
-    const baseline = (this.state.shipments[order.Id]||[]).length;
-    this._api.getZkWizardUrl(order.Id, order.OrderNumber||order.GOA_Order_Number__c).then(d=>{
+    /* The baseline is what tells the poll below that a NEW shipment appeared,
+       and it used to be read straight out of state:
+
+           const baseline = (this.state.shipments[order.Id]||[]).length;
+
+       openOrder() kicks off loadShipments() and does not await it, so on a
+       drawer opened a moment ago that state is still undefined -- and
+       `(undefined||[]).length` is 0. On an order that already HAS shipments
+       (a re-ship, a second box, a split), the very first poll tick then sees
+       list.length > 0, concludes a label was just printed, and writes
+       Shipping_Label_Printed__c = true. Nobody printed anything; the manager
+       may well have closed the Zenkraft tab without touching it. The order
+       then claims a label exists for as long as anyone believes the flag.
+
+       It is fetched fresh here instead, in parallel with the wizard URL so the
+       tab still opens promptly, and the poll only starts if the count is
+       actually KNOWN. (E5.6) */
+    Promise.all([
+      this.loadShipments(order.Id),
+      this._api.getZkWizardUrl(order.Id, order.OrderNumber||order.GOA_Order_Number__c),
+    ]).then(([before, d])=>{
       this.setState(st=>({ shipBusy:Object.assign({},st.shipBusy,{[order.Id]:false}) }));
-      if(d && d.url){
-        window.open(d.url,'_blank','noopener');
-        this.setState(st=>({ shipBaseline:Object.assign({},st.shipBaseline,{[order.Id]:baseline}) }));
-        this.startPolling(order.Id);
-      } else {
+      if(!(d && d.url)){
         this.setState(st=>({ zkErr:Object.assign({},st.zkErr,{[order.Id]:'Could not open the Zenkraft wizard'}) }));
+        return;
       }
+      window.open(d.url,'_blank','noopener');
+      if(before == null){
+        /* Could not read the existing shipments, so there is no baseline to
+           compare against. Open the wizard anyway -- printing the label is the
+           job -- but do NOT auto-mark, because the only two options here are
+           "guess" and "say so". The Mark Shipped toggle still works. */
+        const a=window.CAApi;
+        if(a && a.toast) a.toast('warn', "Couldn't check this order's existing shipments, so it won't be marked shipped automatically. Use Mark Shipped once the label is printed.");
+        return;
+      }
+      this.setState(st=>({ shipBaseline:Object.assign({},st.shipBaseline,{[order.Id]:before.length}) }));
+      this.startPolling(order.Id);
     }).catch(()=>{
       this.setState(st=>({ shipBusy:Object.assign({},st.shipBusy,{[order.Id]:false}), zkErr:Object.assign({},st.zkErr,{[order.Id]:'Could not open the Zenkraft wizard'}) }));
     });
@@ -616,6 +644,10 @@ class Component extends DCLogic {
       // Background: fires every 6s for up to 4 minutes while the Zenkraft tab
       // is open. Must not dim the drawer on every tick.
       this.bg(()=>this.loadShipments(orderId)).then(list=>{
+        // A failed fetch now returns null rather than [] -- treat it as "no
+        // information this tick" and wait for the next one, instead of reading
+        // it as "zero shipments" and drawing a conclusion from it.
+        if(list == null) return;
         const baseline = this.state.shipBaseline[orderId];
         if(baseline!=null && list.length>baseline){
           this.clearPoll();
@@ -666,7 +698,9 @@ class Component extends DCLogic {
     const finish=()=>{
       this.setState(st=>({ shipDeleteBusy:Object.assign({},st.shipDeleteBusy,{[shipmentId]:false}) }));
       this.loadShipments(orderId).then(list=>{
-        if(list.length===0){
+        // Same rule in reverse: only clear the flag when the list is KNOWN to
+        // be empty. A failed read is not evidence the shipment is gone.
+        if(list && list.length===0){
           const order=(this.state.orders||[]).find(o=>o.Id===orderId);
           if(order && order.Shipping_Label_Printed__c) this.setLabelPrinted(orderId, false, false);
         }
