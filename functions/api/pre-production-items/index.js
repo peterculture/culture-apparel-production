@@ -32,6 +32,7 @@
  * which is validated as an SF Id and dropped into a bind.
  */
 import { sfFetch, apiVersion, jsonError, runQuery } from "../_sf.js";
+import { requireCap } from "../_session.js";
 
 // Keep in sync with the same-named consts in production-methods/index.js --
 // this is the same restricted set of item types/picklists, just for adding
@@ -119,6 +120,8 @@ export async function onRequestGet({ env, request }) {
 }
 
 export async function onRequestPost({ env, request }) {
+  const gate = await requireCap(request, env, "items.edit");
+  if (gate.denied) return gate.response;
   let payload;
   try {
     payload = await request.json();
