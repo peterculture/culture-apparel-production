@@ -154,15 +154,35 @@ export function pressAcceptsOrder(groupKey, methods) {
 
 const MS_PER_DAY = 86400000;
 
-/** Whole days from today (UTC midnight) to a Salesforce Date or DateTime. */
-export function daysUntil(value, now) {
+/**
+ * Whole days from today to a Salesforce Date or DateTime, counted on the SHOP's
+ * calendar.
+ *
+ * CHANGED 2026-09-01 (E5.7). This used to floor both ends onto UTC days:
+ *
+ *     Math.floor(then / MS_PER_DAY) - Math.floor(today / MS_PER_DAY)
+ *
+ * which rolls over at UTC midnight -- 7pm Chicago on CDT. So for the last five
+ * or six hours of every working day the shop was already "tomorrow" as far as
+ * this function was concerned, and every print date read one day closer than it
+ * was. That feeds urgency() and therefore the score, and it feeds
+ * suggestPlacement()'s target day, so the whole board drifted for part of each
+ * evening and settled back overnight -- the kind of wrongness nobody reports
+ * because it corrects itself before anyone can point at it.
+ *
+ * Both ends are now real calendar dates in the shop's timezone, differenced as
+ * calendar dates. That also makes the result exact rather than
+ * offset-dependent: no DST-shortened day can round to 0.96 of a day and floor
+ * away.
+ */
+export function daysUntil(value, now, tz) {
   if (!value) return null;
-  const then = Date.parse(value);
-  if (!Number.isFinite(then)) return null;
-  const today = now == null ? Date.now() : now;
-  const a = Math.floor(then / MS_PER_DAY);
-  const b = Math.floor(today / MS_PER_DAY);
-  return a - b;
+  const target = shopDateOf(value, tz);
+  if (!target) return null;
+  const today = shopDate(0, now, tz);
+  const a = Date.UTC(target.year, target.month - 1, target.day);
+  const b = Date.UTC(today.year, today.month - 1, today.day);
+  return Math.round((a - b) / MS_PER_DAY);
 }
 
 /**
@@ -206,9 +226,9 @@ export function readiness(methods) {
  * Returns the score plus every intermediate value, because the calendar shows
  * the breakdown and a number nobody can decompose is a number nobody trusts.
  */
-export function scoreOrder(order, methods, weights, now) {
+export function scoreOrder(order, methods, weights, now, tz) {
   const w = { ...WEIGHTS, ...(weights || {}) };
-  const days = daysUntil(order && order.Print_Date__c, now);
+  const days = daysUntil(order && order.Print_Date__c, now, tz);
 
   const U = urgency(days, w.halfLife);
   // Picklist values come back as strings ("3"), which Number() coerces cleanly;
@@ -283,14 +303,14 @@ export function prepStatus(days, ready) {
  * Returns day offsets from today (integers), which is what the calendar grid
  * wants -- callers turn them back into dates.
  */
-export function suggestPlacement(order, score, weights, now) {
+export function suggestPlacement(order, score, weights, now, tz) {
   const w = { ...WEIGHTS, ...(weights || {}) };
 
-  const target = daysUntil(order && order.Print_Date__c, now);
+  const target = daysUntil(order && order.Print_Date__c, now, tz);
   if (target == null) return null; // nothing to anchor on; the run is unplaceable
 
   const earliest = 0; // today
-  const latest = daysUntil(order && order.Customer_Facing_Delivery_Date__c, now);
+  const latest = daysUntil(order && order.Customer_Facing_Delivery_Date__c, now, tz);
 
   // Priority pulls back toward today, bounded by the print date itself.
   const pullSpan = Math.max(0, target - earliest);
@@ -316,9 +336,137 @@ export function suggestPlacement(order, score, weights, now) {
  * most at odds with how the floor actually works.
  */
 
-/** Shop hours, taken from the real print-shop calendar (7am-4pm), not from
- *  ProductionAutoSchedulerService, which assumes 8-5 and disagrees with it. */
-export const SHOP = { startHour: 7, endHour: 16 };
+/**
+ * Shop hours, taken from the real print-shop calendar (7am-4pm), not from
+ * ProductionAutoSchedulerService, which assumes 8-5 and disagrees with it.
+ *
+ * timeZone ADDED 2026-09-01 (E5.7), and it is the whole point of this fix.
+ *
+ * These hours used to be applied with Date.prototype.setHours, which means the
+ * RUNTIME's local timezone. Cloudflare Workers run in UTC -- measured, not
+ * assumed: getTimezoneOffset() is 0 and resolvedOptions().timeZone is "UTC" in
+ * workerd. So "07:00" meant 07:00 UTC, which is 02:00 in Chicago on CDT and
+ * 01:00 on CST. Every suggested slot landed roughly five hours before the shop
+ * opened, and the working day ended at 11:00 local. The numbers on screen still
+ * read 7am-4pm, so nothing looked wrong -- the suggestion was just always for
+ * the middle of the night.
+ *
+ * The Sunday skip had the same defect: it tested a UTC weekday, so for the
+ * five or six hours between Chicago midnight and UTC midnight it was asking
+ * about the wrong day entirely.
+ *
+ * Everything below therefore goes through shopInstant()/shopDate() rather than
+ * setHours/getDay. Do not reintroduce a bare setHours here -- it will pass
+ * every local test on a Central-time laptop and be wrong in production, which
+ * is exactly how this survived as long as it did.
+ */
+export const SHOP = { startHour: 7, endHour: 16, timeZone: "America/Chicago" };
+
+/* ── Shop-timezone arithmetic ─────────────────────────────────────────────
+ *
+ * Intl with an IANA timeZone is available in workerd and handles DST
+ * correctly -- verified in the runtime: 2026-07-15T12:00Z formats as 07:00
+ * Chicago (CDT, UTC-5) and 2026-01-15T12:00Z as 06:00 (CST, UTC-6). That is
+ * the only DST-correct tool available here; there is no date library in this
+ * project and no build step to add one.
+ */
+
+const WEEKDAY_INDEX = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+const _dtfCache = new Map();
+function dtf(tz) {
+  let f = _dtfCache.get(tz);
+  if (!f) {
+    f = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      hourCycle: "h23", // without this, midnight formats as hour "24" in en-US
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", weekday: "short",
+    });
+    _dtfCache.set(tz, f);
+  }
+  return f;
+}
+
+/** Wall-clock fields of an instant, as the shop's clock reads them. */
+export function shopParts(ts, tz) {
+  const got = {};
+  for (const part of dtf(tz || SHOP.timeZone).formatToParts(new Date(ts))) {
+    if (part.type !== "literal") got[part.type] = part.value;
+  }
+  return {
+    year: +got.year, month: +got.month, day: +got.day,
+    hour: +got.hour % 24, minute: +got.minute, second: +got.second,
+    weekday: WEEKDAY_INDEX[got.weekday],
+  };
+}
+
+/** The zone's UTC offset, in ms, at a given instant. */
+function offsetMsAt(ts, tz) {
+  const p = shopParts(ts, tz);
+  const asIfUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+  return asIfUtc - Math.floor(ts / 1000) * 1000; // formatToParts has second precision
+}
+
+/**
+ * The instant at which the shop's clock reads this wall-clock time.
+ *
+ * Two passes: the first offset is looked up at an instant that is itself off by
+ * the offset, which is wrong on the two days a year the offset changes. Feeding
+ * the corrected instant back settles it. Both DST transitions happen at 02:00
+ * local, outside 07:00-16:00, so the genuinely ambiguous cases (a wall-clock
+ * time that happens twice, or not at all) cannot arise for shop hours.
+ */
+export function shopInstant(year, month, day, hour, minute, tz) {
+  const zone = tz || SHOP.timeZone;
+  const wall = Date.UTC(year, month - 1, day, hour, minute, 0);
+  let ts = wall - offsetMsAt(wall, zone);
+  ts = wall - offsetMsAt(ts, zone);
+  return ts;
+}
+
+/** Normalise the `now` a caller passed (number, Date, or omitted). */
+function nowMs(now) {
+  if (now == null) return Date.now();
+  return now instanceof Date ? now.getTime() : Number(now);
+}
+
+/**
+ * The shop's calendar date `offset` days from now, plus its weekday.
+ *
+ * The roll is done with Date.UTC purely as calendar arithmetic -- month and
+ * year boundaries handled for free, and no timezone involved, because a
+ * calendar date has none. weekday comes from the same rolled value, so it is
+ * the shop's weekday and not UTC's.
+ */
+export function shopDate(offset, now, tz) {
+  const p = shopParts(nowMs(now), tz);
+  const rolled = new Date(Date.UTC(p.year, p.month - 1, p.day + (offset || 0)));
+  return {
+    year: rolled.getUTCFullYear(),
+    month: rolled.getUTCMonth() + 1,
+    day: rolled.getUTCDate(),
+    weekday: rolled.getUTCDay(),
+  };
+}
+
+/**
+ * The shop's calendar date for a Salesforce value.
+ *
+ * A date-only "2026-09-05" IS already a calendar date -- parsing it to an
+ * instant and back would drag it through UTC midnight and hand back the
+ * previous day for anyone behind Greenwich. A DateTime is converted through the
+ * shop's clock, which is the date the shop would call it.
+ */
+function shopDateOf(value, tz) {
+  const raw = String(value).trim();
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (dateOnly) return { year: +dateOnly[1], month: +dateOnly[2], day: +dateOnly[3] };
+  const ts = Date.parse(raw);
+  if (!Number.isFinite(ts)) return null;
+  const p = shopParts(ts, tz);
+  return { year: p.year, month: p.month, day: p.day };
+}
 
 /**
  * How long a run occupies a press, in hours.
@@ -337,14 +485,6 @@ export function runDurationHours(order, runCount) {
   return Math.max(0.25, Math.min(SHOP.endHour - SHOP.startHour, hours));
 }
 
-/** Local-midnight-anchored Date for a day offset from now. */
-function dayStart(offset, now) {
-  const d = new Date(now == null ? Date.now() : now);
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + offset);
-  return d;
-}
-
 /**
  * First free window of `durationH` hours on a given day, given the ranges that
  * press is already busy. Returns {start, end} as Dates, or null if the day is
@@ -352,10 +492,14 @@ function dayStart(offset, now) {
  *
  * `busy` is [{start, end}] in any order; overlapping entries are fine.
  */
-export function packInto(dayOffset, durationH, busy, now) {
-  const base = dayStart(dayOffset, now);
-  const open = new Date(base); open.setHours(SHOP.startHour, 0, 0, 0);
-  const close = new Date(base); close.setHours(SHOP.endHour, 0, 0, 0);
+export function packInto(dayOffset, durationH, busy, now, tz) {
+  // Open and close are built from the shop's own calendar date, so they are
+  // 07:00 and 16:00 as the floor reads them whatever the runtime thinks the
+  // time is, and they survive DST because shopInstant() resolves the offset on
+  // the day in question rather than today's.
+  const d = shopDate(dayOffset, now, tz);
+  const open = new Date(shopInstant(d.year, d.month, d.day, SHOP.startHour, 0, tz));
+  const close = new Date(shopInstant(d.year, d.month, d.day, SHOP.endHour, 0, tz));
   const needMs = durationH * 3600000;
 
   // Only ranges that touch this day matter, sorted by start.
@@ -385,16 +529,22 @@ export function packInto(dayOffset, durationH, busy, now) {
 export function suggestSlot(order, score, busy, opts) {
   const o = opts || {};
   const now = o.now;
-  const place = suggestPlacement(order, score, o.weights, now);
+  // Optional override, defaulting to SHOP.timeZone inside the helpers. Nothing
+  // in the app passes it; it exists so the DST and midnight-rollover cases can
+  // be driven from a test without moving the shop.
+  const tz = o.timeZone;
+  const place = suggestPlacement(order, score, o.weights, now, tz);
   if (!place) return null;
 
   const durationH = runDurationHours(order, o.runCount);
   const horizon = Math.max(place.latest == null ? place.target + 14 : place.latest, place.suggested);
 
   for (let day = place.suggested; day <= horizon + 14; day++) {
-    const d = dayStart(day, now);
-    if (d.getDay() === 0) continue;             // shop is closed Sunday
-    const slot = packInto(day, durationH, busy, now);
+    // The SHOP's Sunday, not UTC's. getDay() on a UTC-anchored Date called
+    // Sunday from 6pm/7pm Saturday Chicago through 6pm/7pm Sunday, so late
+    // Saturday was skipped and late Sunday was bookable.
+    if (shopDate(day, now, tz).weekday === 0) continue;
+    const slot = packInto(day, durationH, busy, now, tz);
     if (slot) {
       return {
         start: slot.start.toISOString(),
