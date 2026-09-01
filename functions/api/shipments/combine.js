@@ -70,6 +70,7 @@
  */
 import { apiVersion, jsonError, runQuery } from "../_sf.js";
 import { runComposite, runChunked, rollbackCreated, COMPOSITE_LIMIT } from "../_composite.js";
+import { requireCap } from "../_session.js";
 
 const SF_ID = /^[a-zA-Z0-9]{15,18}$/;
 
@@ -86,6 +87,8 @@ const ORDER_FIELDS = [
 ];
 
 export async function onRequestPost({ env, request }) {
+  const gate = await requireCap(request, env, "orders.edit");
+  if (gate.denied) return gate.response;
   try {
     let body;
     try {
