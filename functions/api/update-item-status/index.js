@@ -23,10 +23,13 @@
 import { sfFetch, apiVersion, jsonError } from "../_sf.js";
 import { STATION_CONFIG } from "../_station.js";
 import { rollupItemToMethod } from "../_ppi-checklist.js";
+import { requireCap } from "../_session.js";
 
 const SF_ID = /^[a-zA-Z0-9]{15,18}$/;
 
 export async function onRequestPost({ env, request }) {
+  const gate = await requireCap(request, env, "items.status");
+  if (gate.denied) return gate.response;
   try {
     let body;
     try {
