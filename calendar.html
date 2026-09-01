@@ -1698,7 +1698,10 @@ class Component extends DCLogic {
 
       const isToday = d.getTime()===today.getTime();
       return {
-        slots, blocks, empty:blocks.length===0,
+        /* E4.5: "nothing scheduled" is a statement about the press, so it must
+           not appear before the week has loaded. Only claim a day is clear once
+           the board is actually live. */
+        slots, blocks, empty: st.conn==='live' && blocks.length===0,
         showNow: isToday && nowInShop,
         nowTop: nowTopPx+'px',
         nowLabel: st.now.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}),
@@ -1710,24 +1713,33 @@ class Component extends DCLogic {
     const unsched=live.filter(o=>o.needsScheduling).length;
     const risk=live.filter(o=>o.prep&&o.prep.key!=='good').length;
     const top=live.slice().sort((a,b)=>((b.priority||{}).score||0)-((a.priority||{}).score||0))[0];
+    /* E4.5. These tiles read 0 and reassure -- "everything is placed", "every
+       counted run is accounted for", "everything has runway" -- on the FIRST
+       PAINT, before the window has been fetched. Three confident statements
+       about a shop nobody has asked about yet. While loading the value shows an
+       em dash (the treatment E5.9 settled on for a number this app cannot stand
+       behind) and the sub-line says nothing about the work. */
+    const kpiLoading = st.conn === 'loading';
+    const kv = (v) => kpiLoading ? '—' : v;
+    const ks = (busy, calm) => kpiLoading ? '' : (busy || calm);
     const kpis=[
-      {label:'Needs Scheduling', value:unsched, unit:unsched===1?'order':'orders', accent:unsched?AMBER:GREEN,
-       valueColor:unsched?AMBER:INK, sub:unsched?'no production run yet':'everything is placed'},
+      {label:'Needs Scheduling', value:kv(unsched), unit:unsched===1?'order':'orders', accent:kpiLoading?DIM:(unsched?AMBER:GREEN),
+       valueColor:kpiLoading?DIM:(unsched?AMBER:INK), sub:ks(unsched&&'no production run yet','everything is placed')},
       // Sits next to "Needs Scheduling" on purpose: both are work that has to be
       // placed on a press and isn't yet. The difference is that a shortfall is
       // invisible everywhere else -- the order looks finished, because the run
       // that was supposed to print those garments has been counted and closed.
       // Counted shop-wide, not filtered to the date window: a shortfall on a job
       // that printed last week is exactly the one you must not lose track of.
-      {label:'Not Printed', value:st.shortfallTotal, unit:st.shortfallTotal===1?'garment':'garments',
-       accent:st.shortfallTotal?AMBER:GREEN, valueColor:st.shortfallTotal?AMBER:INK,
-       sub:st.shortfallTotal?'counted but never ran — needs a make-up run':'every counted run is accounted for'},
-      {label:'Prep At Risk', value:risk, unit:risk===1?'order':'orders', accent:risk?CRIT:GREEN,
-       valueColor:risk?CRIT:INK, sub:risk?'behind on pre-production':'everything has runway'},
-      {label:'Highest Priority', value:top?((top.priority||{}).score||1).toFixed(1):'—', unit:'of 10', accent:RED,
-       valueColor:INK, sub:top?(t(top.Account&&top.Account.Name)||'—'):'nothing in this window'},
-      {label:'Orders In View', value:live.length, unit:live.length===1?'order':'orders', accent:PURPLE,
-       valueColor:INK, sub:st.view==='day'?'printing this day':st.view==='3day'?'printing these three days':'printing this week'},
+      {label:'Not Printed', value:kv(st.shortfallTotal), unit:st.shortfallTotal===1?'garment':'garments',
+       accent:kpiLoading?DIM:(st.shortfallTotal?AMBER:GREEN), valueColor:kpiLoading?DIM:(st.shortfallTotal?AMBER:INK),
+       sub:ks(st.shortfallTotal&&'counted but never ran — needs a make-up run','every counted run is accounted for')},
+      {label:'Prep At Risk', value:kv(risk), unit:risk===1?'order':'orders', accent:kpiLoading?DIM:(risk?CRIT:GREEN),
+       valueColor:kpiLoading?DIM:(risk?CRIT:INK), sub:ks(risk&&'behind on pre-production','everything has runway')},
+      {label:'Highest Priority', value:kpiLoading?'—':(top?((top.priority||{}).score||1).toFixed(1):'—'), unit:'of 10', accent:kpiLoading?DIM:RED,
+       valueColor:kpiLoading?DIM:INK, sub:kpiLoading?'':(top?(t(top.Account&&top.Account.Name)||'—'):'nothing in this window')},
+      {label:'Orders In View', value:kv(live.length), unit:live.length===1?'order':'orders', accent:kpiLoading?DIM:PURPLE,
+       valueColor:kpiLoading?DIM:INK, sub:kpiLoading?'':(st.view==='day'?'printing this day':st.view==='3day'?'printing these three days':'printing this week')},
     ];
 
     /* drawer */
@@ -2045,7 +2057,9 @@ class Component extends DCLogic {
       rangeLabel: st.view==='day'
         ? start.toLocaleDateString([], {weekday:'long', month:'short', day:'numeric'})
         : start.toLocaleDateString([], {month:'short', day:'numeric'})+' – '+(()=>{const e=new Date(start);e.setDate(e.getDate()+span-1);return e.toLocaleDateString([], {month:'short', day:'numeric'});})(),
-      shownLabel: live.length+(live.length===1?' order':' orders')+(st.q?' matching':' in window')
+      // E4.5: "0 orders in window" is a fact about the week; don't state it
+      // before the week has been fetched.
+      shownLabel: st.conn==='loading' ? 'Loading…' : (live.length+(live.length===1?' order':' orders')+(st.q?' matching':' in window'))
         // Finished jobs are on the grid but not in the count, so say so --
         // otherwise the number and the number of blocks disagree and the board
         // looks broken.
