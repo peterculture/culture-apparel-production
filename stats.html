@@ -417,32 +417,40 @@ class Component extends DCLogic {
     const STATUS_BORDER = { green:'#3D5418', yellow:'#5E4214', red:'#7A241C' };
     const meta = (api.PREP_STATUS_META && api.PREP_STATUS_META[st.prep.status]) || { color:'#6C665C', label:'—' };
 
-    const fmtDays = (n)=> (n===null||n===undefined) ? '—' : (Math.round(n*10)/10).toFixed(1);
+    /* E4.5. Every tile below rendered String(0) on the first paint, so this
+       board opened claiming a shop with no jobs in pre-production, none on the
+       press and nothing overdue -- twelve confident zeros, before a single
+       request had returned. An em dash is what E5.9 already settled on for a
+       number this board cannot stand behind (see the Shipped-7d tile), so the
+       same treatment applies to all of them while loading. */
+    const kpiLoading = st.connection === 'loading';
+    const num = (v) => kpiLoading ? '—' : String(v);
+    const fmtDays = (n)=> kpiLoading ? '—' : ((n===null||n===undefined) ? '—' : (Math.round(n*10)/10).toFixed(1));
     const heroSub = st.prep.knownCount
       ? ('Worst case ' + fmtDays(st.prep.worst) + ' days of buffer left · avg ' + fmtDays(st.prep.avg) + 'd across ' + st.prep.count + (st.prep.count===1?' order':' orders') + ' in Pre-Production')
       : 'No orders currently sitting in Pre-Production';
 
     const prepKpis = [
       { label:'Prep Buffer (Worst)', value:fmtDays(st.prep.worst), unit:'days', sub:'least runway of any order in prep', accent:meta.color, hasGlow:true, glowColor:meta.color, glowLabel:meta.label },
-      { label:'Prep Buffer (Avg)', value:fmtDays(st.prep.avg), unit:'days', sub:st.prep.count+' orders in Pre-Production', accent:'#ECEAE4', hasGlow:false },
+      { label:'Prep Buffer (Avg)', value:fmtDays(st.prep.avg), unit:'days', sub:kpiLoading ? 'orders in Pre-Production' : (st.prep.count+' orders in Pre-Production'), accent:'#ECEAE4', hasGlow:false },
     ];
     const preprodKpis = [
-      { label:'In Pre-Production', value:String(st.preprod.activeJobs), unit:'jobs', sub:'across all methods', accent:'#ECEAE4' },
-      { label:'Garments Staged', value:String(st.preprod.staged), unit:'jobs', sub:'counted in & ready', accent:'#7FA644' },
-      { label:'Awaiting Prep', value:String(st.preprod.awaiting), unit:'jobs', sub:'checklist incomplete', accent:'#C9923A' },
-      { label:'Ready to Send', value:String(st.preprod.ready), unit:'jobs', sub:'clear for production', accent:'#C6372B' },
-      { label:'Overdue', value:String(st.preprod.overdue), unit:'jobs', sub:'print date passed', accent:'#E24A3A' },
+      { label:'In Pre-Production', value:num(st.preprod.activeJobs), unit:'jobs', sub:'across all methods', accent:'#ECEAE4' },
+      { label:'Garments Staged', value:num(st.preprod.staged), unit:'jobs', sub:'counted in & ready', accent:'#7FA644' },
+      { label:'Awaiting Prep', value:num(st.preprod.awaiting), unit:'jobs', sub:'checklist incomplete', accent:'#C9923A' },
+      { label:'Ready to Send', value:num(st.preprod.ready), unit:'jobs', sub:'clear for production', accent:'#C6372B' },
+      { label:'Overdue', value:num(st.preprod.overdue), unit:'jobs', sub:'print date passed', accent:'#E24A3A' },
     ];
     const prodKpis = [
-      { label:'In Pipeline', value:String(st.prod.pipeline), unit:'jobs', sub:'ready for print → post-production', accent:'#ECEAE4' },
-      { label:'On Press Now', value:String(st.prod.onPressUnits), unit:'pcs', sub:st.prod.onPressJobs+' jobs in production', accent:'#C6372B' },
-      { label:'Misprints', value:String(st.prod.misprints), unit:'pcs', sub:'across active orders', accent:'#C9923A' },
+      { label:'In Pipeline', value:num(st.prod.pipeline), unit:'jobs', sub:'ready for print → post-production', accent:'#ECEAE4' },
+      { label:'On Press Now', value:num(st.prod.onPressUnits), unit:'pcs', sub:kpiLoading ? 'jobs in production' : (st.prod.onPressJobs+' jobs in production'), accent:'#C6372B' },
+      { label:'Misprints', value:num(st.prod.misprints), unit:'pcs', sub:'across active orders', accent:'#C9923A' },
     ];
     const shipKpis = [
-      { label:'Overdue', value:String(st.ship.over), unit:'orders', sub:'past print date', accent:'#E24A3A' },
-      { label:'Ship Today', value:String(st.ship.today), unit:'orders', sub:'due today', accent:'#E24A3A' },
-      { label:'Ship Soon', value:String(st.ship.soon), unit:'orders', sub:'due within 2 days', accent:'#C9923A' },
-      { label:'On Schedule', value:String(st.ship.ok), unit:'orders', sub:st.ship.total+' total post-production', accent:'#6C665C' },
+      { label:'Overdue', value:num(st.ship.over), unit:'orders', sub:'past print date', accent:'#E24A3A' },
+      { label:'Ship Today', value:num(st.ship.today), unit:'orders', sub:'due today', accent:'#E24A3A' },
+      { label:'Ship Soon', value:num(st.ship.soon), unit:'orders', sub:'due within 2 days', accent:'#C9923A' },
+      { label:'On Schedule', value:num(st.ship.ok), unit:'orders', sub:kpiLoading ? 'total post-production' : (st.ship.total+' total post-production'), accent:'#6C665C' },
     ];
 
     return {
