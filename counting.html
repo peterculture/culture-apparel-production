@@ -676,6 +676,10 @@ class Component extends DCLogic {
       needsReschedule:false, rescheduleTitle:'', rescheduleMsg:'', makeupHref:'index.html',
     };
 
+    /* E4.5: loading / demo / genuinely-empty, told apart. See ca-api.js. */
+    const countListState = (api && api.listState) ? api.listState(st.connection, cards.length)
+                                                  : (cards.length ? 'ready' : 'empty');
+
     return {
       clock,
       connLabel: live?'Live':(st.connection==='loading'?'Connecting…':'Demo'),
@@ -695,9 +699,18 @@ class Component extends DCLogic {
 
       showList: st.available && !st.runId,
       tabs, cards, q:st.q, onSearch:(e)=>this.setState({q:e.target.value}),
-      listEmpty: st.available && !st.runId && cards.length===0,
-      listEmptyMsg: q ? ('No matches for "'+st.q.trim()+'".')
-        : (st.tab==='done' ? 'Nothing has been counted yet.' : 'No runs waiting to be counted — every printed run is accounted for.'),
+      /* E4.5. Was `cards.length===0` with no regard for whether the list had
+         loaded, so the first paint said "every printed run is accounted for" --
+         a statement about the shop, made before asking. See listState() in
+         ca-api.js. */
+      listEmpty: st.available && !st.runId && countListState !== 'ready',
+      listEmptyMsg: (countListState === 'empty' && q)
+        ? ('No matches for "'+st.q.trim()+'". Clear the search to see every run.')
+        : (countListState === 'empty')
+          ? (st.tab==='done'
+              ? 'Nothing has been counted yet. A run appears here once its counts are submitted.'
+              : 'No runs waiting to be counted. A run arrives here once it has been printed and its method reaches Production.')
+          : ((api && api.listNotice) ? api.listNotice(countListState, '') : ''),
 
       showRun: st.available && !!st.runId,
       runLoading: st.runLoading,
