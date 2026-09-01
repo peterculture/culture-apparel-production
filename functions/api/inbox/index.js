@@ -11,7 +11,7 @@
  * needs no child-relationship name. Same fixed-query, no-client-SOQL shape as
  * /api/orders — the browser can't run arbitrary queries.
  */
-import { jsonError } from "../_sf.js";
+import { runQuery, jsonError } from "../_sf.js";
 import { runQueryOptionalField } from "../_placements.js";
 import { fetchMockupsByOpportunity } from "../_mockup.js";
 const FIELDS = [
@@ -33,12 +33,82 @@ const FIELDS = [
   "Specifications_for_Printing__c",
   "Special_Notes__c",
   "Printer__r.Name",
-  // Color__c + Size__c added 2026-07-22 so the manager can preview the
-  // garment size breakdown (via CAApi.pivotItems) while setting up a fresh
-  // Production Method/Run for this order -- matches the shape /api/orders
-  // already selects.
-  "(SELECT Product2.Name, Color__c, Size__c, Quantity FROM OrderItems)",
 ];
+
+/**
+ * OrderItems are fetched SEPARATELY, not as a nested subquery. (E3.4.)
+ *
+ * This used to ride along in the SELECT above as
+ *
+ *     (SELECT Product2.Name, Color__c, Size__c, Quantity FROM OrderItems)
+ *
+ * which reads well and is wrong past 200 line items. Salesforce returns at
+ * most 200 child rows inline per parent and hands back a per-record
+ * `nextRecordsUrl` for the rest; runQuery follows only the TOP-LEVEL locator
+ * (see _sf.js), so item 201 onward was dropped on the floor. The manager saw a
+ * confident, complete-looking size breakdown that was quietly missing garments,
+ * with no error anywhere -- the worst failure shape this project has, because
+ * nothing on the screen suggests you should not trust the number.
+ *
+ * A flat `WHERE OrderId IN (...)` has only top-level pagination, which runQuery
+ * already handles correctly, so the cap disappears rather than moving. This is
+ * also the pattern orders/index.js and production-orders/index.js already use
+ * for exactly this data -- the inbox was the last nested subquery in the API.
+ */
+const ITEM_FIELDS = ["OrderId", "Product2.Name", "Color__c", "Size__c", "Quantity"];
+
+/**
+ * Order Ids per follow-up query.
+ *
+ * Salesforce takes the SOQL in the GET /query URL, and that URL has a length
+ * ceiling -- the calendar endpoint runs into it somewhere around 700-800 Ids
+ * (E5.12). The inbox is "Pre-Production orders with no method yet" and is
+ * normally small, but nothing bounds it, and swapping a nested subquery for an
+ * unbounded IN list would just trade a silent truncation for a silent 414.
+ * 200 x 18 chars plus quoting is about 4KB of query, comfortably inside it.
+ */
+const ID_CHUNK = 200;
+
+/** Attach each order's line items as the {records:[...]} shape pivotItems reads. */
+async function attachOrderItems(env, records) {
+  const ids = records.map((r) => r.Id).filter(Boolean);
+  // Default every order to an empty-but-present list, so a record that genuinely
+  // has no line items and one whose fetch failed are told apart by the flag
+  // below rather than by both being absent.
+  records.forEach((r) => {
+    r.OrderItems = { totalSize: 0, done: true, records: [] };
+  });
+  if (!ids.length) return;
+
+  const byOrder = new Map();
+  for (let i = 0; i < ids.length; i += ID_CHUNK) {
+    const quoted = ids.slice(i, i + ID_CHUNK).map((id) => `'${id}'`).join(",");
+    const soql = `SELECT ${ITEM_FIELDS.join(", ")} FROM OrderItem WHERE OrderId IN (${quoted})`;
+    const res = await runQuery(env, soql);
+    if (!res.ok) {
+      // Fail OPEN for the items, same call orders/index.js makes: the inbox's
+      // job is listing orders that need a method, and losing a size preview
+      // must not empty the board. But say so -- an empty breakdown that is
+      // really a failed fetch is precisely the "wrong number, no error" shape
+      // this story exists to remove.
+      console.error("Inbox order-item fetch failed", res.status, `chunk ${i / ID_CHUNK}`);
+      records.forEach((r) => {
+        r.OrderItemsError = true;
+      });
+      return;
+    }
+    res.records.forEach((it) => {
+      const arr = byOrder.get(it.OrderId) || [];
+      arr.push(it);
+      byOrder.set(it.OrderId, arr);
+    });
+  }
+
+  records.forEach((r) => {
+    const recs = byOrder.get(r.Id) || [];
+    r.OrderItems = { totalSize: recs.length, done: true, records: recs };
+  });
+}
 /* Ticked by the CAM on the Opportunity during Close and Create Order and copied
    onto every Order the flow creates. It is the ONLY signal the shop has that a
    job needs more than one production method -- the dashboard cannot infer it
@@ -66,6 +136,9 @@ export async function onRequestGet({ env }) {
       console.error("Inbox query failed", status);
       return jsonError("query_failed", status);
     }
+
+    // Line items, in their own paginated query -- see attachOrderItems.
+    await attachOrderItems(env, records);
 
     const mockups = await fetchMockupsByOpportunity(
       env,
