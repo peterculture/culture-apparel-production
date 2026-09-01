@@ -7,6 +7,7 @@
  * successful update.
  */
 import { sfFetch, apiVersion, jsonError } from "../_sf.js";
+import { requireCap } from "../_session.js";
 
 // NOTE (2026-07-22): this endpoint used to cascade any checklist box checked
 // TRUE here down onto matching Pre_Production_Item__c records. That cascade
@@ -114,6 +115,8 @@ const ALLOWED_DELIVERY_METHODS = new Set([
 const SF_ID = /^[a-zA-Z0-9]{15,18}$/;
 
 export async function onRequestPatch({ params, request, env }) {
+  const gate = await requireCap(request, env, "orders.edit");
+  if (gate.denied) return gate.response;
   try {
     const id = params.id;
     if (!SF_ID.test(id)) {
