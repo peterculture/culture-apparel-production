@@ -28,6 +28,7 @@ window.__resources = Object.assign({}, window.__resources, {
   "https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js": "./vendor/react-dom-18.3.1.production.min.js"
 });
 </script>
+<link rel="stylesheet" href="./tokens.css">
 <script src="./support.js"></script>
 <script src="./ca-api.js"></script>
 </head>
@@ -39,19 +40,7 @@ window.__resources = Object.assign({}, window.__resources, {
   <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css" rel="stylesheet">
   <style>
-    *{box-sizing:border-box}
-    body{margin:0;background:#08080A;font-family:'Archivo',system-ui,sans-serif;-webkit-font-smoothing:antialiased;color:#ECEAE4}
-    a{color:#E24A3A;text-decoration:none}
-    a:hover{color:#C6372B}
-    .ti{font-size:inherit;line-height:1;display:inline-block}
-    input,textarea{font-family:inherit}
-    input::placeholder,textarea::placeholder{color:#4d483f}
-    ::-webkit-scrollbar{width:9px;height:9px}
-    ::-webkit-scrollbar-thumb{background:#2a2a2e;border-radius:6px}
-    ::-webkit-scrollbar-track{background:transparent}
     @keyframes ca-slide{from{transform:translateX(30px);opacity:0}to{transform:translateX(0);opacity:1}}
-    @keyframes ca-shake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(4px)}30%,50%,70%{transform:translateX(-7px)}40%,60%{transform:translateX(7px)}}
-    @keyframes ca-slide-left{from{transform:translateX(-30px);opacity:0}to{transform:translateX(0);opacity:1}}
   </style>
 </helmet>
 
@@ -65,10 +54,10 @@ window.__resources = Object.assign({}, window.__resources, {
       <div style="font:500 9px/1 'Oswald';letter-spacing:.4em;text-transform:uppercase;color:#C6372B;margin-top:4px">Pre-Production</div>
     </div>
     <div style="margin-left:auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:flex-end">
-      <div style="font:600 13px/1 'Oswald';letter-spacing:.1em;color:#9C978C;white-space:nowrap">{{clock}} <span style="color:#4d483f">·</span> {{dateStr}}</div>
+      <div style="font:600 13px/1 'Oswald';letter-spacing:.1em;color:#9C978C;white-space:nowrap">{{clock}} <span style="color:var(--text-faint)">·</span> {{dateStr}}</div>
       <div style="display:flex;align-items:center;gap:7px;font:600 10px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#9C978C;white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:{{connColor}};box-shadow:0 0 7px {{connColor}}"></span>{{connLabel}}</div>
       <sc-if value="{{isAdmin}}" hint-placeholder-val="{{ false }}"><button onClick="{{ onOpenSfEnv }}" title="Salesforce environment -- click to switch" style="display:flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#9C978C;background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:8px 11px;cursor:pointer;white-space:nowrap" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-cloud" style="font-size:12px"></i>{{sfEnvLabel}}</button></sc-if>
-      <div style="display:flex;align-items:center;gap:8px"><span style="width:28px;height:28px;border-radius:50%;background:#C9923A;color:#08080A;font:700 10px/28px 'Oswald';text-align:center">{{workerInit}}</span><span style="font:400 12px/1 'Archivo';color:#9C978C;white-space:nowrap">{{worker}}</span><button onClick="{{ onSwitchUser }}" title="Switch user" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px;background:transparent;border:1px solid #2a2a2f;color:#6C665C;cursor:pointer;flex-shrink:0" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-repeat" style="font-size:12px"></i></button></div>
+      <div style="display:flex;align-items:center;gap:8px"><span style="width:28px;height:28px;border-radius:50%;background:#C9923A;color:#08080A;font:700 10px/28px 'Oswald';text-align:center">{{workerInit}}</span><span style="font:400 12px/1 'Archivo';color:#9C978C;white-space:nowrap">{{worker}}</span><button onClick="{{ onSwitchUser }}" title="Switch user" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px;background:transparent;border:1px solid #2a2a2f;color:var(--text-muted);cursor:pointer;flex-shrink:0" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-repeat" style="font-size:12px"></i></button></div>
     </div>
   </header>
 
@@ -84,7 +73,7 @@ window.__resources = Object.assign({}, window.__resources, {
         <sc-for list="{{navBoards}}" as="b" hint-placeholder-count="6">
           <a href="{{b.href}}" style="display:flex;align-items:center;gap:13px;background:{{b.bg}};border:1px solid {{b.border}};border-left:4px solid {{b.color}};border-radius:11px;padding:14px 15px;text-decoration:none" style-hover="border-color:#3a3a40">
             <i class="ti {{b.icon}}" style="color:{{b.color}};font-size:19px;flex-shrink:0"></i>
-            <div style="min-width:0"><div style="font:600 13px/1 'Oswald';color:#ECEAE4">{{b.label}}</div><div style="font:400 10px/1.3 'Archivo';color:#6C665C;margin-top:3px">{{b.sub}}</div></div>
+            <div style="min-width:0"><div style="font:600 13px/1 'Oswald';color:#ECEAE4">{{b.label}}</div><div style="font:400 10px/1.3 'Archivo';color:var(--text-muted);margin-top:3px">{{b.sub}}</div></div>
             <sc-if value="{{b.isActive}}" hint-placeholder-val="{{ false }}"><i class="ti ti-circle-check" style="margin-left:auto;color:{{b.color}};font-size:16px;flex-shrink:0"></i></sc-if>
           </a>
         </sc-for>
@@ -98,7 +87,7 @@ window.__resources = Object.assign({}, window.__resources, {
 
   <div style="display:flex;align-items:center;gap:12px;padding:16px 26px 4px;flex-wrap:wrap">
     <div style="position:relative;flex:1;min-width:220px;max-width:360px">
-      <i class="ti ti-search" style="position:absolute;left:13px;top:50%;transform:translateY(-50%);color:#4d483f;font-size:15px"></i>
+      <i class="ti ti-search" style="position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--text-faint);font-size:15px"></i>
       <input value="{{q}}" onInput="{{ onSearch }}" placeholder="Search order #, customer, account…" style="width:100%;background:#121215;border:1px solid #242428;border-radius:9px;padding:11px 13px 11px 36px;font-size:13px;color:#ECEAE4;outline:none">
     </div>
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
@@ -106,7 +95,7 @@ window.__resources = Object.assign({}, window.__resources, {
       <sc-if value="{{showPick}}" hint-placeholder-val="{{ false }}"><input type="date" value="{{pickDate}}" onInput="{{ onPickDate }}" style="background:#121215;border:1px solid #242428;border-radius:8px;padding:8px 10px;font-size:12px;color:#ECEAE4;outline:none"></sc-if>
     </div>
     <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
-      <span style="font:400 11px/1 'Archivo';color:#6C665C">{{shownLabel}}</span>
+      <span style="font:400 11px/1 'Archivo';color:var(--text-muted)">{{shownLabel}}</span>
       <button onClick="{{ onRefresh }}" style="display:inline-flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#9C978C;background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:9px 12px;cursor:pointer" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-refresh"></i>Refresh</button>
     </div>
   </div>
@@ -116,9 +105,9 @@ window.__resources = Object.assign({}, window.__resources, {
       <div style="flex:1;min-width:150px;display:flex;gap:11px;align-items:stretch;background:#0D0D0F;border:1px solid #1b1b1e;border-radius:12px;padding:14px 16px">
         <div style="width:4px;border-radius:3px;background:{{k.accent}};flex-shrink:0"></div>
         <div style="min-width:0">
-          <div style="font:500 10px/1 'Oswald';letter-spacing:.13em;text-transform:uppercase;color:#6C665C;margin-bottom:9px">{{k.label}}</div>
-          <div style="display:flex;align-items:baseline;gap:4px"><span style="font:600 27px/0.85 'Oswald';color:#ECEAE4">{{k.value}}</span><span style="font:500 10px/1 'Archivo';color:#6C665C">{{k.unit}}</span></div>
-          <div style="font:400 9px/1.3 'Archivo';color:#4d483f;margin-top:8px">{{k.sub}}</div>
+          <div style="font:500 10px/1 'Oswald';letter-spacing:.13em;text-transform:uppercase;color:var(--text-muted);margin-bottom:9px">{{k.label}}</div>
+          <div style="display:flex;align-items:baseline;gap:4px"><span style="font:600 27px/0.85 'Oswald';color:#ECEAE4">{{k.value}}</span><span style="font:500 10px/1 'Archivo';color:var(--text-muted)">{{k.unit}}</span></div>
+          <div style="font:400 9px/1.3 'Archivo';color:var(--text-faint);margin-top:8px">{{k.sub}}</div>
         </div>
       </div>
     </sc-for>
@@ -132,7 +121,7 @@ window.__resources = Object.assign({}, window.__resources, {
           <span style="font:600 12px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#ECEAE4">{{col.label}}</span>
           <span style="margin-left:auto;font:700 15px/1 'Oswald';color:{{col.color}}">{{col.count}}</span>
         </div>
-        <div style="font:400 10px/1 'Archivo';letter-spacing:.03em;color:#4d483f;padding:0 4px;margin-top:-4px">{{col.readyLabel}}</div>
+        <div style="font:400 10px/1 'Archivo';letter-spacing:.03em;color:var(--text-faint);padding:0 4px;margin-top:-4px">{{col.readyLabel}}</div>
         <sc-for list="{{col.items}}" as="o" hint-placeholder-count="2">
           <div onClick="{{ o.onOpen }}" style="display:flex;background:{{o.cardBg}};border:1px solid {{o.cardBorder}};border-radius:11px;overflow:hidden;cursor:pointer;transition:border-color .12s,transform .12s" style-hover="border-color:#3a3a40;transform:translateY(-1px)">
             <div style="width:6px;background:{{o.urgColor}};flex-shrink:0"></div>
@@ -142,13 +131,13 @@ window.__resources = Object.assign({}, window.__resources, {
               <div style="display:flex;align-items:flex-start;gap:8px">
                 <div style="min-width:0">
                   <div style="display:flex;align-items:center;gap:6px"><div style="font:600 15px/1.1 'Oswald';color:#ECEAE4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{o.customer}}</div><sc-if value="{{o.isReprint}}" hint-placeholder-val="{{ false }}"><span style="flex-shrink:0;display:inline-flex;align-items:center;gap:3px;font:700 8px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:5px;padding:3px 6px"><i class="ti ti-replace"></i>Reprint</span></sc-if></div>
-                  <div style="font:400 10px/1 'Archivo';color:#6C665C;margin-top:4px">{{o.num}} · {{o.account}}</div>
+                  <div style="font:400 10px/1 'Archivo';color:var(--text-muted);margin-top:4px">{{o.num}} · {{o.account}}</div>
                 </div>
                 <span style="margin-left:auto;flex-shrink:0;font:600 12px/1 'Oswald';color:#ECEAE4;background:#1e1e22;border-radius:5px;padding:4px 8px">{{o.qty}} pcs</span>
               </div>
               <div style="font:400 11px/1 'Archivo';color:#9C978C;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{o.garment}}</div>
               <div>
-                <div style="display:flex;justify-content:space-between;font:500 9px/1 'Archivo';color:#6C665C;margin-bottom:5px"><span>Pre-prod prerequisites</span><span>{{o.checkLabel}}</span></div>
+                <div style="display:flex;justify-content:space-between;font:500 9px/1 'Archivo';color:var(--text-muted);margin-bottom:5px"><span>Pre-prod prerequisites</span><span>{{o.checkLabel}}</span></div>
                 <div style="height:6px;background:#232327;border-radius:4px;overflow:hidden"><div style="height:100%;width:{{o.checkWidth}};background:{{o.color}}"></div></div>
               </div>
               <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -176,9 +165,9 @@ window.__resources = Object.assign({}, window.__resources, {
     <aside style="position:fixed;top:0;right:0;bottom:0;z-index:61;width:min(460px,100vw);background:#0C0C0E;border-left:1px solid #232327;box-shadow:-30px 0 70px -20px rgba(0,0,0,.8);display:flex;flex-direction:column;animation:ca-slide .22s ease">
       <div style="display:flex;align-items:flex-start;gap:12px;padding:20px 22px;border-bottom:1px solid #1b1b1e;border-top:4px solid {{open.color}}">
         <div style="min-width:0">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font:600 10px/1 'Oswald';letter-spacing:.08em;color:#6C665C">{{open.num}}</span><span style="display:inline-flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#9C978C"><span style="width:7px;height:7px;border-radius:50%;background:{{open.color}}"></span>{{open.methLabel}}</span></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font:600 10px/1 'Oswald';letter-spacing:.08em;color:var(--text-muted)">{{open.num}}</span><span style="display:inline-flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#9C978C"><span style="width:7px;height:7px;border-radius:50%;background:{{open.color}}"></span>{{open.methLabel}}</span></div>
           <div style="font:600 21px/1.05 'Oswald';color:#ECEAE4">{{open.customer}}</div>
-          <div style="font:400 12px/1 'Archivo';color:#6C665C;margin-top:5px">{{open.account}}</div>
+          <div style="font:400 12px/1 'Archivo';color:var(--text-muted);margin-top:5px">{{open.account}}</div>
         </div>
         <button onClick="{{ onClose }}" style="margin-left:auto;flex-shrink:0;width:34px;height:34px;border-radius:9px;background:#16161a;border:1px solid #2a2a2f;color:#9C978C;cursor:pointer;font-size:17px" style-hover="color:#ECEAE4;border-color:#3a3a40"><i class="ti ti-x"></i></button>
       </div>
@@ -186,7 +175,7 @@ window.__resources = Object.assign({}, window.__resources, {
       <div style="flex:1;overflow-y:auto;padding:20px 22px;display:flex;flex-direction:column;gap:24px">
         <div style="display:flex;gap:12px;align-items:center">
           <sc-if value="{{open.hasMockup}}" hint-placeholder-val="{{ false }}">{{open.mockupNode}}</sc-if>
-          <sc-if value="{{open.noMockup}}" hint-placeholder-val="{{ true }}"><div style="width:96px;height:96px;flex-shrink:0;border-radius:11px;background:#1c1c20;border:1px solid #2a2a2f;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px"><i class="ti ti-photo-off" style="color:#8a8378;font-size:26px"></i><span style="font:600 8px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#6C665C">No Mockup</span></div></sc-if>
+          <sc-if value="{{open.noMockup}}" hint-placeholder-val="{{ true }}"><div style="width:96px;height:96px;flex-shrink:0;border-radius:11px;background:#1c1c20;border:1px solid #2a2a2f;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px"><i class="ti ti-photo-off" style="color:#8a8378;font-size:26px"></i><span style="font:600 8px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted)">No Mockup</span></div></sc-if>
           <div style="flex:1;display:flex;flex-direction:column;gap:9px">
             <div style="display:flex;align-items:center;gap:8px"><span style="font:600 15px/1 'Oswald';color:#ECEAE4">{{open.qty}} pieces</span></div>
             <div style="font:400 11px/1.3 'Archivo';color:#9C978C">{{open.garment}}</div>
@@ -205,7 +194,7 @@ window.__resources = Object.assign({}, window.__resources, {
         </div>
 
         <div>
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px"><span style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378">Pre-Production Checklist</span><span style="margin-left:auto;font:600 10px/1 'Oswald';color:#6C665C">{{open.checkLabel}}</span></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px"><span style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378">Pre-Production Checklist</span><span style="margin-left:auto;font:600 10px/1 'Oswald';color:var(--text-muted)">{{open.checkLabel}}</span></div>
           <div style="display:flex;flex-direction:column;gap:7px">
             <sc-for list="{{open.checklist}}" as="c" hint-placeholder-count="3">
               <button onClick="{{ c.onToggle }}" style="display:flex;align-items:center;gap:11px;background:#121215;border:1px solid {{c.border}};border-radius:9px;padding:11px 13px;cursor:pointer;text-align:left">
@@ -220,7 +209,7 @@ window.__resources = Object.assign({}, window.__resources, {
           <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:11px">Garment Size Breakdown</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <sc-for list="{{open.sizeCells}}" as="s" hint-placeholder-count="5">
-              <div style="min-width:52px;text-align:center;background:#121215;border:1px solid #232327;border-radius:8px;padding:9px 8px"><div style="font:600 10px/1 'Oswald';letter-spacing:.06em;color:#6C665C;margin-bottom:5px">{{s.label}}</div><div style="font:600 16px/1 'Oswald';color:#ECEAE4">{{s.qty}}</div></div>
+              <div style="min-width:52px;text-align:center;background:#121215;border:1px solid #232327;border-radius:8px;padding:9px 8px"><div style="font:600 10px/1 'Oswald';letter-spacing:.06em;color:var(--text-muted);margin-bottom:5px">{{s.label}}</div><div style="font:600 16px/1 'Oswald';color:#ECEAE4">{{s.qty}}</div></div>
             </sc-for>
             <sc-if value="{{open.hasSizes}}" hint-placeholder-val="{{ true }}"><div style="min-width:52px;text-align:center;background:#18230D;border:1px solid #3D5418;border-radius:8px;padding:9px 8px"><div style="font:600 10px/1 'Oswald';letter-spacing:.06em;color:#BBD382;margin-bottom:5px">Total</div><div style="font:600 16px/1 'Oswald';color:#ECEAE4">{{open.qty}}</div></div></sc-if>
           </div>
@@ -270,7 +259,7 @@ window.__resources = Object.assign({}, window.__resources, {
                 <sc-if value="{{it.isTransfer}}" hint-placeholder-val="{{ false }}"><select value="{{it.transferType}}" onChange="{{ it.onTransfer }}" style="background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:13px;color:#ECEAE4;outline:none"><option value="">Transfer type…</option><sc-for list="{{it.ttOptions}}" as="m" hint-placeholder-count="4"><option value="{{m.value}}">{{m.label}}</option></sc-for></select></sc-if>
               </div>
             </sc-for>
-            <sc-if value="{{open.ppItemsEmpty}}" hint-placeholder-val="{{ true }}"><div style="font:400 11px/1 'Archivo';color:#4d483f;padding:2px">No production items on this order yet — add one above.</div></sc-if>
+            <sc-if value="{{open.ppItemsEmpty}}" hint-placeholder-val="{{ true }}"><div style="font:400 11px/1 'Archivo';color:var(--text-faint);padding:2px">No production items on this order yet — add one above.</div></sc-if>
           </div>
         </div>
 
@@ -307,7 +296,7 @@ window.__resources = Object.assign({}, window.__resources, {
                     <div>
                       <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Status</div>
                       <select value="{{pm.mf.status}}" onChange="{{ pm.mf.onStatus }}" style="width:100%;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:12px;color:#ECEAE4;outline:none"><sc-for list="{{pm.mf.statusOptions}}" as="s" hint-placeholder-count="7"><option value="{{s}}">{{s}}</option></sc-for></select>
-                      <div style="font:400 10px/1.5 'Archivo';letter-spacing:.02em;color:#4d483f;margin-top:6px">{{pm.mf.statusHelp}}</div>
+                      <div style="font:400 10px/1.5 'Archivo';letter-spacing:.02em;color:var(--text-faint);margin-top:6px">{{pm.mf.statusHelp}}</div>
                     </div>
                     <sc-if value="{{pm.mf.hasErr}}" hint-placeholder-val="{{ false }}"><div style="font:600 10px/1.3 'Oswald';letter-spacing:.04em;text-transform:uppercase;color:#E8A89F">{{pm.mf.err}}</div></sc-if>
                     <div style="display:flex;gap:8px">
@@ -318,7 +307,7 @@ window.__resources = Object.assign({}, window.__resources, {
                 </sc-if>
               </div>
             </sc-for>
-            <sc-if value="{{open.methodsEmpty}}" hint-placeholder-val="{{ false }}"><div style="font:400 11px/1.4 'Archivo';color:#4d483f;padding:2px">No production method set up yet.</div></sc-if>
+            <sc-if value="{{open.methodsEmpty}}" hint-placeholder-val="{{ false }}"><div style="font:400 11px/1.4 'Archivo';color:var(--text-faint);padding:2px">No production method set up yet.</div></sc-if>
             <sc-if value="{{open.canManage}}" hint-placeholder-val="{{ false }}"><button onClick="{{ open.onAddMethod }}" style="display:inline-flex;align-items:center;justify-content:center;gap:7px;font:600 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#5E9B9A;background:transparent;border:1px dashed #3D5418;border-radius:8px;padding:11px;cursor:pointer;margin-top:2px" style-hover="background:#18230D"><i class="ti ti-plus"></i>Add another method / location</button></sc-if>
           </div>
         </div>
@@ -330,14 +319,14 @@ window.__resources = Object.assign({}, window.__resources, {
                 <i class="ti ti-user-check" style="font-size:14px;color:#5E9B9A"></i>
                 <div style="font:600 10px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#5E9B9A">Account Manager Suggested</div>
               </div>
-              <div style="font:400 10px/1.45 'Archivo';color:#6C665C;margin-bottom:10px">What was promised when the order closed. Nothing here is booked — use one to open a prefilled run, or turn it down.</div>
+              <div style="font:400 10px/1.45 'Archivo';color:var(--text-muted);margin-bottom:10px">What was promised when the order closed. Nothing here is booked — use one to open a prefilled run, or turn it down.</div>
               <sc-for list="{{open.drawerProposals}}" as="p" hint-placeholder-count="1">
                 <div style="background:#0D0D0F;border:1px solid #1f1f23;border-radius:9px;padding:10px 11px;margin-bottom:7px">
                   <div style="display:flex;align-items:baseline;gap:8px">
                     <div style="font:600 13px/1.2 'Oswald';color:#ECEAE4">{{p.machine}}</div>
                     <div style="font:400 11px/1.2 'Archivo';color:#9C978C">{{p.when}}</div>
                   </div>
-                  <div style="font:400 10px/1.4 'Archivo';color:#6C665C;margin-top:3px">{{p.name}} · {{p.meta}}</div>
+                  <div style="font:400 10px/1.4 'Archivo';color:var(--text-muted);margin-top:3px">{{p.name}} · {{p.meta}}</div>
                   <sc-if value="{{p.hasNotes}}" hint-placeholder-val="{{ false }}">
                     <div style="font:400 11px/1.45 'Archivo';color:#C9C6BF;margin-top:6px;white-space:pre-wrap">{{p.notes}}</div>
                   </sc-if>
@@ -350,7 +339,7 @@ window.__resources = Object.assign({}, window.__resources, {
             </div>
           </sc-if>
 
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px"><span style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378">Production Runs</span><sc-if value="{{open.runsLoading}}" hint-placeholder-val="{{ false }}"><span style="font:400 10px/1 'Archivo';color:#4d483f">Loading…</span></sc-if></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px"><span style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378">Production Runs</span><sc-if value="{{open.runsLoading}}" hint-placeholder-val="{{ false }}"><span style="font:400 10px/1 'Archivo';color:var(--text-faint)">Loading…</span></sc-if></div>
           <div style="display:flex;flex-direction:column;gap:14px">
             <sc-for list="{{open.runsView}}" as="run" hint-placeholder-count="0">
               <div style="background:#121215;border:1px solid #232327;border-radius:10px;padding:13px 14px;display:flex;flex-direction:column;gap:11px">
@@ -361,10 +350,10 @@ window.__resources = Object.assign({}, window.__resources, {
                     <div style="margin-top:10px">
                       <sc-if value="{{run.allocHasErr}}" hint-placeholder-val="{{ false }}"><div style="font:400 10px/1.45 'Archivo';color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:8px;padding:9px 11px;margin-top:9px">{{run.allocErr}}</div></sc-if>
                       <sc-if value="{{run.allocHasMsg}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:#BBD382;margin-top:9px"><i class="ti ti-check"></i>{{run.allocMsg}}</div></sc-if>
-                      <sc-if value="{{run.allocLoading}}" hint-placeholder-val="{{ false }}"><div style="font:400 11px/1 'Archivo';color:#6C665C;padding:8px 2px">Loading sizes…</div></sc-if>
+                      <sc-if value="{{run.allocLoading}}" hint-placeholder-val="{{ false }}"><div style="font:400 11px/1 'Archivo';color:var(--text-muted);padding:8px 2px">Loading sizes…</div></sc-if>
                       <sc-if value="{{run.allocEmpty}}" hint-placeholder-val="{{ false }}"><div style="font:400 11px/1.5 'Archivo';color:#8a8378;padding:8px 2px">No sizes on this order to allocate.</div></sc-if>
                       <sc-if value="{{run.allocHasRows}}" hint-placeholder-val="{{ true }}">
-                        <div style="display:flex;align-items:center;gap:8px;font:600 8px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#6C665C;padding:0 2px 7px">
+                        <div style="display:flex;align-items:center;gap:8px;font:600 8px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);padding:0 2px 7px">
                           <span style="flex:1">Size</span><span style="width:58px;text-align:center">Left</span><span style="width:88px;text-align:center">This run</span>
                         </div>
                         <div style="display:flex;flex-direction:column;gap:6px">
@@ -373,14 +362,14 @@ window.__resources = Object.assign({}, window.__resources, {
                               <div style="display:flex;align-items:center;gap:8px">
                                 <div style="flex:1;min-width:0">
                                   <div style="font:500 12px/1.2 'Archivo';color:#ECEAE4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{a.label}}</div>
-                                  <div style="font:400 9px/1 'Archivo';color:#4d483f;margin-top:3px">{{a.orderQty}} ordered</div>
+                                  <div style="font:400 9px/1 'Archivo';color:var(--text-faint);margin-top:3px">{{a.orderQty}} ordered</div>
                                 </div>
                                 <div style="width:58px;text-align:center;font:600 12px/1 'Oswald';color:#8a8378">{{a.remaining}}</div>
                                 <sc-if value="{{a.editable}}" hint-placeholder-val="{{ true }}">
                                   <input type="number" min="0" inputmode="numeric" value="{{a.value}}" onInput="{{ a.onQty }}" placeholder="0" style="width:88px;height:44px;flex-shrink:0;text-align:center;background:#16161a;border:1px solid {{a.border}};border-radius:9px;font:600 16px/1 'Oswald';color:#ECEAE4;outline:none">
                                 </sc-if>
                                 <sc-if value="{{a.missing}}" hint-placeholder-val="{{ false }}">
-                                  <div title="No line item on this run for this size" style="width:88px;flex-shrink:0;text-align:center;font:400 9px/1.3 'Archivo';color:#4d483f">no row</div>
+                                  <div title="No line item on this run for this size" style="width:88px;flex-shrink:0;text-align:center;font:400 9px/1.3 'Archivo';color:var(--text-faint)">no row</div>
                                 </sc-if>
                               </div>
                               <sc-if value="{{a.hasMessage}}" hint-placeholder-val="{{ false }}"><div style="font:400 10px/1.4 'Archivo';color:#E8A89F;padding:5px 2px 2px">{{a.message}}</div></sc-if>
@@ -440,7 +429,7 @@ window.__resources = Object.assign({}, window.__resources, {
                   </sc-if>
                   <sc-if value="{{run.qtyTyped}}" hint-placeholder-val="{{ true }}">
                   <input type="number" min="1" value="{{run.qty}}" onInput="{{ run.onQty }}" style="width:100%;max-width:140px;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:12px;color:#ECEAE4;outline:none">
-                  <sc-if value="{{run.hasQtyHint}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:5px;font:400 10px/1.3 'Archivo';color:#8a8378;margin-top:6px"><i class="ti ti-shirt" style="font-size:12px;color:#6C665C"></i>{{run.qtyHint}}</div></sc-if>
+                  <sc-if value="{{run.hasQtyHint}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:5px;font:400 10px/1.3 'Archivo';color:#8a8378;margin-top:6px"><i class="ti ti-shirt" style="font-size:12px;color:var(--text-muted)"></i>{{run.qtyHint}}</div></sc-if>
                   </sc-if>
                 </div>
 
@@ -470,7 +459,7 @@ window.__resources = Object.assign({}, window.__resources, {
                 </div>
               </div>
             </sc-for>
-            <sc-if value="{{open.runsEmpty}}" hint-placeholder-val="{{ true }}"><div style="font:400 11px/1.4 'Archivo';color:#4d483f;padding:2px">No production runs created for this method yet.</div></sc-if>
+            <sc-if value="{{open.runsEmpty}}" hint-placeholder-val="{{ true }}"><div style="font:400 11px/1.4 'Archivo';color:var(--text-faint);padding:2px">No production runs created for this method yet.</div></sc-if>
           </div>
         </div>
 
@@ -517,7 +506,7 @@ window.__resources = Object.assign({}, window.__resources, {
       <div style="display:flex;align-items:center;gap:12px;padding:18px 22px;border-bottom:1px solid #1f1f23">
         <div>
           <div style="font:600 17px/1.1 'Oswald';color:#ECEAE4">Salesforce Environment</div>
-          <div style="font:400 11px/1.4 'Archivo';color:#6C665C;margin-top:4px">Switches which org every tablet talks to — applies to everyone immediately.</div>
+          <div style="font:400 11px/1.4 'Archivo';color:var(--text-muted);margin-top:4px">Switches which org every tablet talks to — applies to everyone immediately.</div>
         </div>
         <button onClick="{{ onCloseSfEnv }}" style="margin-left:auto;flex-shrink:0;width:32px;height:32px;border-radius:9px;background:#16161a;border:1px solid #2a2a2f;color:#9C978C;cursor:pointer;font-size:15px" style-hover="color:#ECEAE4;border-color:#3a3a40"><i class="ti ti-x"></i></button>
       </div>
@@ -528,7 +517,7 @@ window.__resources = Object.assign({}, window.__resources, {
               <span style="width:9px;height:9px;border-radius:50%;background:{{e.dotColor}};flex-shrink:0"></span>
               <div style="flex:1;min-width:0">
                 <div style="font:600 13px/1.1 'Oswald';color:{{e.textColor}}">{{e.label}}</div>
-                <div style="font:400 10px/1.3 'Archivo';color:#6C665C;margin-top:3px">{{e.statusLabel}}</div>
+                <div style="font:400 10px/1.3 'Archivo';color:var(--text-muted);margin-top:3px">{{e.statusLabel}}</div>
               </div>
               <sc-if value="{{e.isActive}}" hint-placeholder-val="{{ false }}"><span style="font:600 8px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#7FA644;background:#18230D;border:1px solid #3D5418;border-radius:6px;padding:4px 7px;flex-shrink:0">Active</span></sc-if>
             </button>
@@ -564,9 +553,9 @@ window.__resources = Object.assign({}, window.__resources, {
     <div style="max-width:920px;margin:0 auto;padding:24px 26px 70px">
       <sc-if value="{{mgrShowInbox}}" hint-placeholder-val="{{ true }}">
         <div style="font:600 12px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Incoming orders</div>
-        <div style="font:400 12px/1.4 'Archivo';color:#6C665C;margin-bottom:18px">Orders in pre-production with no production method yet. Set one up to create its production plan.</div>
+        <div style="font:400 12px/1.4 'Archivo';color:var(--text-muted);margin-bottom:18px">Orders in pre-production with no production method yet. Set one up to create its production plan.</div>
         <div style="position:relative;max-width:380px;margin-bottom:18px">
-          <i class="ti ti-search" style="position:absolute;left:13px;top:50%;transform:translateY(-50%);color:#4d483f;font-size:15px"></i>
+          <i class="ti ti-search" style="position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--text-faint);font-size:15px"></i>
           <input value="{{mgrQ}}" onInput="{{ onMgrSearch }}" placeholder="Search order #, customer, account…" style="width:100%;background:#121215;border:1px solid #242428;border-radius:9px;padding:11px 13px 11px 36px;font-size:13px;color:#ECEAE4;outline:none">
         </div>
         <sc-if value="{{mgrHasMsg}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:7px;font:600 11px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:#BBD382;background:#18230D;border:1px solid #3D5418;border-radius:9px;padding:10px 13px;margin-bottom:16px"><i class="ti ti-check"></i>{{mgrMsg}}</div></sc-if>
@@ -577,25 +566,25 @@ window.__resources = Object.assign({}, window.__resources, {
               <sc-if value="{{o.hasThumb}}" hint-placeholder-val="{{ false }}">{{o.thumbNode}}</sc-if>
               <sc-if value="{{o.noThumb}}" hint-placeholder-val="{{ true }}"><div style="width:64px;flex-shrink:0;align-self:stretch;background:#1c1c20;border-right:1px solid #2a2a2f;display:flex;align-items:center;justify-content:center"><i class="ti ti-photo-off" style="color:#8a8378;font-size:24px"></i></div></sc-if>
               <div style="padding:15px 16px;flex:1;min-width:0;display:flex;flex-direction:column;gap:11px">
-                <div><div style="font:600 16px/1.1 'Oswald';color:#ECEAE4">{{o.customer}}</div><div style="font:400 10px/1 'Archivo';color:#6C665C;margin-top:5px">{{o.num}} · {{o.account}}</div></div>
+                <div><div style="font:600 16px/1.1 'Oswald';color:#ECEAE4">{{o.customer}}</div><div style="font:400 10px/1 'Archivo';color:var(--text-muted);margin-top:5px">{{o.num}} · {{o.account}}</div></div>
                 <div style="display:flex;align-items:center;gap:8px"><span style="font:600 12px/1 'Oswald';color:#ECEAE4;background:#1e1e22;border-radius:5px;padding:4px 8px">{{o.qty}} pcs</span><span style="display:inline-flex;align-items:center;gap:5px;font:600 10px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:{{o.urgColor}}"><i class="ti {{o.urgIcon}}"></i>{{o.dueLabel}}</span></div>
                 <button onClick="{{ o.onPick }}" style="margin-top:2px;width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;font:700 11px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#fff;background:#C6372B;border:none;border-radius:9px;padding:12px;cursor:pointer" style-hover="filter:brightness(1.1)"><i class="ti ti-tools"></i>Begin Set-up</button>
               </div>
             </div>
           </sc-for>
         </div>
-        <sc-if value="{{inboxEmpty}}" hint-placeholder-val="{{ false }}"><div style="border:1px dashed #2a2a2f;border-radius:12px;padding:40px 20px;text-align:center;font:400 13px/1.5 'Archivo';color:#4d483f">No orders waiting for a production method. (Empty in demo mode — live once deployed against Salesforce.)</div></sc-if>
-        <sc-if value="{{inboxNoMatches}}" hint-placeholder-val="{{ false }}"><div style="border:1px dashed #2a2a2f;border-radius:12px;padding:40px 20px;text-align:center;font:400 13px/1.5 'Archivo';color:#4d483f">No incoming orders match "{{mgrQ}}".</div></sc-if>
+        <sc-if value="{{inboxEmpty}}" hint-placeholder-val="{{ false }}"><div style="border:1px dashed #2a2a2f;border-radius:12px;padding:40px 20px;text-align:center;font:400 13px/1.5 'Archivo';color:var(--text-faint)">No orders waiting for a production method. (Empty in demo mode — live once deployed against Salesforce.)</div></sc-if>
+        <sc-if value="{{inboxNoMatches}}" hint-placeholder-val="{{ false }}"><div style="border:1px dashed #2a2a2f;border-radius:12px;padding:40px 20px;text-align:center;font:400 13px/1.5 'Archivo';color:var(--text-faint)">No incoming orders match "{{mgrQ}}".</div></sc-if>
       </sc-if>
 
       <sc-if value="{{mgrShowForm}}" hint-placeholder-val="{{ false }}">
         <button onClick="{{ onBackToInbox }}" style="display:inline-flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#8a8378;background:transparent;border:1px solid #242428;border-radius:8px;padding:8px 12px;cursor:pointer;margin-bottom:16px"><i class="ti ti-chevron-left"></i>All incoming</button>
         <div style="display:flex;align-items:center;gap:16px;background:#0D0D0F;border:1px solid #1f1f23;border-left:4px solid #C6372B;border-radius:12px;padding:16px 18px;margin-bottom:22px">
           <sc-if value="{{mgrOrder.hasThumb}}" hint-placeholder-val="{{ false }}">{{mgrOrder.thumbNode}}</sc-if>
-          <sc-if value="{{mgrOrder.noThumb}}" hint-placeholder-val="{{ true }}"><div style="width:96px;height:96px;flex-shrink:0;border-radius:11px;background:#1c1c20;border:1px solid #2a2a2f;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px"><i class="ti ti-photo-off" style="color:#8a8378;font-size:26px"></i><span style="font:600 8px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#6C665C">No Mockup</span></div></sc-if>
+          <sc-if value="{{mgrOrder.noThumb}}" hint-placeholder-val="{{ true }}"><div style="width:96px;height:96px;flex-shrink:0;border-radius:11px;background:#1c1c20;border:1px solid #2a2a2f;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px"><i class="ti ti-photo-off" style="color:#8a8378;font-size:26px"></i><span style="font:600 8px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted)">No Mockup</span></div></sc-if>
           <div style="min-width:0">
             <div style="font:600 19px/1.1 'Oswald';color:#ECEAE4">{{mgrOrder.customer}}</div>
-            <div style="font:400 12px/1 'Archivo';color:#6C665C;margin-top:6px">{{mgrOrder.num}} · {{mgrOrder.account}} · {{mgrOrder.qty}} pcs</div>
+            <div style="font:400 12px/1 'Archivo';color:var(--text-muted);margin-top:6px">{{mgrOrder.num}} · {{mgrOrder.account}} · {{mgrOrder.qty}} pcs</div>
           </div>
         </div>
 
@@ -619,7 +608,7 @@ window.__resources = Object.assign({}, window.__resources, {
 
           <div>
             <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:11px">Placements</div>
-            <div style="font:400 11px/1.4 'Archivo';color:#6C665C;margin-bottom:11px">Every location this method prints — pick as many as apply (e.g. front + back for one screen print plan). A genuinely different print method (like a heat-press tag) still gets its own plan — use "Add another method" from the order's drawer for that.</div>
+            <div style="font:400 11px/1.4 'Archivo';color:var(--text-muted);margin-bottom:11px">Every location this method prints — pick as many as apply (e.g. front + back for one screen print plan). A genuinely different print method (like a heat-press tag) still gets its own plan — use "Add another method" from the order's drawer for that.</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <sc-for list="{{formPlacementOptions}}" as="p" hint-placeholder-count="4">
                 <button onClick="{{ p.onPick }}" style="font:600 12px/1 'Oswald';letter-spacing:.04em;color:{{p.color}};background:{{p.bg}};border:1px solid {{p.border}};border-radius:9px;padding:11px 15px;cursor:pointer">{{p.label}}</button>
@@ -633,7 +622,7 @@ window.__resources = Object.assign({}, window.__resources, {
               <button onClick="{{ onPlanNew }}" style="flex:1;max-width:200px;font:600 11px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:{{planNewColor}};background:{{planNewBg}};border:1px solid {{planNewBorder}};border-radius:9px;padding:11px;cursor:pointer">Create new plan</button>
               <button onClick="{{ onPlanExisting }}" style="flex:1;max-width:200px;font:600 11px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:{{planExColor}};background:{{planExBg}};border:1px solid {{planExBorder}};border-radius:9px;padding:11px;cursor:pointer">Attach existing</button>
             </div>
-            <sc-if value="{{planIsNew}}" hint-placeholder-val="{{ true }}"><div style="font:400 12px/1.4 'Archivo';color:#6C665C">A new Production Requirement + Plan will be created from this order automatically.</div></sc-if>
+            <sc-if value="{{planIsNew}}" hint-placeholder-val="{{ true }}"><div style="font:400 12px/1.4 'Archivo';color:var(--text-muted)">A new Production Requirement + Plan will be created from this order automatically.</div></sc-if>
             <sc-if value="{{planIsExisting}}" hint-placeholder-val="{{ false }}">
               <input value="{{planQ}}" onInput="{{ onPlanSearch }}" placeholder="Search plans (e.g. PP-0018)…" style="width:100%;max-width:420px;background:#121215;border:1px solid #242428;border-radius:9px;padding:11px 13px;font-size:13px;color:#ECEAE4;outline:none">
               <sc-if value="{{planPicked}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:6px;font:600 11px/1 'Oswald';letter-spacing:.04em;color:#BBD382;margin-top:9px"><i class="ti ti-check"></i>{{planName}}</div></sc-if>
@@ -650,7 +639,7 @@ window.__resources = Object.assign({}, window.__resources, {
             <select value="{{formStatus}}" onChange="{{ onStatus }}" style="width:100%;max-width:280px;background:#121215;border:1px solid #242428;border-radius:9px;padding:11px 13px;font-size:13px;color:#ECEAE4;outline:none">
               <sc-for list="{{statusOptions}}" as="s" hint-placeholder-count="7"><option value="{{s.value}}">{{s.label}}</option></sc-for>
             </select>
-            <div style="font:400 11px/1.5 'Archivo';letter-spacing:.02em;color:#4d483f;margin-top:8px;max-width:280px">{{formStatusHelp}}</div>
+            <div style="font:400 11px/1.5 'Archivo';letter-spacing:.02em;color:var(--text-faint);margin-top:8px;max-width:280px">{{formStatusHelp}}</div>
           </div>
 
           <div>
@@ -672,7 +661,7 @@ window.__resources = Object.assign({}, window.__resources, {
                   <button onClick="{{ it.onRemove }}" style="margin-left:auto;width:32px;height:32px;border-radius:7px;background:#16161a;border:1px solid #2a2a2f;color:#8a8378;cursor:pointer;font-size:14px" style-hover="color:#E8A89F;border-color:#7A241C"><i class="ti ti-x"></i></button>
                 </div>
               </sc-for>
-              <sc-if value="{{itemsEmpty}}" hint-placeholder-val="{{ true }}"><div style="font:400 11px/1.4 'Archivo';color:#4d483f;padding:2px">No items yet — add the screens, inks, threads, digitization or transfers this method needs (optional).</div></sc-if>
+              <sc-if value="{{itemsEmpty}}" hint-placeholder-val="{{ true }}"><div style="font:400 11px/1.4 'Archivo';color:var(--text-faint);padding:2px">No items yet — add the screens, inks, threads, digitization or transfers this method needs (optional).</div></sc-if>
             </div>
           </div>
 
@@ -687,7 +676,7 @@ window.__resources = Object.assign({}, window.__resources, {
             </sc-if>
           </div>
           <sc-if value="{{mgrCanSaveNew}}" hint-placeholder-val="{{ true }}">
-            <div style="font:400 11px/1.5 'Archivo';color:#4d483f;margin-top:-12px">Save and New creates this method and clears the form for the next one on the same order — print specs and special notes carry over.</div>
+            <div style="font:400 11px/1.5 'Archivo';color:var(--text-faint);margin-top:-12px">Save and New creates this method and clears the form for the next one on the same order — print specs and special notes carry over.</div>
           </sc-if>
         </div>
       </sc-if>
@@ -696,7 +685,7 @@ window.__resources = Object.assign({}, window.__resources, {
         <div style="background:#0D0D0F;border:1px solid #1f1f23;border-left:4px solid #7FA644;border-radius:12px;padding:16px 18px;margin-bottom:22px">
           <div style="display:inline-flex;align-items:center;gap:7px;font:600 11px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:#BBD382;background:#18230D;border:1px solid #3D5418;border-radius:9px;padding:9px 13px;margin-bottom:12px"><i class="ti ti-check"></i>Production method created</div>
           <div style="font:600 19px/1.1 'Oswald';color:#ECEAE4">{{createdPanel.customer}}</div>
-          <div style="font:400 12px/1 'Archivo';color:#6C665C;margin-top:6px">{{createdPanel.num}} · {{createdPanel.qty}} pcs · {{createdPanel.methodLabel}}</div>
+          <div style="font:400 12px/1 'Archivo';color:var(--text-muted);margin-top:6px">{{createdPanel.num}} · {{createdPanel.qty}} pcs · {{createdPanel.methodLabel}}</div>
         </div>
 
         <div style="display:flex;flex-direction:column;gap:22px">
@@ -704,10 +693,10 @@ window.__resources = Object.assign({}, window.__resources, {
             <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:11px">Garment Breakdown</div>
             <div style="display:flex;gap:6px;flex-wrap:wrap">
               <sc-for list="{{createdPanel.sizeCells}}" as="s" hint-placeholder-count="5">
-                <div style="min-width:52px;text-align:center;background:#121215;border:1px solid #232327;border-radius:8px;padding:9px 8px"><div style="font:600 10px/1 'Oswald';letter-spacing:.06em;color:#6C665C;margin-bottom:5px">{{s.label}}</div><div style="font:600 16px/1 'Oswald';color:#ECEAE4">{{s.qty}}</div></div>
+                <div style="min-width:52px;text-align:center;background:#121215;border:1px solid #232327;border-radius:8px;padding:9px 8px"><div style="font:600 10px/1 'Oswald';letter-spacing:.06em;color:var(--text-muted);margin-bottom:5px">{{s.label}}</div><div style="font:600 16px/1 'Oswald';color:#ECEAE4">{{s.qty}}</div></div>
               </sc-for>
               <sc-if value="{{createdPanel.hasSizes}}" hint-placeholder-val="{{ true }}"><div style="min-width:52px;text-align:center;background:#18230D;border:1px solid #3D5418;border-radius:8px;padding:9px 8px"><div style="font:600 10px/1 'Oswald';letter-spacing:.06em;color:#BBD382;margin-bottom:5px">Total</div><div style="font:600 16px/1 'Oswald';color:#ECEAE4">{{createdPanel.qty}}</div></div></sc-if>
-              <sc-if value="{{createdPanel.sizesEmpty}}" hint-placeholder-val="{{ true }}"><div style="font:400 11px/1.4 'Archivo';color:#4d483f">No size breakdown on file for this order.</div></sc-if>
+              <sc-if value="{{createdPanel.sizesEmpty}}" hint-placeholder-val="{{ true }}"><div style="font:400 11px/1.4 'Archivo';color:var(--text-faint)">No size breakdown on file for this order.</div></sc-if>
             </div>
           </div>
           <div>
@@ -722,10 +711,10 @@ window.__resources = Object.assign({}, window.__resources, {
           <div>
             <div style="display:flex;align-items:center;gap:9px;margin-bottom:11px;flex-wrap:wrap">
               <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378">{{createdPanel.methodsHeading}}</div>
-              <sc-if value="{{createdPanel.methodsLoading}}" hint-placeholder-val="{{ false }}"><span style="font:400 11px/1 'Archivo';color:#4d483f">Loading…</span></sc-if>
+              <sc-if value="{{createdPanel.methodsLoading}}" hint-placeholder-val="{{ false }}"><span style="font:400 11px/1 'Archivo';color:var(--text-faint)">Loading…</span></sc-if>
             </div>
             <sc-if value="{{createdPanel.isMultiMethod}}" hint-placeholder-val="{{ false }}">
-              <div style="font:400 11px/1.5 'Archivo';color:#4d483f;margin:-4px 0 13px">This order is printed more than one way. Every method is listed below — book runs for all of them here, no need to exit to the board and reopen each one.</div>
+              <div style="font:400 11px/1.5 'Archivo';color:var(--text-faint);margin:-4px 0 13px">This order is printed more than one way. Every method is listed below — book runs for all of them here, no need to exit to the board and reopen each one.</div>
             </sc-if>
             <div style="display:flex;flex-direction:column;gap:13px">
               <sc-for list="{{createdPanel.methodsView}}" as="m" hint-placeholder-count="1">
@@ -736,7 +725,7 @@ window.__resources = Object.assign({}, window.__resources, {
                     <sc-if value="{{m.hasStatus}}" hint-placeholder-val="{{ false }}"><span style="margin-left:auto;font:600 8px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#8a8378;background:#141417;border:1px solid #242428;border-radius:6px;padding:4px 7px">{{m.status}}</span></sc-if>
                   </div>
                   <sc-if value="{{m.runsEmpty}}" hint-placeholder-val="{{ true }}">
-                    <div style="border:1px dashed #2a2a2f;border-radius:9px;padding:15px 13px;text-align:center;font:400 11px/1.5 'Archivo';color:#4d483f">No runs on this method yet. Create one below — it goes straight onto the shop calendar and will appear here.</div>
+                    <div style="border:1px dashed #2a2a2f;border-radius:9px;padding:15px 13px;text-align:center;font:400 11px/1.5 'Archivo';color:var(--text-faint)">No runs on this method yet. Create one below — it goes straight onto the shop calendar and will appear here.</div>
                   </sc-if>
                   <sc-if value="{{m.hasRuns}}" hint-placeholder-val="{{ false }}">
                     <div style="display:flex;flex-direction:column;gap:9px">
@@ -763,10 +752,10 @@ window.__resources = Object.assign({}, window.__resources, {
           </div>
           <sc-if value="{{createdPanel.canAddAnotherMethod}}" hint-placeholder-val="{{ true }}">
             <button onClick="{{ onCreateAnotherMethod }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:9px;font:700 13px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#ECEAE4;background:transparent;border:1px solid #3a3a40;border-radius:11px;padding:16px;cursor:pointer;margin-top:-12px" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-layers-plus"></i>Create Another Method</button>
-            <div style="font:400 11px/1.5 'Archivo';color:#4d483f;margin-top:-14px">For an order printed more than one way — screen print on the front, embroidery on the back. Specs and notes carry over; the runs above stay on this method.</div>
+            <div style="font:400 11px/1.5 'Archivo';color:var(--text-faint);margin-top:-14px">For an order printed more than one way — screen print on the front, embroidery on the back. Specs and notes carry over; the runs above stay on this method.</div>
           </sc-if>
           <button onClick="{{ onExitToBoard }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:9px;font:700 13px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#9C978C;background:transparent;border:1px solid #2a2a2f;border-radius:11px;padding:16px;cursor:pointer;margin-top:-12px" style-hover="border-color:#5E9B9A;color:#5E9B9A"><i class="ti ti-arrow-left"></i>Exit to Pre-Production</button>
-          <div style="font:400 11px/1.5 'Archivo';color:#4d483f;margin-top:-14px">Done with this order — back to the pre-production board. Everything above is already saved.</div>
+          <div style="font:400 11px/1.5 'Archivo';color:var(--text-faint);margin-top:-14px">Done with this order — back to the pre-production board. Everything above is already saved.</div>
         </div>
       </sc-if>
     </div>
@@ -783,15 +772,15 @@ window.__resources = Object.assign({}, window.__resources, {
 
       <div style="padding:20px 22px;display:flex;flex-direction:column;gap:20px">
         <div style="background:#121215;border:1px solid #232327;border-radius:11px;padding:14px 15px;display:flex;flex-direction:column;gap:12px">
-          <div style="font:600 10px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#6C665C">For reference</div>
+          <div style="font:600 10px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)">For reference</div>
           <div>
             <div style="font:600 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:7px">Garment Breakdown</div>
             <div style="display:flex;gap:5px;flex-wrap:wrap">
               <sc-for list="{{createdPanel.sizeCells}}" as="s" hint-placeholder-count="5">
-                <div style="min-width:44px;text-align:center;background:#0D0D0F;border:1px solid #232327;border-radius:7px;padding:6px 7px"><div style="font:600 9px/1 'Oswald';letter-spacing:.05em;color:#6C665C;margin-bottom:3px">{{s.label}}</div><div style="font:600 13px/1 'Oswald';color:#ECEAE4">{{s.qty}}</div></div>
+                <div style="min-width:44px;text-align:center;background:#0D0D0F;border:1px solid #232327;border-radius:7px;padding:6px 7px"><div style="font:600 9px/1 'Oswald';letter-spacing:.05em;color:var(--text-muted);margin-bottom:3px">{{s.label}}</div><div style="font:600 13px/1 'Oswald';color:#ECEAE4">{{s.qty}}</div></div>
               </sc-for>
               <sc-if value="{{createdPanel.hasSizes}}" hint-placeholder-val="{{ true }}"><div style="min-width:44px;text-align:center;background:#18230D;border:1px solid #3D5418;border-radius:7px;padding:6px 7px"><div style="font:600 9px/1 'Oswald';letter-spacing:.05em;color:#BBD382;margin-bottom:3px">Total</div><div style="font:600 13px/1 'Oswald';color:#ECEAE4">{{createdPanel.qty}}</div></div></sc-if>
-              <sc-if value="{{createdPanel.sizesEmpty}}" hint-placeholder-val="{{ true }}"><div style="font:400 11px/1.4 'Archivo';color:#4d483f">No size breakdown on file.</div></sc-if>
+              <sc-if value="{{createdPanel.sizesEmpty}}" hint-placeholder-val="{{ true }}"><div style="font:400 11px/1.4 'Archivo';color:var(--text-faint)">No size breakdown on file.</div></sc-if>
             </div>
           </div>
           <div>
@@ -810,15 +799,15 @@ window.__resources = Object.assign({}, window.__resources, {
               <i class="ti ti-user-check" style="font-size:14px;color:#5E9B9A"></i>
               <div style="font:600 10px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#5E9B9A">Account Manager Suggested</div>
             </div>
-            <div style="font:400 11px/1.45 'Archivo';color:#6C665C;margin-bottom:11px">What was promised when the order closed. Use one to fill the form in, then change whatever does not fit the floor — nothing here is booked.</div>
+            <div style="font:400 11px/1.45 'Archivo';color:var(--text-muted);margin-bottom:11px">What was promised when the order closed. Use one to fill the form in, then change whatever does not fit the floor — nothing here is booked.</div>
             <sc-for list="{{proposals}}" as="p" hint-placeholder-count="1">
               <div style="background:#0D0D0F;border:1px solid #1f1f23;border-left:3px solid {{p.accent}};border-radius:9px;padding:11px 12px;margin-bottom:7px">
                 <div style="display:flex;align-items:baseline;gap:8px">
                   <div style="font:600 13px/1.2 'Oswald';color:{{p.nameColor}}">{{p.machine}}</div>
                   <div style="font:400 11px/1.2 'Archivo';color:#9C978C">{{p.when}}</div>
-                  <div style="margin-left:auto;font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#6C665C">{{p.statusLabel}}</div>
+                  <div style="margin-left:auto;font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)">{{p.statusLabel}}</div>
                 </div>
-                <div style="font:400 10px/1.4 'Archivo';color:#6C665C;margin-top:4px">{{p.name}} · {{p.meta}}</div>
+                <div style="font:400 10px/1.4 'Archivo';color:var(--text-muted);margin-top:4px">{{p.name}} · {{p.meta}}</div>
                 <sc-if value="{{p.hasNotes}}" hint-placeholder-val="{{ false }}">
                   <div style="font:400 11px/1.45 'Archivo';color:#C9C6BF;margin-top:6px;white-space:pre-wrap">{{p.notes}}</div>
                 </sc-if>
@@ -868,14 +857,14 @@ window.__resources = Object.assign({}, window.__resources, {
               <option value="">— Not set —</option>
               <sc-for list="{{runLocationOptions}}" as="loc" hint-placeholder-count="3"><option value="{{loc}}">{{loc}}</option></sc-for>
             </select>
-            <div style="font:400 11px/1.5 'Archivo';letter-spacing:.02em;color:#4d483f;margin-top:7px;max-width:280px">One run prints one location — front and back are separate passes. Choices come from this method's placements.</div>
+            <div style="font:400 11px/1.5 'Archivo';letter-spacing:.02em;color:var(--text-faint);margin-top:7px;max-width:280px">One run prints one location — front and back are separate passes. Choices come from this method's placements.</div>
           </div>
         </sc-if>
 
         <div>
           <div style="font:600 11px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#8a8378;margin-bottom:8px">Total Garments to Print</div>
           <input type="number" min="1" value="{{runForm.qty}}" onInput="{{ onRunQty }}" placeholder="e.g. 48" style="width:100%;max-width:180px;background:#121215;border:1px solid #242428;border-radius:9px;padding:11px 13px;font-size:13px;color:#ECEAE4;outline:none">
-          <sc-if value="{{runHasQtyHint}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:5px;font:400 11px/1.3 'Archivo';color:#8a8378;margin-top:7px"><i class="ti ti-shirt" style="font-size:13px;color:#6C665C"></i>{{runQtyHint}}</div></sc-if>
+          <sc-if value="{{runHasQtyHint}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:5px;font:400 11px/1.3 'Archivo';color:#8a8378;margin-top:7px"><i class="ti ti-shirt" style="font-size:13px;color:var(--text-muted)"></i>{{runQtyHint}}</div></sc-if>
         </div>
 
         <sc-if value="{{runHasMsg}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:7px;font:600 11px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:#BBD382;background:#18230D;border:1px solid #3D5418;border-radius:9px;padding:10px 13px"><i class="ti ti-check"></i>{{runMsg}}</div></sc-if>
@@ -2141,7 +2130,7 @@ class Component extends DCLogic {
   mgrVals(){
     const st=this.state, api=this._api||window.CAApi;
     const t=(v)=>(api&&api.text?api.text(v):(v||''));
-    const UC={ over:'#E24A3A', today:'#E24A3A', soon:'#C9923A', ok:'#6C665C' };
+    const UC={ over:'#E24A3A', today:'#E24A3A', soon:'#C9923A', ok:'var(--text-muted)' };
     const inboxAll=(st.inbox||[]).map(r=>{
       const piv=api&&api.pivotItems?api.pivotItems(r):{qty:''}; const due=api&&api.dueInfo?api.dueInfo(r.Print_Date__c):{label:'',urg:'ok'}; const id=r.Id;
       const ucs = window.CAApi.urgCardStyle(due.urg);
@@ -2473,7 +2462,7 @@ class Component extends DCLogic {
     // field still exists on the schema (not yet deleted), just unused now.
     const M={ sp:{label:'Screen Print',color:'#C6372B',icon:'ti-stack-2',prereq:['Screens completed','Inks mixed']}, em:{label:'Embroidery',color:'#5E9B9A',icon:'ti-needle',prereq:['File digitized','Thread & materials']}, hp:{label:'Heat Press',color:'#C9923A',icon:'ti-flame',prereq:['Transfers received','Transfers ready']}, promo:{label:'Promotional Items',color:'#8E6FB0',icon:'ti-gift',prereq:[]} };
     const W={ MA:{name:'Marcus A.',color:'#C6372B'}, DK:{name:'Dana K.',color:'#5E9B9A'}, PR:{name:'Priya R.',color:'#C9923A'}, JT:{name:'Jules T.',color:'#7FA644'} };
-    const U={ over:'#E24A3A', today:'#E24A3A', soon:'#C9923A', ok:'#6C665C' };
+    const U={ over:'#E24A3A', today:'#E24A3A', soon:'#C9923A', ok:'var(--text-muted)' };
     const RECV={ none:{label:'Not Received',icon:'ti-inbox',textColor:'#E8A89F',bg:'#2A100D',border:'#7A241C'}, partial:{label:'Partial',icon:'ti-progress',textColor:'#E0B870',bg:'#241a09',border:'#5E4214'}, countedin:{label:'Counted In',icon:'ti-checks',textColor:'#8FCBE0',bg:'#0D1F2A',border:'#2E6A8B'}, staged:{label:'Staged',icon:'ti-check',textColor:'#BBD382',bg:'#18230D',border:'#3D5418'} };
     const RECV_STEPS=[['none','Not In','ti-inbox'],['partial','Partial','ti-progress'],['countedin','Counted','ti-checks'],['staged','Staged','ti-checkbox']];
 
@@ -2542,7 +2531,7 @@ class Component extends DCLogic {
         emptyMsg: (colState === 'empty')
           ? ('Nothing in ' + s.label + '. Orders appear here once a production method is created for them from the Management inbox.')
           : ((window.CAApi && window.CAApi.listNotice) ? window.CAApi.listNotice(colState, '') : ''),
-        emptyColor: colState === 'error' ? '#C9923A' : '#6C665C',
+        emptyColor: colState === 'error' ? '#C9923A' : 'var(--text-muted)',
         readyLabel: ready+' ready to send · '+items.length+' in prep' });
     });
 
@@ -2711,7 +2700,7 @@ class Component extends DCLogic {
     const isAdmin = !!(window.CAApi && window.CAApi.isAdmin && window.CAApi.isAdmin());
     const live=st.connection==='live';
     const connLabel = live?'Live · Salesforce':(st.connection==='loading'?'Connecting…':'Demo data');
-    const connColor = live?'#7FA644':(st.connection==='loading'?'#6C665C':'#C9923A');
+    const connColor = live?'#7FA644':(st.connection==='loading'?'var(--text-muted)':'#C9923A');
     // Switch-account PIN pad (mirrors login.html/index.html's keypad).
     const gateDots=[0,1,2,3].map(i=>{ const f=i<st.gatePin.length; return { bg:f?'#C6372B':'transparent', border:f?'#C6372B':'#3a3a40' }; });
     const gateKeys=['1','2','3','4','5','6','7','8','9'];
@@ -2720,7 +2709,7 @@ class Component extends DCLogic {
     gatePad.push({ label:'0', isText:true, isIcon:false, onPress:()=>this.onGatePress('0'), bg:'#16161a', border:'#242428', color:'#ECEAE4' });
     gatePad.push({ label:'', isText:false, isIcon:true, icon:'ti-arrow-right', onPress:()=>{ if(st.gatePin.length===4) this.submitGatePin(st.gatePin); }, bg:'#C6372B', border:'#C6372B', color:'#08080A' });
     const gateStatusText = st.gateErr || (st.gateSubmitting ? 'Verifying…' : '');
-    const gateStatusColor = st.gateErr ? '#E8A89F' : '#6C665C';
+    const gateStatusColor = st.gateErr ? '#E8A89F' : 'var(--text-muted)';
     // Salesforce environment switcher -- mirrors index.html's copy of the
     // same feature. Lives in `base` (shared by both the board header and the
     // Management view's header) since it's global regardless of which view
@@ -2731,10 +2720,10 @@ class Component extends DCLogic {
       return {
         key:e.key, label:e.label, isActive,
         statusLabel: e.configured ? (isActive?'Currently active':'Configured') : 'Not configured yet',
-        dotColor: isActive?'#7FA644':(e.configured?'#6C665C':'#3a3a3f'),
+        dotColor: isActive?'#7FA644':(e.configured?'var(--text-muted)':'#3a3a3f'),
         bg: isSelected?'#1a1410':'#121215',
         border: isSelected?'#5E4214':'#232327',
-        textColor: e.configured?'#ECEAE4':'#4d483f',
+        textColor: e.configured?'#ECEAE4':'var(--text-faint)',
         cursor: e.configured?'pointer':'not-allowed',
         onPick: e.configured?(()=>this.pickSfEnvKey(e.key)):(()=>{}),
       };
