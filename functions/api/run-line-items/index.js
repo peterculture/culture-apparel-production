@@ -80,6 +80,7 @@
  * arithmetic is never trusted.
  */
 import { runQuery, sfFetch, apiVersion, jsonError, soqlQuote, soqlQuoteList } from "../_sf.js";
+import { requireCap } from "../_session.js";
 
 const RUN_OBJECT = "Production_Run__c";
 const LINE_OBJECT = "Production_Run_Line_Items__c";
@@ -298,6 +299,8 @@ export async function onRequestGet({ env, request }) {
  * size" -- see the header on why that is a write and not a delete.
  */
 export async function onRequestPatch({ env, request }) {
+  const gate = await requireCap(request, env, "runs.schedule");
+  if (gate.denied) return gate.response;
   try {
     let body;
     try {
