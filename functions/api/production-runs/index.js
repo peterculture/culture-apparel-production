@@ -53,12 +53,23 @@
  * (after insert/update) -> ProductionRunTriggerHelper -> ProductionAutoScheduler
  * Service.scheduleFromRuns(). It runs on every insert/update and OVERWRITES
  * Scheduled_Start__c/Scheduled_End__c with its own computed slot for any run
- * whose Auto_Scheduling_Status__c isn't literally 'Confirmed'
- * (ProductionAutoSchedulerSelector.getSchedulableByPress() excludes Confirmed
- * runs from its query). Every write here sets Auto_Scheduling_Status__c =
- * 'Confirmed' specifically to opt OUT of that auto-scheduler -- without it,
- * the manager's manually-typed Scheduled Start/End get silently replaced
- * moments after creation.
+ * whose Auto_Scheduling_Status__c the selector considers schedulable
+ * (ProductionAutoSchedulerSelector.getSchedulableByPress()). Writing a PINNED
+ * status opts a run out of that, which is what makes a manager's typed
+ * Scheduled Start/End actually stick.
+ *
+ * CORRECTED 2026-09-01 (E5.13). This used to read "every write here sets
+ * Auto_Scheduling_Status__c = 'Confirmed'", which is not what the code does and
+ * has not been since 2026-08-21. A run is INSERTED as 'Planned' and PATCHED to
+ * 'Confirmed' a moment later -- see publishRun() and the long note at the
+ * create call. Both statuses are pinned, so the auto-scheduler leaves the times
+ * alone throughout; the two steps exist because ProductionEventPublisher keys
+ * off Trigger.oldMap, which is null on an insert, so a run born Confirmed may
+ * publish no calendar Event at all and fail silently.
+ *
+ * The distinction matters because the header, read alone, invites exactly the
+ * "simplification" that breaks publishing: collapsing the two writes into one.
+ * Every write still ENDS at Confirmed. None of them starts there.
  */
 import { sfFetch, apiVersion, jsonError, runQuery } from "../_sf.js";
 import { rollupPrintDateToOrder, orderIdForMethod } from "../_print-date-rollup.js";
