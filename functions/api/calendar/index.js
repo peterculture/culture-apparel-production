@@ -25,7 +25,7 @@
  * deliberately does not trust it, so a missed nightly refresh can never put a
  * stale number on the calendar.
  */
-import { runQuery, jsonError } from "../_sf.js";
+import { runQuery, jsonError, runChunkedIdQuery } from "../_sf.js";
 import { runQueryOptionalField } from "../_placements.js";
 import { fetchMockupsByOpportunity } from "../_mockup.js";
 import { scoreOrder, suggestSlot, prepStatus, byPriority, WEIGHTS, SHOP,
@@ -90,6 +90,23 @@ const RUN_FIELDS = [
 // would render as a shop with nothing scheduled.
 const RUN_LOCATION_FIELD = "Print_Location__c";
 
+/**
+ * Hard ceiling on the requested window (E5.12).
+ *
+ * from/to are shape-checked as YYYY-MM-DD but the SPAN between them was never
+ * bounded, so /api/calendar?from=1900-01-01&to=2100-01-01 asked this endpoint
+ * to score every order the shop has ever had and run four follow-up roll-ups
+ * over all of them. Chunking below makes that correct; it does not make it
+ * wise.
+ *
+ * calendar.html never asks for more than six days (windowDays(): day, 3day, or
+ * Mon-Sat), and the server default is 56. A year is therefore enormously
+ * generous for every real caller and still bounds the work. Clamped rather
+ * than rejected, and reported back in `window.clamped`, because a board that
+ * renders a year of work is more useful than a 400 nobody expected.
+ */
+const MAX_RANGE_DAYS = 366;
+
 const DEFAULT_BACK_DAYS = 14;
 const DEFAULT_FORWARD_DAYS = 42;
 
@@ -153,9 +170,32 @@ export async function onRequestGet({ env, request }) {
     const from = isDay(url.searchParams.get("from"))
       ? url.searchParams.get("from")
       : dayOffset(-DEFAULT_BACK_DAYS);
-    const to = isDay(url.searchParams.get("to"))
+    let to = isDay(url.searchParams.get("to"))
       ? url.searchParams.get("to")
       : dayOffset(DEFAULT_FORWARD_DAYS);
+
+    // Clamp an over-long window to MAX_RANGE_DAYS from `from`. Date.UTC on the
+    // parsed parts, not Date.parse on the strings, so this is plain calendar
+    // arithmetic and cannot be shifted by the runtime's timezone (see the E5.7
+    // note in _priority.js -- Workers run in UTC and setHours-style code was
+    // wrong here for months).
+    let clamped = false;
+    {
+      const asUtc = (d) => {
+        const [y, m, dd] = d.split("-").map(Number);
+        return Date.UTC(y, m - 1, dd);
+      };
+      const span = (asUtc(to) - asUtc(from)) / 86400000;
+      if (!(span >= 0)) {
+        // `to` before `from` yields no rows and reads as an empty shop rather
+        // than a bad request. Say so instead.
+        return jsonError("to_before_from", 400);
+      }
+      if (span > MAX_RANGE_DAYS) {
+        to = new Date(asUtc(from) + MAX_RANGE_DAYS * 86400000).toISOString().slice(0, 10);
+        clamped = true;
+      }
+    }
 
     // Everything with a print date in the window comes back, finished or not.
     // Only Cancelled is filtered out -- see the note on HIDDEN_METHOD_STATUSES.
@@ -295,18 +335,55 @@ export async function onRequestGet({ env, request }) {
     }
 
     try {
-      const quoted = methodIds.map((id) => `'${id}'`).join(",");
-      const runWhere =
-        `(Scheduled_Start__c >= ${soqlDateTime(from, false)} ` +
-        `AND Scheduled_Start__c <= ${soqlDateTime(to, true)})` +
-        (methodIds.length ? ` OR PrintMethod__c IN (${quoted})` : "");
-      const runsResult = await runQueryOptionalField(
+      /* Runs come from two halves that used to be ORed into one query:
+         everything scheduled inside the window, plus everything belonging to a
+         method on this board whatever its schedule says.
+
+         The second half was an unbounded `PrintMethod__c IN (...)` built from
+         the primary result set, which is exactly the shape that dies when the
+         query URL gets too long (E5.12) -- and dies as an HTTP rejection, not a
+         SOQL error, so this whole block would have fallen into its catch and
+         the board would have rendered with no runs at all and no explanation.
+
+         Split and deduped rather than chunked in place: chunking an
+         `A OR B IN (...)` re-runs the A half on every chunk, so the range rows
+         would come back once per chunk. One query for the range, then chunked
+         queries for the method Ids, merged through a Map keyed on run Id.
+
+         Deliberately ONE code path rather than keeping the old single query for
+         the common small case -- the rare branch is always the untested one,
+         and with no methodIds this is just the range query as before. */
+      const runSelect = (withLocation) =>
+        `SELECT ${RUN_FIELDS.concat(withLocation ? [RUN_LOCATION_FIELD] : []).join(", ")} ` +
+        `FROM Production_Run__c WHERE `;
+      const byRunId = new Map();
+      let runsOk = true;
+      let runsStatus = null;
+
+      const rangeRes = await runQueryOptionalField(
         env,
         (withLocation) =>
-          `SELECT ${RUN_FIELDS.concat(withLocation ? [RUN_LOCATION_FIELD] : []).join(", ")} ` +
-          `FROM Production_Run__c WHERE ${runWhere}`,
+          runSelect(withLocation) +
+          `(Scheduled_Start__c >= ${soqlDateTime(from, false)} ` +
+          `AND Scheduled_Start__c <= ${soqlDateTime(to, true)})`,
         RUN_LOCATION_FIELD,
       );
+      if (rangeRes.ok) rangeRes.records.forEach((r) => byRunId.set(r.Id, r));
+      else { runsOk = false; runsStatus = rangeRes.status; }
+
+      if (runsOk && methodIds.length) {
+        const byMethod = await runChunkedIdQuery(methodIds, (quoted) =>
+          runQueryOptionalField(
+            env,
+            (withLocation) => runSelect(withLocation) + `PrintMethod__c IN (${quoted})`,
+            RUN_LOCATION_FIELD,
+          ),
+        );
+        if (byMethod.ok) byMethod.records.forEach((r) => byRunId.set(r.Id, r));
+        else { runsOk = false; runsStatus = byMethod.status; }
+      }
+
+      const runsResult = { ok: runsOk, status: runsStatus, records: Array.from(byRunId.values()) };
       if (runsResult.ok) {
         const methodToOrder = new Map(records.map((r) => [r.Id, r.Order__c]));
         runsResult.records.forEach((run) => {
@@ -423,10 +500,8 @@ export async function onRequestGet({ env, request }) {
     const orderIds = orders.map((o) => o.Id).filter(Boolean);
     if (orderIds.length) {
       try {
-        const quotedIds = orderIds.map((oid) => `'${oid}'`).join(",");
-        const itemsResult = await runQuery(
-          env,
-          `SELECT OrderId, Quantity FROM OrderItem WHERE OrderId IN (${quotedIds})`,
+        const itemsResult = await runChunkedIdQuery(orderIds, (quotedIds) =>
+          runQuery(env, `SELECT OrderId, Quantity FROM OrderItem WHERE OrderId IN (${quotedIds})`),
         );
         if (itemsResult.ok) {
           const qtyByOrder = new Map();
@@ -467,17 +542,21 @@ export async function onRequestGet({ env, request }) {
      */
     if (orderIds.length) {
       try {
-        const quotedIds = orderIds.map((oid) => `'${oid}'`).join(",");
-        const propResult = await runQueryOptionalField(
-          env,
-          (withLocation) =>
-            `SELECT Id, Name, Order__c, Machine_Group__c, ` +
-            (withLocation ? `${RUN_LOCATION_FIELD}, ` : "") +
-            `Proposed_Start__c, Proposed_Hours__c, ` +
-            `Quantity__c, Sequence__c, Notes__c, Status__c, CreatedBy.Name ` +
-            `FROM Proposed_Run__c WHERE Order__c IN (${quotedIds}) AND Status__c = 'Proposed' ` +
-            `ORDER BY Sequence__c ASC NULLS LAST, Proposed_Start__c ASC NULLS LAST, CreatedDate ASC`,
-          RUN_LOCATION_FIELD,
+        const propResult = await runChunkedIdQuery(orderIds, (quotedIds) =>
+          runQueryOptionalField(
+            env,
+            (withLocation) =>
+              `SELECT Id, Name, Order__c, Machine_Group__c, ` +
+              (withLocation ? `${RUN_LOCATION_FIELD}, ` : "") +
+              `Proposed_Start__c, Proposed_Hours__c, ` +
+              `Quantity__c, Sequence__c, Notes__c, Status__c, CreatedBy.Name ` +
+              `FROM Proposed_Run__c WHERE Order__c IN (${quotedIds}) AND Status__c = 'Proposed' ` +
+              // ORDER BY is per-chunk, but the consumer regroups by Order__c
+              // and each order's proposals land in one chunk (chunking is by
+              // order Id), so each order's list keeps its order.
+              `ORDER BY Sequence__c ASC NULLS LAST, Proposed_Start__c ASC NULLS LAST, CreatedDate ASC`,
+            RUN_LOCATION_FIELD,
+          ),
         );
         if (propResult.ok) {
           const byOrderId = new Map();
@@ -532,25 +611,26 @@ export async function onRequestGet({ env, request }) {
      */
     if (orderIds.length) {
       try {
-        const quotedIds = orderIds.map((oid) => `'${oid}'`).join(",");
-        const itemResult = await runQuery(
-          env,
-          // Pre_Production_Item__c has NO Order__c of its own -- it reaches the
-          // order through its method (item -> Production_Method__c -> Order__c),
-          // exactly as pre-production-items/index.js does. Filtering on a
-          // non-existent Order__c would 400, and because this whole block fails
-          // open, it would have failed SILENTLY: no prep detail, no error, no
-          // clue why.
-          `SELECT Id, Name, Type__c, Status__c, Mesh_Count__c, Pantone_Color__c, ` +
-          `Thread_Color__c, Thread_Number__c, Transfer_Type__c, ` +
-          // The per-type sub-status is what the station board tabs on, so
-          // carrying it lets the calendar link straight to the stage the item
-          // is actually sitting at rather than the station's master list.
-          `Screen_Sub_Status__c, Ink_Sub_Status__c, Transfers_Sub_Status__c, ` +
-          `Production_Method__c, Production_Method__r.Type__c, Production_Method__r.Order__c ` +
-          `FROM Pre_Production_Item__c WHERE Production_Method__r.Order__c IN (${quotedIds}) ` +
-          `AND (Status__c = null OR Status__c != 'Ready') ` +
-          `ORDER BY Type__c, Name`,
+        const itemResult = await runChunkedIdQuery(orderIds, (quotedIds) =>
+          runQuery(
+            env,
+            // Pre_Production_Item__c has NO Order__c of its own -- it reaches the
+            // order through its method (item -> Production_Method__c -> Order__c),
+            // exactly as pre-production-items/index.js does. Filtering on a
+            // non-existent Order__c would 400, and because this whole block fails
+            // open, it would have failed SILENTLY: no prep detail, no error, no
+            // clue why.
+            `SELECT Id, Name, Type__c, Status__c, Mesh_Count__c, Pantone_Color__c, ` +
+            `Thread_Color__c, Thread_Number__c, Transfer_Type__c, ` +
+            // The per-type sub-status is what the station board tabs on, so
+            // carrying it lets the calendar link straight to the stage the item
+            // is actually sitting at rather than the station's master list.
+            `Screen_Sub_Status__c, Ink_Sub_Status__c, Transfers_Sub_Status__c, ` +
+            `Production_Method__c, Production_Method__r.Type__c, Production_Method__r.Order__c ` +
+            `FROM Pre_Production_Item__c WHERE Production_Method__r.Order__c IN (${quotedIds}) ` +
+            `AND (Status__c = null OR Status__c != 'Ready') ` +
+            `ORDER BY Type__c, Name`,
+          ),
         );
         if (itemResult.ok) {
           const byOrderId = new Map();
@@ -617,7 +697,7 @@ export async function onRequestGet({ env, request }) {
 
     return Response.json(
       {
-        window: { from, to },
+        window: { from, to, clamped },
         shopHours: SHOP,
         weights: WEIGHTS, // echoed so the UI can show the breakdown without hardcoding it
         presses,
