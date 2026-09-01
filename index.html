@@ -181,7 +181,7 @@ window.__resources = Object.assign({}, window.__resources, {
           </div>
         </sc-for>
         <sc-if value="{{col.isEmpty}}" hint-placeholder-val="{{ true }}">
-          <div style="border:1px dashed #2a2a2f;border-radius:11px;padding:22px 12px;text-align:center;font:400 11px/1.4 'Archivo';color:#4d483f">No orders — drag one here</div>
+          <div style="border:1px dashed #2a2a2f;border-radius:11px;padding:22px 12px;text-align:center;font:400 11px/1.4 'Archivo';color:{{col.emptyColor}}">{{col.emptyMsg}}</div>
         </sc-if>
       </div>
     </sc-for>
@@ -2290,9 +2290,22 @@ class Component extends DCLogic {
     const columns = stageMeta.map(s=>{
       const items = visible.filter(o=>o.stage===s.key).map(mk);
       const units = items.reduce((a,o)=>a+(parseInt(o.qty,10)||0),0);
+      const colState = (window.CAApi && window.CAApi.listState)
+        ? window.CAApi.listState(st.connection, items.length)
+        : (items.length ? 'ready' : 'empty');
       const over = st.dragOverStage===s.key;
       return Object.assign({}, s, {
-        items, count:items.length, isEmpty:items.length===0, unitsLabel:units.toLocaleString()+' pcs',
+        items, count:items.length, unitsLabel:units.toLocaleString()+' pcs',
+        /* E4.5. This used to be `items.length===0` with the words "No orders --
+           drag one here" hardcoded in the markup, so every column on a board
+           that had not finished loading stated there were no orders in it.
+           Loading, demo and genuinely-empty now read differently; see
+           listState() in ca-api.js. */
+        isEmpty: colState !== 'ready',
+        emptyMsg: (colState === 'empty')
+          ? ('No orders in ' + s.label + ' — drag one here, or it arrives when a method reaches this stage.')
+          : ((window.CAApi && window.CAApi.listNotice) ? window.CAApi.listNotice(colState, '') : ''),
+        emptyColor: colState === 'error' ? '#C9923A' : '#6C665C',
         // One line saying what this stage MEANS, under the column heading.
         // Sourced from ca-api.js so the wording matches the drawer's stepper
         // and every Status dropdown instead of being retyped per board.
