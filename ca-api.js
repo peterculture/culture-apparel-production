@@ -1785,15 +1785,78 @@
     for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
     return WORKER_COLORS[h % WORKER_COLORS.length];
   }
-  function methodOf(rec){
-    var p = ((rec.Printer__r && rec.Printer__r.Name) || '').toLowerCase();
-    if (/embroid|stitch|thread/.test(p)) return 'em';
-    if (/heat|transfer|dtf|vinyl|press/.test(p)) return 'hp';
-    if (/screen|print/.test(p)) return 'sp';
-    if (rec.Digitize_File__c || rec.Thread_Color_Materials__c) return 'em';
-    if (rec.Transfers_Received__c || rec.Transfers_Ready__c) return 'hp';
-    return 'sp';
+  /* Which print method an order probably needs -- AND HOW SURE WE ARE. (E3.3)
+   *
+   * There is no field on Order that says. This reads five weak signals and
+   * guesses, which is fine as long as the guess is presented as a guess. It
+   * was not: methodOf() below returned a bare 'sp' for "no idea" exactly as it
+   * does for "the press is literally called Screen Print 1", and nothing
+   * downstream could tell those apart. On the Begin Set-up form that means a
+   * confident, wrong Screen Print sitting in a field the manager is about to
+   * accept -- and a silent wrong guess prints the job wrong.
+   *
+   * The signal order is the original one and must stay that way: press name
+   * first, then the prep checklist, because a press name is a statement about
+   * this job and a checklist tick is a side effect of someone starting work.
+   *
+   * Returns { type, key, confident, from, reason }:
+   *   type        'Screen Print' | 'Embroidery' | 'Heat Press', or null
+   *   key         the short code the boards use, or null
+   *   confident   true only when a signal actually matched
+   *   from        the press name it read, so the UI can show its working
+   *   reason      'press-name' | 'prep-checklist' | 'no-match' | 'no-press-name'
+   *
+   * WHICH SIGNALS ARE EVEN AVAILABLE DEPENDS ON THE CALLER. /api/orders returns
+   * the four checklist fields; /api/inbox does NOT, so on the Begin Set-up form
+   * only the press name can ever match and everything else lands on no-match.
+   * That is not a bug to fix here -- it is why `reason` exists. */
+  var METHOD_BY_KEY = { sp:'Screen Print', em:'Embroidery', hp:'Heat Press' };
+  function methodGuess(rec){
+    var r = rec || {};
+    var name = (r.Printer__r && r.Printer__r.Name) || '';
+    var p = String(name).toLowerCase();
+    var hit = function (key, reason, from) {
+      return { type: METHOD_BY_KEY[key], key: key, confident: true, from: from, reason: reason };
+    };
+    /* These patterns mirror PRESS_GROUPS in functions/api/_priority.js, which
+       is the authority on which physical press runs which method. They were
+       NOT aligned before, and the difference mattered:
+
+         old heat pattern   /heat|transfer|dtf|vinyl|press/
+                            ^^^^^ a bare "press"
+
+       "Press 1" and "Press 2" are the shop's two SCREEN PRINT presses -- see
+       PRESS_GROUPS, where press1/press2 carry methodTypes ["Screen Print"].
+       The bare `press` matched them first, so the shop's two busiest presses
+       were confidently classified Heat Press, and that is what the Method chip
+       printed on the order sheet that goes to the floor.
+
+       The server requires a qualifier -- (heat|hat|shirt)\s*press -- and so do
+       we now. `press 1` / `press 2` / `10 head` / `6 head` are screen print,
+       matching press1 and press2.
+
+       This IS a second copy of a matching rule, which _priority.js warns
+       against ("a second copy would drift the first time a press is renamed").
+       The durable fix is for /api/inbox to return the group the server already
+       computes, and let the browser stop guessing. Until then these two must be
+       changed together -- and the equivalence test that caught this compares
+       them, so a drift shows up. */
+    if (/embroid|stitch|thread/.test(p)) return hit('em', 'press-name', name);
+    if (/(heat|hat|shirt)\s*press|transfer|dtf|vinyl/.test(p)) return hit('hp', 'press-name', name);
+    if (/screen|press\s*0*[12]\b|\b\d+\s*head\b|print/.test(p)) return hit('sp', 'press-name', name);
+    if (r.Digitize_File__c || r.Thread_Color_Materials__c) return hit('em', 'prep-checklist', '');
+    if (r.Transfers_Received__c || r.Transfers_Ready__c) return hit('hp', 'prep-checklist', '');
+    return {
+      type: null, key: null, confident: false, from: name,
+      reason: String(name).trim() ? 'no-match' : 'no-press-name',
+    };
   }
+  /* The old shape, unchanged on purpose. order-sheet.html's Method chip wants a
+     best guess for a printed reference and has always fallen back to Screen
+     Print; keeping that here means E3.3 changes no existing behaviour anywhere,
+     and only the new caller has to reason about confidence. One inference path,
+     two views of it. */
+  function methodOf(rec){ return methodGuess(rec).key || 'sp'; }
   // Salesforce Date fields come back as plain "YYYY-MM-DD" (needs a noon time
   // appended so it doesn't parse as UTC midnight and roll back a day in local
   // time). Salesforce DateTime fields come back already carrying a "T" and an
@@ -2032,6 +2095,7 @@
     getSfEnv: getSfEnv, setSfEnv: setSfEnv,
     getStationItems: getStationItems, updateItemStatus: updateItemStatus, updateOrderReceiving: updateOrderReceiving,
     getInventory: getInventory, postInventory: postInventory, stationLogin: stationLogin,
+    methodGuess: methodGuess,
     SIZE_ORDER: SIZE_ORDER, text: text, initials: initials, colorForName: colorForName, methodOf: methodOf, dueInfo: dueInfo, parseSfDate: parseSfDate, pivotItems: pivotItems, runQtyHint: runQtyHint,
     backgroundLoad: backgroundLoad, foregroundLoad: foregroundLoad,
     toast: toast, errText: errText, canWrite: canWrite, reportBlockedWrite: reportBlockedWrite, reportFailedWrite: reportFailedWrite,
