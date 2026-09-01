@@ -49,18 +49,18 @@ window.__resources = Object.assign({}, window.__resources, {
 <div style="display:flex;flex-direction:column;min-height:100vh;background:radial-gradient(circle at 30% -10%,#101013,#08080A 55%)">
 
   <header style="position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:16px;padding:14px 26px;background:rgba(6,6,7,.92);backdrop-filter:blur(10px);border-bottom:1px solid rgba(198,55,43,.4)">
-    <button onClick="{{ onOpenNav }}" title="All dashboards" style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:9px;background:#16161a;border:1px solid #2a2a2f;color:#9C978C;cursor:pointer;flex-shrink:0" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-menu-2" style="font-size:18px"></i></button>
+    <button onClick="{{ onOpenNav }}" title="All dashboards" style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:9px;background:#16161a;border:1px solid #2a2a2f;color:var(--text-secondary);cursor:pointer;flex-shrink:0" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-menu-2" style="font-size:18px"></i></button>
     <svg width="34" height="34" viewBox="0 0 48 48" aria-hidden="true" style="flex-shrink:0"><g fill="#C6372B"><rect x="12" y="9" width="24" height="3.1" rx="1.5"/><rect x="8" y="14" width="32" height="3.1" rx="1.5"/><rect x="5" y="19" width="38" height="3.1" rx="1.5"/><rect x="5" y="24" width="38" height="3.1" rx="1.5"/><rect x="6" y="29" width="36" height="3.1" rx="1.5"/><rect x="9" y="34" width="30" height="3.1" rx="1.5"/><rect x="13" y="39" width="22" height="3.1" rx="1.5"/></g></svg>
     <div style="min-width:0">
       <div style="font:700 16px/1 'Oswald';letter-spacing:.12em;color:#ECEAE4">CULTURE APPAREL</div>
       <div style="font:500 9px/1 'Oswald';letter-spacing:.4em;text-transform:uppercase;color:#C6372B;margin-top:4px">Production Floor</div>
     </div>
     <div style="margin-left:auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:flex-end">
-      <div style="font:600 13px/1 'Oswald';letter-spacing:.1em;color:#9C978C;white-space:nowrap">{{clock}} <span style="color:var(--text-faint)">·</span> {{dateStr}}</div>
+      <div style="font:600 13px/1 'Oswald';letter-spacing:.1em;color:var(--text-secondary);white-space:nowrap">{{clock}} <span style="color:var(--text-faint)">·</span> {{dateStr}}</div>
       <sc-if value="{{rushCount}}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:7px;font:600 10px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#E0B870;background:#241a09;border:1px solid #5E4214;border-radius:8px;padding:8px 11px;white-space:nowrap"><i class="ti ti-alert-triangle"></i>{{rushCount}} rush</div></sc-if>
-      <div style="display:flex;align-items:center;gap:7px;font:600 10px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#9C978C;white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:{{connColor}};box-shadow:0 0 7px {{connColor}}"></span>{{connLabel}}</div>
-      <sc-if value="{{isAdmin}}" hint-placeholder-val="{{ false }}"><button onClick="{{ onOpenSfEnv }}" title="Salesforce environment -- click to switch" style="display:flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#9C978C;background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:8px 11px;cursor:pointer;white-space:nowrap" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-cloud" style="font-size:12px"></i>{{sfEnvLabel}}</button></sc-if>
-      <div style="display:flex;align-items:center;gap:8px"><span style="width:28px;height:28px;border-radius:50%;background:#5E9B9A;color:#08080A;font:700 10px/28px 'Oswald';text-align:center">{{workerInit}}</span><span style="font:400 12px/1 'Archivo';color:#9C978C;white-space:nowrap">{{worker}}</span><button onClick="{{ onSwitchUser }}" title="Switch user" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px;background:transparent;border:1px solid #2a2a2f;color:var(--text-muted);cursor:pointer;flex-shrink:0" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-repeat" style="font-size:12px"></i></button></div>
+      <div style="display:flex;align-items:center;gap:7px;font:600 10px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:var(--text-secondary);white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:{{connColor}};box-shadow:0 0 7px {{connColor}}"></span>{{connLabel}}</div>
+      <sc-if value="{{isAdmin}}" hint-placeholder-val="{{ false }}"><button onClick="{{ onOpenSfEnv }}" title="Salesforce environment -- click to switch" style="display:flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-secondary);background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:8px 11px;cursor:pointer;white-space:nowrap" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-cloud" style="font-size:12px"></i>{{sfEnvLabel}}</button></sc-if>
+      <div style="display:flex;align-items:center;gap:8px"><span style="width:28px;height:28px;border-radius:50%;background:#5E9B9A;color:#08080A;font:700 10px/28px 'Oswald';text-align:center">{{workerInit}}</span><span style="font:400 12px/1 'Archivo';color:var(--text-secondary);white-space:nowrap">{{worker}}</span><button onClick="{{ onSwitchUser }}" title="Switch user" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px;background:transparent;border:1px solid #2a2a2f;color:var(--text-muted);cursor:pointer;flex-shrink:0" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-repeat" style="font-size:12px"></i></button></div>
     </div>
   </header>
 
@@ -70,7 +70,7 @@ window.__resources = Object.assign({}, window.__resources, {
       <div style="display:flex;align-items:center;gap:12px;padding:20px 22px;border-bottom:1px solid #1b1b1e">
         <svg width="28" height="28" viewBox="0 0 48 48" aria-hidden="true" style="flex-shrink:0"><g fill="#C6372B"><rect x="12" y="9" width="24" height="3.1" rx="1.5"/><rect x="8" y="14" width="32" height="3.1" rx="1.5"/><rect x="5" y="19" width="38" height="3.1" rx="1.5"/><rect x="5" y="24" width="38" height="3.1" rx="1.5"/><rect x="6" y="29" width="36" height="3.1" rx="1.5"/><rect x="9" y="34" width="30" height="3.1" rx="1.5"/><rect x="13" y="39" width="22" height="3.1" rx="1.5"/></g></svg>
         <div style="font:700 13px/1 'Oswald';letter-spacing:.1em;color:#ECEAE4">CULTURE APPAREL</div>
-        <button onClick="{{ onCloseNav }}" style="margin-left:auto;flex-shrink:0;width:30px;height:30px;border-radius:8px;background:#16161a;border:1px solid #2a2a2f;color:#9C978C;cursor:pointer" style-hover="color:#ECEAE4;border-color:#3a3a40"><i class="ti ti-x"></i></button>
+        <button onClick="{{ onCloseNav }}" style="margin-left:auto;flex-shrink:0;width:30px;height:30px;border-radius:8px;background:#16161a;border:1px solid #2a2a2f;color:var(--text-secondary);cursor:pointer" style-hover="color:#ECEAE4;border-color:#3a3a40"><i class="ti ti-x"></i></button>
       </div>
       <div style="padding:14px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1">
         <sc-for list="{{navBoards}}" as="b" hint-placeholder-count="6">
@@ -82,7 +82,7 @@ window.__resources = Object.assign({}, window.__resources, {
         </sc-for>
       </div>
       <div style="padding:14px;border-top:1px solid #1b1b1e;display:flex;flex-direction:column;gap:8px;flex-shrink:0">
-        <button onClick="{{ onSwitchAccount }}" style="display:flex;align-items:center;gap:10px;background:#141417;border:1px solid #232327;border-radius:10px;padding:12px 14px;color:#ECEAE4;font:600 12px/1 'Oswald';letter-spacing:.03em;cursor:pointer;text-align:left" style-hover="border-color:#3a3a40"><i class="ti ti-repeat" style="color:#8a8378;font-size:15px;flex-shrink:0"></i>Switch Account</button>
+        <button onClick="{{ onSwitchAccount }}" style="display:flex;align-items:center;gap:10px;background:#141417;border:1px solid #232327;border-radius:10px;padding:12px 14px;color:#ECEAE4;font:600 12px/1 'Oswald';letter-spacing:.03em;cursor:pointer;text-align:left" style-hover="border-color:#3a3a40"><i class="ti ti-repeat" style="color:var(--text-tertiary);font-size:15px;flex-shrink:0"></i>Switch Account</button>
         <button onClick="{{ onLogout }}" style="display:flex;align-items:center;gap:10px;background:transparent;border:1px solid #232327;border-radius:10px;padding:12px 14px;color:#E8A89F;font:600 12px/1 'Oswald';letter-spacing:.03em;cursor:pointer;text-align:left" style-hover="border-color:#7A241C;background:#2A100D"><i class="ti ti-logout" style="font-size:15px;flex-shrink:0"></i>Log Out</button>
       </div>
     </aside>
@@ -103,7 +103,7 @@ window.__resources = Object.assign({}, window.__resources, {
     </div>
     <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
       <span style="font:400 11px/1 'Archivo';color:var(--text-muted)">{{shownLabel}}</span>
-      <button onClick="{{ onRefresh }}" style="display:inline-flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#9C978C;background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:9px 12px;cursor:pointer" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-refresh"></i>Refresh</button>
+      <button onClick="{{ onRefresh }}" style="display:inline-flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-secondary);background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:9px 12px;cursor:pointer" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-refresh"></i>Refresh</button>
     </div>
   </div>
 
@@ -138,16 +138,16 @@ window.__resources = Object.assign({}, window.__resources, {
           <div draggable="true" onDragStart="{{ o.onDragStart }}" onDragEnd="{{ o.onDragEnd }}" onClick="{{ o.onOpen }}" style="display:flex;background:{{o.cardBg}};border:1px solid {{o.cardBorder}};border-radius:11px;overflow:hidden;cursor:pointer;opacity:{{o.cardOpacity}};transition:border-color .12s,transform .12s" style-hover="border-color:#3a3a40;transform:translateY(-1px)">
             <div style="width:6px;background:{{o.urgColor}};flex-shrink:0"></div>
             <sc-if value="{{o.hasThumb}}" hint-placeholder-val="{{ false }}">{{o.thumbNode}}</sc-if>
-            <sc-if value="{{o.noThumb}}" hint-placeholder-val="{{ true }}"><div style="width:64px;flex-shrink:0;align-self:stretch;background:#1c1c20;border-right:1px solid #2a2a2f;display:flex;align-items:center;justify-content:center"><i class="ti ti-photo-off" style="color:#8a8378;font-size:24px"></i></div></sc-if>
+            <sc-if value="{{o.noThumb}}" hint-placeholder-val="{{ true }}"><div style="width:64px;flex-shrink:0;align-self:stretch;background:#1c1c20;border-right:1px solid #2a2a2f;display:flex;align-items:center;justify-content:center"><i class="ti ti-photo-off" style="color:var(--text-tertiary);font-size:24px"></i></div></sc-if>
             <div style="padding:13px 14px;flex:1;min-width:0;display:flex;flex-direction:column;gap:10px">
               <div style="display:flex;align-items:flex-start;gap:8px">
                 <div style="min-width:0">
                   <div style="font:600 15px/1.1 'Oswald';color:#ECEAE4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{o.customer}}</div>
                   <div style="font:400 10px/1 'Archivo';color:var(--text-muted);margin-top:4px">{{o.num}} · {{o.account}}</div>
                 </div>
-                <span style="margin-left:auto;flex-shrink:0;display:flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#9C978C"><span style="width:8px;height:8px;border-radius:50%;background:{{o.methColor}}"></span>{{o.methShort}}</span>
+                <span style="margin-left:auto;flex-shrink:0;display:flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:var(--text-secondary)"><span style="width:8px;height:8px;border-radius:50%;background:{{o.methColor}}"></span>{{o.methShort}}</span>
               </div>
-              <div style="display:flex;align-items:center;gap:8px;min-width:0"><span style="font:600 12px/1 'Oswald';color:#ECEAE4;background:#1e1e22;border-radius:5px;padding:4px 8px;flex-shrink:0">{{o.qty}} pcs</span><span style="font:400 11px/1 'Archivo';color:#9C978C;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{o.garment}}</span></div>
+              <div style="display:flex;align-items:center;gap:8px;min-width:0"><span style="font:600 12px/1 'Oswald';color:#ECEAE4;background:#1e1e22;border-radius:5px;padding:4px 8px;flex-shrink:0">{{o.qty}} pcs</span><span style="font:400 11px/1 'Archivo';color:var(--text-secondary);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{o.garment}}</span></div>
               <sc-if value="{{o.hasProgress}}" hint-placeholder-val="{{ true }}">
                 <div>
                   <div style="display:flex;justify-content:space-between;font:500 9px/1 'Archivo';color:var(--text-muted);margin-bottom:5px"><span>{{o.progressLabel}}</span><span>{{o.pct}}%</span></div>
@@ -181,26 +181,26 @@ window.__resources = Object.assign({}, window.__resources, {
     <aside style="position:fixed;top:0;right:0;bottom:0;z-index:61;width:min(460px,100vw);background:#0C0C0E;border-left:1px solid #232327;box-shadow:-30px 0 70px -20px rgba(0,0,0,.8);display:flex;flex-direction:column;animation:ca-slide .22s ease">
       <div style="display:flex;align-items:flex-start;gap:12px;padding:20px 22px;border-bottom:1px solid #1b1b1e;border-top:4px solid {{open.urgColor}}">
         <div style="min-width:0">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font:600 10px/1 'Oswald';letter-spacing:.08em;color:var(--text-muted)">{{open.num}}</span><span style="display:inline-flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#9C978C"><span style="width:7px;height:7px;border-radius:50%;background:{{open.methColor}}"></span>{{open.methLabel}}</span></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font:600 10px/1 'Oswald';letter-spacing:.08em;color:var(--text-muted)">{{open.num}}</span><span style="display:inline-flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:var(--text-secondary)"><span style="width:7px;height:7px;border-radius:50%;background:{{open.methColor}}"></span>{{open.methLabel}}</span></div>
           <div style="font:600 21px/1.05 'Oswald';color:#ECEAE4">{{open.customer}}</div>
           <div style="font:400 12px/1 'Archivo';color:var(--text-muted);margin-top:5px">{{open.account}}</div>
         </div>
-        <button onClick="{{ onClose }}" style="margin-left:auto;flex-shrink:0;width:34px;height:34px;border-radius:9px;background:#16161a;border:1px solid #2a2a2f;color:#9C978C;cursor:pointer;font-size:17px" style-hover="color:#ECEAE4;border-color:#3a3a40"><i class="ti ti-x"></i></button>
+        <button onClick="{{ onClose }}" style="margin-left:auto;flex-shrink:0;width:34px;height:34px;border-radius:9px;background:#16161a;border:1px solid #2a2a2f;color:var(--text-secondary);cursor:pointer;font-size:17px" style-hover="color:#ECEAE4;border-color:#3a3a40"><i class="ti ti-x"></i></button>
       </div>
 
       <div style="flex:1;overflow-y:auto;padding:20px 22px;display:flex;flex-direction:column;gap:24px">
 
         <div style="display:flex;gap:12px;align-items:center">
           <sc-if value="{{open.hasMockup}}" hint-placeholder-val="{{ false }}">{{open.mockupNode}}</sc-if>
-          <sc-if value="{{open.noMockup}}" hint-placeholder-val="{{ true }}"><div style="width:96px;height:96px;flex-shrink:0;border-radius:11px;background:#1c1c20;border:1px solid #2a2a2f;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px"><i class="ti ti-photo-off" style="color:#8a8378;font-size:26px"></i><span style="font:600 8px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted)">No Mockup</span></div></sc-if>
+          <sc-if value="{{open.noMockup}}" hint-placeholder-val="{{ true }}"><div style="width:96px;height:96px;flex-shrink:0;border-radius:11px;background:#1c1c20;border:1px solid #2a2a2f;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px"><i class="ti ti-photo-off" style="color:var(--text-tertiary);font-size:26px"></i><span style="font:600 8px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted)">No Mockup</span></div></sc-if>
           <div style="flex:1;display:flex;flex-direction:column;gap:9px">
-            <div style="display:flex;align-items:center;gap:8px"><span style="font:600 15px/1 'Oswald';color:#ECEAE4">{{open.qty}} pieces</span><span style="font:400 11px/1 'Archivo';color:#9C978C">{{open.garment}}</span></div>
+            <div style="display:flex;align-items:center;gap:8px"><span style="font:600 15px/1 'Oswald';color:#ECEAE4">{{open.qty}} pieces</span><span style="font:400 11px/1 'Archivo';color:var(--text-secondary)">{{open.garment}}</span></div>
             <div style="display:inline-flex;align-items:center;gap:6px;align-self:flex-start;font:700 11px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:{{open.urgColor}}"><i class="ti {{open.urgIcon}}"></i>{{open.dueLabel}}</div>
           </div>
         </div>
 
         <div>
-          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:11px">Production Status</div>
+          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:11px">Production Status</div>
           <div style="display:flex;gap:4px">
             <sc-for list="{{open.statusSteps}}" as="s" hint-placeholder-count="5">
               <button onClick="{{ s.onClick }}" style="flex:1;min-width:0;font:600 8px/1.25 'Oswald';letter-spacing:.02em;text-transform:uppercase;color:{{s.textColor}};background:{{s.bg}};border:1px solid {{s.border}};border-radius:6px;padding:9px 3px;cursor:pointer;text-align:center">{{s.label}}</button>
@@ -214,7 +214,7 @@ window.__resources = Object.assign({}, window.__resources, {
              tiles. Hidden rather than shown greyed out. -->
         <sc-if value="{{open.notPP}}" hint-placeholder-val="{{ true }}">
         <div>
-          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:11px">Time Logged</div>
+          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:11px">Time Logged</div>
           <sc-if value="{{open.runPicker.shown}}" hint-placeholder-val="{{ false }}">
             <div style="background:#101013;border:1px solid #232327;border-radius:11px;padding:12px 13px;margin-bottom:11px">
               <div style="font:600 9px/1 'Oswald';letter-spacing:.11em;text-transform:uppercase;color:var(--text-muted);margin-bottom:9px">Working on</div>
@@ -262,7 +262,7 @@ window.__resources = Object.assign({}, window.__resources, {
         <a href="{{open.orderSheetUrl}}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;font:700 11px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#ECEAE4;background:#141417;border:1px solid #2a2a2f;border-radius:10px;padding:13px;text-decoration:none" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-printer"></i>Open Order Sheet</a>
 
         <sc-if value="{{open.isPP}}" hint-placeholder-val="{{ false }}">
-          <a href="{{open.runResultsUrl}}" style="display:flex;align-items:center;gap:11px;background:#1A1409;border:1px solid #5E4214;border-radius:10px;padding:13px 14px;text-decoration:none" style-hover="border-color:#C9923A"><i class="ti ti-clipboard-list" style="color:#C9923A;font-size:19px;flex-shrink:0"></i><div style="min-width:0"><div style="font:700 11px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#E0B870">Run Results</div><div style="font:400 10px/1.45 'Archivo';color:#8a8378;margin-top:5px">Record misprints, damaged, and incomplete garments</div></div><i class="ti ti-chevron-right" style="margin-left:auto;color:var(--text-muted);font-size:15px;flex-shrink:0"></i></a>
+          <a href="{{open.runResultsUrl}}" style="display:flex;align-items:center;gap:11px;background:#1A1409;border:1px solid #5E4214;border-radius:10px;padding:13px 14px;text-decoration:none" style-hover="border-color:#C9923A"><i class="ti ti-clipboard-list" style="color:#C9923A;font-size:19px;flex-shrink:0"></i><div style="min-width:0"><div style="font:700 11px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#E0B870">Run Results</div><div style="font:400 10px/1.45 'Archivo';color:var(--text-tertiary);margin-top:5px">Record misprints, damaged, and incomplete garments</div></div><i class="ti ti-chevron-right" style="margin-left:auto;color:var(--text-muted);font-size:15px;flex-shrink:0"></i></a>
         </sc-if>
 
         <!-- Everything from Specifications through Production Runs is press-time
@@ -271,7 +271,7 @@ window.__resources = Object.assign({}, window.__resources, {
              pack-and-ship screen. See open.notPP. -->
         <sc-if value="{{open.notPP}}" hint-placeholder-val="{{ true }}">
         <div>
-          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:9px">Specifications for Printing</div>
+          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:9px">Specifications for Printing</div>
           <textarea value="{{open.specs}}" onInput="{{ open.onSpecs }}" placeholder="Print specs — placement, colors, screens, digitizing notes…" style="width:100%;min-height:72px;font:400 13px/1.55 'Archivo';color:#C9C6BF;white-space:pre-wrap;background:#121215;border:1px solid #232327;border-radius:9px;padding:12px 14px;outline:none;resize:vertical"></textarea>
         </div>
         <div>
@@ -280,11 +280,11 @@ window.__resources = Object.assign({}, window.__resources, {
         </div>
 
         <div>
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px"><span style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378">Production Items</span><button onClick="{{ open.onNewItem }}" style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#5E9B9A;background:transparent;border:1px solid #3D5418;border-radius:7px;padding:6px 9px;cursor:pointer" style-hover="background:#18230D"><i class="ti ti-plus"></i>Add Item</button></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px"><span style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary)">Production Items</span><button onClick="{{ open.onNewItem }}" style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#5E9B9A;background:transparent;border:1px solid #3D5418;border-radius:7px;padding:6px 9px;cursor:pointer" style-hover="background:#18230D"><i class="ti ti-plus"></i>Add Item</button></div>
           <sc-if value="{{open.itemCreateOpen}}" hint-placeholder-val="{{ false }}">
             <div style="background:#121215;border:1px solid #3D5418;border-radius:10px;padding:13px 14px;display:flex;flex-direction:column;gap:10px;margin-bottom:12px">
               <div>
-                <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Item Type</div>
+                <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:6px">Item Type</div>
                 <div style="display:flex;gap:6px;flex-wrap:wrap">
                   <sc-for list="{{open.itemCreate.typeOptions}}" as="t" hint-placeholder-count="5">
                     <button onClick="{{ t.onPick }}" style="font:600 10px/1 'Oswald';letter-spacing:.04em;color:{{t.color}};background:{{t.bg}};border:1px solid {{t.border}};border-radius:7px;padding:8px 10px;cursor:pointer">{{t.label}}</button>
@@ -298,35 +298,35 @@ window.__resources = Object.assign({}, window.__resources, {
               <sc-if value="{{open.itemCreate.isTransfer}}" hint-placeholder-val="{{ false }}"><select value="{{open.itemCreate.transferType}}" onChange="{{ open.itemCreate.onTransfer }}" style="background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:13px;color:#ECEAE4;outline:none"><option value="">Transfer type…</option><sc-for list="{{open.itemCreate.ttOptions}}" as="m" hint-placeholder-count="4"><option value="{{m.value}}">{{m.label}}</option></sc-for></select></sc-if>
               <sc-if value="{{open.itemCreate.hasErr}}" hint-placeholder-val="{{ false }}"><div style="font:600 10px/1.3 'Oswald';letter-spacing:.04em;text-transform:uppercase;color:#E8A89F">{{open.itemCreate.err}}</div></sc-if>
               <div style="display:flex;gap:8px">
-                <button onClick="{{ open.itemCreate.onCancel }}" style="flex:1;font:700 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#8a8378;background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:11px;cursor:pointer">Cancel</button>
+                <button onClick="{{ open.itemCreate.onCancel }}" style="flex:1;font:700 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:var(--text-tertiary);background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:11px;cursor:pointer">Cancel</button>
                 <button onClick="{{ open.itemCreate.onSubmit }}" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;font:700 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#08080A;background:#5E9B9A;border:none;border-radius:8px;padding:11px;cursor:pointer">{{open.itemCreate.submitLabel}}</button>
               </div>
             </div>
           </sc-if>
           <div style="display:flex;flex-direction:column;gap:6px">
             <sc-for list="{{open.ppItemsView}}" as="it" hint-placeholder-count="1">
-              <div style="display:flex;align-items:center;gap:10px;background:#121215;border:1px solid #232327;border-radius:8px;padding:10px 13px"><span style="font:600 10px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#5E9B9A;min-width:74px">{{it.type}}</span><span style="font:500 12px/1.3 'Archivo';color:#ECEAE4;flex:1;min-width:0">{{it.detail}}</span><span style="font:600 9px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#9C978C">{{it.status}}</span><button onClick="{{ it.onRemove }}" title="Remove item" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:transparent;border:1px solid #2a2a2f;color:#8a8378;cursor:pointer;flex-shrink:0"><i class="ti ti-trash" style="font-size:13px"></i></button></div>
+              <div style="display:flex;align-items:center;gap:10px;background:#121215;border:1px solid #232327;border-radius:8px;padding:10px 13px"><span style="font:600 10px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#5E9B9A;min-width:74px">{{it.type}}</span><span style="font:500 12px/1.3 'Archivo';color:#ECEAE4;flex:1;min-width:0">{{it.detail}}</span><span style="font:600 9px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:var(--text-secondary)">{{it.status}}</span><button onClick="{{ it.onRemove }}" title="Remove item" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:transparent;border:1px solid #2a2a2f;color:var(--text-tertiary);cursor:pointer;flex-shrink:0"><i class="ti ti-trash" style="font-size:13px"></i></button></div>
             </sc-for>
             <sc-if value="{{open.ppItemsEmpty}}" hint-placeholder-val="{{ true }}"><div style="font:400 11px/1 'Archivo';color:var(--text-faint);padding:4px 2px">No production items on this order.</div></sc-if>
           </div>
         </div>
 
         <div>
-          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:11px">Production Methods</div>
+          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:11px">Production Methods</div>
           <div style="display:flex;flex-direction:column;gap:7px">
             <sc-for list="{{open.methodsView}}" as="pm" hint-placeholder-count="1">
               <div style="display:flex;flex-direction:column;background:#121215;border:1px solid #232327;border-radius:8px;overflow:hidden">
                 <div style="display:flex;align-items:center;gap:10px;padding:11px 13px">
                   <span style="width:8px;height:8px;border-radius:50%;background:{{pm.color}};flex-shrink:0"></span>
                   <span style="font:500 12px/1 'Archivo';color:#ECEAE4">{{pm.label}}</span>
-                  <span style="font:600 8px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#9C978C;background:#1a1a1e;border-radius:6px;padding:4px 7px">{{pm.status}}</span>
-                  <button onClick="{{ pm.onEdit }}" title="Edit method" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:transparent;border:1px solid #2a2a2f;color:#8a8378;cursor:pointer;flex-shrink:0"><i class="ti ti-pencil" style="font-size:12px"></i></button>
-                  <button onClick="{{ pm.onRemove }}" title="Remove method" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:transparent;border:1px solid #2a2a2f;color:#8a8378;cursor:pointer;flex-shrink:0"><i class="ti ti-trash" style="font-size:12px"></i></button>
+                  <span style="font:600 8px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:var(--text-secondary);background:#1a1a1e;border-radius:6px;padding:4px 7px">{{pm.status}}</span>
+                  <button onClick="{{ pm.onEdit }}" title="Edit method" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:transparent;border:1px solid #2a2a2f;color:var(--text-tertiary);cursor:pointer;flex-shrink:0"><i class="ti ti-pencil" style="font-size:12px"></i></button>
+                  <button onClick="{{ pm.onRemove }}" title="Remove method" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:transparent;border:1px solid #2a2a2f;color:var(--text-tertiary);cursor:pointer;flex-shrink:0"><i class="ti ti-trash" style="font-size:12px"></i></button>
                 </div>
                 <sc-if value="{{pm.editing}}" hint-placeholder-val="{{ false }}">
                   <div style="padding:11px 13px 13px;display:flex;flex-direction:column;gap:10px;border-top:1px dashed #232327">
                     <div>
-                      <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Method</div>
+                      <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:6px">Method</div>
                       <div style="display:flex;gap:6px;flex-wrap:wrap">
                         <sc-for list="{{pm.mf.methodOptions}}" as="m" hint-placeholder-count="4">
                           <button onClick="{{ m.onPick }}" style="font:600 10px/1 'Oswald';letter-spacing:.04em;color:{{m.color}};background:{{m.bg}};border:1px solid {{m.border}};border-radius:7px;padding:8px 10px;cursor:pointer">{{m.label}}</button>
@@ -334,7 +334,7 @@ window.__resources = Object.assign({}, window.__resources, {
                       </div>
                     </div>
                     <div>
-                      <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Placements</div>
+                      <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:6px">Placements</div>
                       <div style="display:flex;gap:6px;flex-wrap:wrap">
                         <sc-for list="{{pm.mf.placementOptions}}" as="p" hint-placeholder-count="4">
                           <button onClick="{{ p.onPick }}" style="font:600 10px/1 'Oswald';letter-spacing:.03em;color:{{p.color}};background:{{p.bg}};border:1px solid {{p.border}};border-radius:7px;padding:7px 9px;cursor:pointer">{{p.label}}</button>
@@ -342,13 +342,13 @@ window.__resources = Object.assign({}, window.__resources, {
                       </div>
                     </div>
                     <div>
-                      <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Status</div>
+                      <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:6px">Status</div>
                       <select value="{{pm.mf.status}}" onChange="{{ pm.mf.onStatus }}" style="width:100%;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:12px;color:#ECEAE4;outline:none"><sc-for list="{{pm.mf.statusOptions}}" as="s" hint-placeholder-count="7"><option value="{{s}}">{{s}}</option></sc-for></select>
                       <div style="font:400 10px/1.5 'Archivo';letter-spacing:.02em;color:var(--text-faint);margin-top:6px">{{pm.mf.statusHelp}}</div>
                     </div>
                     <sc-if value="{{pm.mf.hasErr}}" hint-placeholder-val="{{ false }}"><div style="font:600 10px/1.3 'Oswald';letter-spacing:.04em;text-transform:uppercase;color:#E8A89F">{{pm.mf.err}}</div></sc-if>
                     <div style="display:flex;gap:8px">
-                      <button onClick="{{ pm.mf.onCancel }}" style="flex:1;font:700 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#8a8378;background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:11px;cursor:pointer">Cancel</button>
+                      <button onClick="{{ pm.mf.onCancel }}" style="flex:1;font:700 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:var(--text-tertiary);background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:11px;cursor:pointer">Cancel</button>
                       <button onClick="{{ pm.mf.onSave }}" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;font:700 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#ECEAE4;background:#16161a;border:1px solid #2a2a2f;border-radius:8px;padding:11px;cursor:pointer" style-hover="border-color:#5E9B9A;color:#5E9B9A"><i class="ti ti-device-floppy"></i>{{pm.mf.saveLabel}}</button>
                     </div>
                   </div>
@@ -383,12 +383,12 @@ window.__resources = Object.assign({}, window.__resources, {
               </sc-for>
             </div>
           </sc-if>
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px"><span style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378">Production Runs</span><sc-if value="{{open.runsLoading}}" hint-placeholder-val="{{ false }}"><span style="font:400 10px/1 'Archivo';color:var(--text-faint)">Loading…</span></sc-if><button onClick="{{ open.onNewRun }}" style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#5E9B9A;background:transparent;border:1px solid #3D5418;border-radius:7px;padding:6px 9px;cursor:pointer" style-hover="background:#18230D"><i class="ti {{open.newRunIcon}}"></i>{{open.newRunLabel}}</button></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px"><span style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary)">Production Runs</span><sc-if value="{{open.runsLoading}}" hint-placeholder-val="{{ false }}"><span style="font:400 10px/1 'Archivo';color:var(--text-faint)">Loading…</span></sc-if><button onClick="{{ open.onNewRun }}" style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#5E9B9A;background:transparent;border:1px solid #3D5418;border-radius:7px;padding:6px 9px;cursor:pointer" style-hover="background:#18230D"><i class="ti {{open.newRunIcon}}"></i>{{open.newRunLabel}}</button></div>
           <sc-if value="{{open.runCreateOpen}}" hint-placeholder-val="{{ false }}">
             <div style="background:#121215;border:1px solid #3D5418;border-radius:10px;padding:13px 14px;display:flex;flex-direction:column;gap:11px;margin-bottom:14px">
               <div style="font:600 11px/1 'Oswald';letter-spacing:.06em;color:#5E9B9A">New Production Run</div>
               <div>
-                <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Press</div>
+                <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:6px">Press</div>
                 <input value="{{open.runCreate.pressQ}}" onInput="{{ open.runCreate.onPressSearch }}" placeholder="Search presses/machines…" style="width:100%;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:12px;color:#ECEAE4;outline:none">
                 <sc-if value="{{open.runCreate.pressPicked}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:5px;font:600 10px/1 'Oswald';letter-spacing:.03em;color:#BBD382;margin-top:7px"><i class="ti ti-check"></i>{{open.runCreate.pressName}}</div></sc-if>
                 <div style="display:flex;flex-direction:column;gap:4px;margin-top:7px">
@@ -399,14 +399,14 @@ window.__resources = Object.assign({}, window.__resources, {
               </div>
               <div style="display:flex;gap:8px">
                 <div style="flex:1;min-width:0">
-                  <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Scheduled Start</div>
+                  <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:6px">Scheduled Start</div>
                   <div style="display:flex;gap:6px">
                     <input type="date" value="{{open.runCreate.startDate}}" onInput="{{ open.runCreate.onStartDate }}" style="flex:1;min-width:0;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 8px;font-size:12px;color:#ECEAE4;outline:none">
                     <select value="{{open.runCreate.startTime}}" onChange="{{ open.runCreate.onStartTime }}" style="width:110px;flex-shrink:0;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 8px;font-size:12px;color:#ECEAE4;outline:none"><option value="">Time…</option><sc-for list="{{open.runCreate.timeOptions}}" as="t" hint-placeholder-count="96"><option value="{{t.value}}">{{t.label}}</option></sc-for></select>
                   </div>
                 </div>
                 <div style="flex:1;min-width:0">
-                  <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Scheduled End</div>
+                  <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:6px">Scheduled End</div>
                   <div style="display:flex;gap:6px">
                     <input type="date" value="{{open.runCreate.endDate}}" onInput="{{ open.runCreate.onEndDate }}" style="flex:1;min-width:0;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 8px;font-size:12px;color:#ECEAE4;outline:none">
                     <select value="{{open.runCreate.endTime}}" onChange="{{ open.runCreate.onEndTime }}" style="width:110px;flex-shrink:0;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 8px;font-size:12px;color:#ECEAE4;outline:none"><option value="">Time…</option><sc-for list="{{open.runCreate.timeOptions}}" as="t" hint-placeholder-count="96"><option value="{{t.value}}">{{t.label}}</option></sc-for></select>
@@ -414,13 +414,13 @@ window.__resources = Object.assign({}, window.__resources, {
                 </div>
               </div>
               <div>
-                <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Total Garments</div>
+                <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:6px">Total Garments</div>
                 <input type="number" min="1" value="{{open.runCreate.qty}}" onInput="{{ open.runCreate.onQty }}" style="width:100%;max-width:140px;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:12px;color:#ECEAE4;outline:none">
-                <sc-if value="{{open.runCreate.hasQtyHint}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:5px;font:400 10px/1.3 'Archivo';color:#8a8378;margin-top:6px"><i class="ti ti-shirt" style="font-size:12px;color:var(--text-muted)"></i>{{open.runCreate.qtyHint}}</div></sc-if>
+                <sc-if value="{{open.runCreate.hasQtyHint}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:5px;font:400 10px/1.3 'Archivo';color:var(--text-tertiary);margin-top:6px"><i class="ti ti-shirt" style="font-size:12px;color:var(--text-muted)"></i>{{open.runCreate.qtyHint}}</div></sc-if>
               </div>
               <sc-if value="{{open.runCreate.hasErr}}" hint-placeholder-val="{{ false }}"><div style="font:600 10px/1.3 'Oswald';letter-spacing:.04em;text-transform:uppercase;color:#E8A89F">{{open.runCreate.err}}</div></sc-if>
               <div style="display:flex;gap:8px">
-                <button onClick="{{ open.runCreate.onCancel }}" style="flex:1;font:700 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#8a8378;background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:11px;cursor:pointer">Cancel</button>
+                <button onClick="{{ open.runCreate.onCancel }}" style="flex:1;font:700 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:var(--text-tertiary);background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:11px;cursor:pointer">Cancel</button>
                 <button onClick="{{ open.runCreate.onSubmit }}" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;font:700 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#08080A;background:#5E9B9A;border:none;border-radius:8px;padding:11px;cursor:pointer">{{open.runCreate.submitLabel}}</button>
               </div>
             </div>
@@ -431,7 +431,7 @@ window.__resources = Object.assign({}, window.__resources, {
                 <div style="font:600 11px/1 'Oswald';letter-spacing:.06em;color:#5E9B9A">{{run.name}}</div>
 
                 <div>
-                  <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Press</div>
+                  <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:6px">Press</div>
                   <input value="{{run.pressQ}}" onInput="{{ run.onPressSearch }}" placeholder="Search presses/machines…" style="width:100%;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:12px;color:#ECEAE4;outline:none">
                   <sc-if value="{{run.pressPicked}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:5px;font:600 10px/1 'Oswald';letter-spacing:.03em;color:#BBD382;margin-top:7px"><i class="ti ti-check"></i>{{run.pressName}}</div></sc-if>
                   <div style="display:flex;flex-direction:column;gap:4px;margin-top:7px">
@@ -443,14 +443,14 @@ window.__resources = Object.assign({}, window.__resources, {
 
                 <div style="display:flex;gap:8px">
                   <div style="flex:1;min-width:0">
-                    <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Scheduled Start</div>
+                    <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:6px">Scheduled Start</div>
                     <div style="display:flex;gap:6px">
                       <input type="date" value="{{run.startDate}}" onInput="{{ run.onStartDate }}" style="flex:1;min-width:0;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 8px;font-size:12px;color:#ECEAE4;outline:none">
                       <select value="{{run.startTime}}" onChange="{{ run.onStartTime }}" style="width:110px;flex-shrink:0;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 8px;font-size:12px;color:#ECEAE4;outline:none"><option value="">Time…</option><sc-for list="{{run.timeOptions}}" as="t" hint-placeholder-count="96"><option value="{{t.value}}">{{t.label}}</option></sc-for></select>
                     </div>
                   </div>
                   <div style="flex:1;min-width:0">
-                    <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Scheduled End</div>
+                    <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:6px">Scheduled End</div>
                     <div style="display:flex;gap:6px">
                       <input type="date" value="{{run.endDate}}" onInput="{{ run.onEndDate }}" style="flex:1;min-width:0;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 8px;font-size:12px;color:#ECEAE4;outline:none">
                       <select value="{{run.endTime}}" onChange="{{ run.onEndTime }}" style="width:110px;flex-shrink:0;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 8px;font-size:12px;color:#ECEAE4;outline:none"><option value="">Time…</option><sc-for list="{{run.timeOptions}}" as="t" hint-placeholder-count="96"><option value="{{t.value}}">{{t.label}}</option></sc-for></select>
@@ -460,7 +460,7 @@ window.__resources = Object.assign({}, window.__resources, {
 
                 <sc-if value="{{run.locationShown}}" hint-placeholder-val="{{ true }}">
                   <div>
-                    <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Print Location</div>
+                    <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:6px">Print Location</div>
                     <select value="{{run.printLocation}}" onChange="{{ run.onPrintLocation }}" style="width:100%;max-width:200px;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:12px;color:#ECEAE4;outline:none">
                       <option value="">— Not set —</option>
                       <sc-for list="{{run.locationOptions}}" as="loc" hint-placeholder-count="3"><option value="{{loc}}">{{loc}}</option></sc-for>
@@ -468,14 +468,14 @@ window.__resources = Object.assign({}, window.__resources, {
                   </div>
                 </sc-if>
                 <div>
-                  <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Total Garments</div>
+                  <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:6px">Total Garments</div>
                   <sc-if value="{{run.qtyReadOnly}}" hint-placeholder-val="{{ false }}">
                     <div style="font:600 15px/1 'Oswald';color:#ECEAE4;background:#121215;border:1px solid #232327;border-radius:7px;padding:10px 12px;max-width:140px">{{run.allocTotal}}</div>
-                    <div style="font:400 10px/1.35 'Archivo';color:#8a8378;margin-top:6px">Summed from the sizes below — one source of truth, so this is not typed here.</div>
+                    <div style="font:400 10px/1.35 'Archivo';color:var(--text-tertiary);margin-top:6px">Summed from the sizes below — one source of truth, so this is not typed here.</div>
                   </sc-if>
                   <sc-if value="{{run.qtyTyped}}" hint-placeholder-val="{{ true }}">
                   <input type="number" min="1" value="{{run.qty}}" onInput="{{ run.onQty }}" style="width:100%;max-width:140px;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:12px;color:#ECEAE4;outline:none">
-                  <sc-if value="{{run.hasQtyHint}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:5px;font:400 10px/1.3 'Archivo';color:#8a8378;margin-top:6px"><i class="ti ti-shirt" style="font-size:12px;color:var(--text-muted)"></i>{{run.qtyHint}}</div></sc-if>
+                  <sc-if value="{{run.hasQtyHint}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:5px;font:400 10px/1.3 'Archivo';color:var(--text-tertiary);margin-top:6px"><i class="ti ti-shirt" style="font-size:12px;color:var(--text-muted)"></i>{{run.qtyHint}}</div></sc-if>
                   </sc-if>
                 </div>
 
@@ -503,7 +503,7 @@ window.__resources = Object.assign({}, window.__resources, {
                       <sc-if value="{{run.allocHasErr}}" hint-placeholder-val="{{ false }}"><div style="font:400 10px/1.45 'Archivo';color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:8px;padding:9px 11px;margin-top:9px">{{run.allocErr}}</div></sc-if>
                       <sc-if value="{{run.allocHasMsg}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:#BBD382;margin-top:9px"><i class="ti ti-check"></i>{{run.allocMsg}}</div></sc-if>
                       <sc-if value="{{run.allocLoading}}" hint-placeholder-val="{{ false }}"><div style="font:400 11px/1 'Archivo';color:var(--text-muted);padding:8px 2px">Loading sizes…</div></sc-if>
-                      <sc-if value="{{run.allocEmpty}}" hint-placeholder-val="{{ false }}"><div style="font:400 11px/1.5 'Archivo';color:#8a8378;padding:8px 2px">No sizes on this order to allocate.</div></sc-if>
+                      <sc-if value="{{run.allocEmpty}}" hint-placeholder-val="{{ false }}"><div style="font:400 11px/1.5 'Archivo';color:var(--text-tertiary);padding:8px 2px">No sizes on this order to allocate.</div></sc-if>
                       <sc-if value="{{run.allocHasRows}}" hint-placeholder-val="{{ true }}">
                         <div style="display:flex;align-items:center;gap:8px;font:600 8px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);padding:0 2px 7px">
                           <span style="flex:1">Size</span><span style="width:58px;text-align:center">Left</span><span style="width:88px;text-align:center">This run</span>
@@ -516,7 +516,7 @@ window.__resources = Object.assign({}, window.__resources, {
                                   <div style="font:500 12px/1.2 'Archivo';color:#ECEAE4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{a.label}}</div>
                                   <div style="font:400 9px/1 'Archivo';color:var(--text-faint);margin-top:3px">{{a.orderQty}} ordered</div>
                                 </div>
-                                <div style="width:58px;text-align:center;font:600 12px/1 'Oswald';color:#8a8378">{{a.remaining}}</div>
+                                <div style="width:58px;text-align:center;font:600 12px/1 'Oswald';color:var(--text-tertiary)">{{a.remaining}}</div>
                                 <sc-if value="{{a.editable}}" hint-placeholder-val="{{ true }}">
                                   <input type="number" min="0" inputmode="numeric" value="{{a.value}}" onInput="{{ a.onQty }}" placeholder="0" style="width:88px;height:44px;flex-shrink:0;text-align:center;background:#16161a;border:1px solid {{a.border}};border-radius:9px;font:600 16px/1 'Oswald';color:#ECEAE4;outline:none">
                                 </sc-if>
@@ -550,13 +550,13 @@ window.__resources = Object.assign({}, window.__resources, {
         </sc-if>
 
         <div>
-          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:11px">Shipping &amp; Delivery</div>
+          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:11px">Shipping &amp; Delivery</div>
           <select value="{{open.delivery}}" onChange="{{ open.onDelivery }}" style="width:100%;background:#16161a;border:1px solid #2a2a2f;border-radius:9px;padding:11px 13px;font-size:13px;color:#ECEAE4;outline:none;margin-bottom:9px"><sc-for list="{{open.deliveryOptions}}" as="d" hint-placeholder-count="6"><option value="{{d.value}}">{{d.label}}</option></sc-for></select>
           <button onClick="{{ open.onToggleLabel }}" style="width:100%;display:flex;align-items:center;gap:10px;background:{{open.labelBg}};border:1px solid {{open.labelBorder}};border-radius:9px;padding:11px 13px;cursor:pointer;text-align:left"><i class="ti {{open.labelIcon}}" style="color:{{open.labelColor}};font-size:18px"></i><span style="font:500 13px/1 'Archivo';color:{{open.labelColor}}">Shipping label printed</span></button>
         </div>
 
         <div>
-          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:11px">Packaging</div>
+          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:11px">Packaging</div>
           <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
             <select value="{{open.pkgType}}" onChange="{{ open.onPkgType }}" style="flex:1;min-width:150px;background:#16161a;border:1px solid #2a2a2f;border-radius:8px;padding:9px 11px;font-size:13px;color:#ECEAE4;outline:none"><sc-for list="{{open.pkgTypeOptions}}" as="pt" hint-placeholder-count="4"><option value="{{pt.value}}">{{pt.label}}</option></sc-for></select>
             <input value="{{open.pkgQty}}" onInput="{{ open.onPkgQty }}" type="number" min="1" style="width:72px;background:#16161a;border:1px solid #2a2a2f;border-radius:8px;padding:9px 11px;font-size:13px;color:#ECEAE4;outline:none">
@@ -564,14 +564,14 @@ window.__resources = Object.assign({}, window.__resources, {
           </div>
           <div style="display:flex;flex-direction:column;gap:6px">
             <sc-for list="{{open.packaging}}" as="p" hint-placeholder-count="1">
-              <div style="display:flex;align-items:center;gap:10px;background:#121215;border:1px solid #232327;border-radius:8px;padding:10px 13px"><i class="ti ti-box" style="color:#5E9B9A;font-size:15px"></i><span style="font:500 12px/1 'Archivo';color:#ECEAE4">{{p.type}}</span><span style="margin-left:auto;font:600 12px/1 'Oswald';color:#9C978C">×{{p.qty}}</span><button onClick="{{ p.onRemove }}" title="Remove packaging" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:transparent;border:1px solid #2a2a2f;color:#8a8378;cursor:pointer;flex-shrink:0"><i class="ti ti-trash" style="font-size:13px"></i></button></div>
+              <div style="display:flex;align-items:center;gap:10px;background:#121215;border:1px solid #232327;border-radius:8px;padding:10px 13px"><i class="ti ti-box" style="color:#5E9B9A;font-size:15px"></i><span style="font:500 12px/1 'Archivo';color:#ECEAE4">{{p.type}}</span><span style="margin-left:auto;font:600 12px/1 'Oswald';color:var(--text-secondary)">×{{p.qty}}</span><button onClick="{{ p.onRemove }}" title="Remove packaging" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:transparent;border:1px solid #2a2a2f;color:var(--text-tertiary);cursor:pointer;flex-shrink:0"><i class="ti ti-trash" style="font-size:13px"></i></button></div>
             </sc-for>
             <sc-if value="{{open.pkgEmpty}}" hint-placeholder-val="{{ false }}"><div style="font:400 11px/1 'Archivo';color:var(--text-faint);padding:4px 2px">No packaging logged yet.</div></sc-if>
           </div>
         </div>
 
         <div>
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px"><span style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378">Shipments</span><button onClick="{{ open.onZk }}" title="Open the Zenkraft Shipment Wizard in Salesforce" style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#E0B870;background:transparent;border:1px solid #5E4214;border-radius:7px;padding:6px 9px;cursor:pointer"><i class="ti ti-printer"></i>Print Label</button><button onClick="{{ open.onAddShip }}" style="margin-left:8px;display:inline-flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#9C978C;background:transparent;border:1px solid #2a2a2f;border-radius:7px;padding:6px 9px;cursor:pointer" style-hover="border-color:#5E9B9A;color:#5E9B9A"><i class="{{open.addShipIcon}}"></i>{{open.addShipLabel}}</button></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px"><span style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary)">Shipments</span><button onClick="{{ open.onZk }}" title="Open the Zenkraft Shipment Wizard in Salesforce" style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#E0B870;background:transparent;border:1px solid #5E4214;border-radius:7px;padding:6px 9px;cursor:pointer"><i class="ti ti-printer"></i>Print Label</button><button onClick="{{ open.onAddShip }}" style="margin-left:8px;display:inline-flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:var(--text-secondary);background:transparent;border:1px solid #2a2a2f;border-radius:7px;padding:6px 9px;cursor:pointer" style-hover="border-color:#5E9B9A;color:#5E9B9A"><i class="{{open.addShipIcon}}"></i>{{open.addShipLabel}}</button></div>
           <sc-if value="{{open.hasZkErr}}" hint-placeholder-val="{{ false }}"><div style="font:400 10px/1 'Archivo';color:#C6372B;margin:-5px 0 8px">{{open.zkErrMsg}}</div></sc-if>
           <sc-if value="{{open.zkPolling}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:7px;font:400 10px/1 'Archivo';color:#E0B870;margin:-5px 0 8px"><i class="ti ti-loader-2" style="font-size:12px"></i>Waiting for Zenkraft to create the shipment…</div></sc-if>
           <sc-if value="{{open.shipFormOpen}}" hint-placeholder-val="{{ false }}">
@@ -588,13 +588,13 @@ window.__resources = Object.assign({}, window.__resources, {
               <sc-if value="{{open.shipForm.hasErr}}" hint-placeholder-val="{{ false }}"><div style="font:400 10px/1 'Archivo';color:#C6372B;margin-bottom:8px">{{open.shipForm.err}}</div></sc-if>
               <div style="display:flex;gap:8px">
                 <button onClick="{{ open.shipForm.onSubmit }}" disabled="{{open.shipForm.submitting}}" style="display:inline-flex;align-items:center;gap:5px;font:600 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#5E9B9A;background:transparent;border:1px solid #3D5418;border-radius:8px;padding:9px 13px;cursor:pointer" style-hover="background:#18230D"><i class="ti ti-check"></i>{{open.shipForm.submitLabel}}</button>
-                <button onClick="{{ open.shipForm.onCancel }}" style="display:inline-flex;align-items:center;gap:5px;font:600 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#8a8378;background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:9px 13px;cursor:pointer">Cancel</button>
+                <button onClick="{{ open.shipForm.onCancel }}" style="display:inline-flex;align-items:center;gap:5px;font:600 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:var(--text-tertiary);background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:9px 13px;cursor:pointer">Cancel</button>
               </div>
             </div>
           </sc-if>
           <div style="display:flex;flex-direction:column;gap:6px">
             <sc-for list="{{open.shipments}}" as="s" hint-placeholder-count="1">
-              <div style="display:flex;align-items:center;gap:10px;background:#121215;border:1px solid #232327;border-radius:8px;padding:10px 13px"><i class="ti ti-truck" style="color:#7FA644;font-size:15px"></i><div style="min-width:0"><div style="font:500 12px/1 'Archivo';color:#ECEAE4">{{s.carrier}}</div><div style="font:400 10px/1 'Archivo';color:var(--text-muted);margin-top:3px">{{s.tracking}}</div></div><button onClick="{{ s.onRemove }}" title="Remove shipment" style="margin-left:auto;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:transparent;border:1px solid #2a2a2f;color:#8a8378;cursor:pointer;flex-shrink:0"><i class="ti ti-trash" style="font-size:13px"></i></button></div>
+              <div style="display:flex;align-items:center;gap:10px;background:#121215;border:1px solid #232327;border-radius:8px;padding:10px 13px"><i class="ti ti-truck" style="color:#7FA644;font-size:15px"></i><div style="min-width:0"><div style="font:500 12px/1 'Archivo';color:#ECEAE4">{{s.carrier}}</div><div style="font:400 10px/1 'Archivo';color:var(--text-muted);margin-top:3px">{{s.tracking}}</div></div><button onClick="{{ s.onRemove }}" title="Remove shipment" style="margin-left:auto;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:transparent;border:1px solid #2a2a2f;color:var(--text-tertiary);cursor:pointer;flex-shrink:0"><i class="ti ti-trash" style="font-size:13px"></i></button></div>
             </sc-for>
             <sc-if value="{{open.shipEmpty}}" hint-placeholder-val="{{ false }}"><div style="font:400 11px/1 'Archivo';color:var(--text-faint);padding:4px 2px">No shipments created yet.</div></sc-if>
           </div>
@@ -605,7 +605,7 @@ window.__resources = Object.assign({}, window.__resources, {
              incomplete get recorded. See open.notPP. -->
         <sc-if value="{{open.notPP}}" hint-placeholder-val="{{ true }}">
         <div>
-          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:11px">Misprints</div>
+          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:11px">Misprints</div>
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
             <button onClick="{{ open.onMisMinus }}" style="width:38px;height:38px;border-radius:9px;background:#16161a;border:1px solid #2a2a2f;color:#ECEAE4;font-size:16px;cursor:pointer">−</button>
             <div style="flex:1;text-align:center;background:#121215;border:1px solid {{open.misBorder}};border-radius:9px;padding:9px"><div style="font:600 24px/1 'Oswald';color:{{open.misColor}}">{{open.mis}}</div><div style="font:400 9px/1 'Archivo';color:var(--text-muted);margin-top:3px">of {{open.qty}} pcs</div></div>
@@ -614,7 +614,7 @@ window.__resources = Object.assign({}, window.__resources, {
           <textarea value="{{open.misDetails}}" onInput="{{ open.onMisDetails }}" placeholder="Misprint details — sizes, cause, notes…" style="width:100%;min-height:64px;background:#121215;border:1px solid #232327;border-radius:9px;padding:11px 13px;font-size:13px;color:#ECEAE4;outline:none;resize:vertical"></textarea>
           <div style="display:flex;gap:9px;align-items:flex-start;background:#101013;border:1px solid #232327;border-radius:9px;padding:11px 12px;margin-top:10px">
             <i class="ti ti-info-circle" style="color:var(--text-muted);font-size:14px;flex-shrink:0;margin-top:1px"></i>
-            <div style="font:400 10px/1.5 'Archivo';color:#8a8378">Reprints are created automatically from the counts entered on <a href="counting.html" style="color:#C9923A">Run Results</a> when every method on this order is finished. This stepper is a running note only — it no longer files anything.</div>
+            <div style="font:400 10px/1.5 'Archivo';color:var(--text-tertiary)">Reprints are created automatically from the counts entered on <a href="counting.html" style="color:#C9923A">Run Results</a> when every method on this order is finished. This stepper is a running note only — it no longer files anything.</div>
           </div>
         </div>
         </sc-if>
@@ -639,7 +639,7 @@ window.__resources = Object.assign({}, window.__resources, {
             <div style="font:600 17px/1.1 'Oswald';color:#ECEAE4">Salesforce Environment</div>
             <div style="font:400 11px/1.4 'Archivo';color:var(--text-muted);margin-top:4px">Switches which org every tablet talks to — applies to everyone immediately.</div>
           </div>
-          <button onClick="{{ onCloseSfEnv }}" style="margin-left:auto;flex-shrink:0;width:32px;height:32px;border-radius:9px;background:#16161a;border:1px solid #2a2a2f;color:#9C978C;cursor:pointer;font-size:15px" style-hover="color:#ECEAE4;border-color:#3a3a40"><i class="ti ti-x"></i></button>
+          <button onClick="{{ onCloseSfEnv }}" style="margin-left:auto;flex-shrink:0;width:32px;height:32px;border-radius:9px;background:#16161a;border:1px solid #2a2a2f;color:var(--text-secondary);cursor:pointer;font-size:15px" style-hover="color:#ECEAE4;border-color:#3a3a40"><i class="ti ti-x"></i></button>
         </div>
         <div style="padding:20px 22px;display:flex;flex-direction:column;gap:14px">
           <div style="display:flex;flex-direction:column;gap:8px">
@@ -656,7 +656,7 @@ window.__resources = Object.assign({}, window.__resources, {
           </div>
 
           <div>
-            <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Switch PIN</div>
+            <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:6px">Switch PIN</div>
             <input type="password" value="{{sfEnvPin}}" onInput="{{ onSfEnvPin }}" placeholder="Enter PIN to confirm switch" style="width:100%;background:#121215;border:1px solid #232327;border-radius:9px;padding:11px 13px;font-size:13px;color:#ECEAE4;outline:none">
           </div>
 
@@ -675,7 +675,7 @@ window.__resources = Object.assign({}, window.__resources, {
         <div style="position:absolute;top:0;left:0;right:0;height:4px;background:#C6372B"></div>
         <div style="width:52px;height:52px;border-radius:14px;background:#1a1a1e;border:1px solid #2a2a2f;display:flex;align-items:center;justify-content:center;margin:0 auto 18px"><i class="ti ti-user" style="color:#C6372B;font-size:26px"></i></div>
         <div style="font:600 21px/1.1 'Oswald';color:#ECEAE4;margin-bottom:8px">Who's this?</div>
-        <div style="font:400 12px/1.5 'Archivo';color:#8a8378;margin-bottom:20px">Enter your PIN so changes made this shift can be traced back to you.</div>
+        <div style="font:400 12px/1.5 'Archivo';color:var(--text-tertiary);margin-bottom:20px">Enter your PIN so changes made this shift can be traced back to you.</div>
         <div style="display:flex;justify-content:center;gap:12px;margin-bottom:8px;animation:{{gateShakeAnim}}">
           <sc-for list="{{gateDots}}" as="d" hint-placeholder-count="4">
             <div style="width:13px;height:13px;border-radius:50%;border:2px solid {{d.border}};background:{{d.bg}};transition:all .12s"></div>
@@ -1023,7 +1023,7 @@ class Component extends DCLogic {
         const orderCompleted = r.Status === 'Complete';
         methods.forEach(pm=>{
           const stage = orderCompleted ? 'done' : api.stageOfMethod(pm.Status__c); if(!stage) return;
-          const meta = (api.METHOD_META && api.METHOD_META[pm.Type__c]) || { key:'sp', short:pm.Type__c||'Method', color:'#8a8378' };
+          const meta = (api.METHOD_META && api.METHOD_META[pm.Type__c]) || { key:'sp', short:pm.Type__c||'Method', color:'var(--text-tertiary)' };
           const meth = meta.key;
           let pct, progressLabel;
           if(stage==='ip'||stage==='pp'){ const s=PREREQ[meth]||PREREQ.sp; const done=s.filter(f=>pm[f]).length; pct=Math.round(done/s.length*100); progressLabel = stage==='ip'?'On press':'Post-production'; }
@@ -1391,7 +1391,7 @@ class Component extends DCLogic {
   // edit form (pm.mf) when that row is the one currently being edited.
   methodRowView(r, orderId){
     const api=this._api||window.CAApi;
-    const meta=(api && api.METHOD_META && api.METHOD_META[r.Type__c]) || { color:'#8a8378' };
+    const meta=(api && api.METHOD_META && api.METHOD_META[r.Type__c]) || { color:'var(--text-tertiary)' };
     const placements=(r.Placements__c||'').split(';').map(s=>s.trim()).filter(Boolean);
     const editing = this.state.methodEditId===r.Id;
     const view = {
@@ -1403,8 +1403,8 @@ class Component extends DCLogic {
     };
     if(editing){
       const f=this.state.methodEditForm||{};
-      const methodOptions=['Screen Print','Embroidery','Heat Press','Promotional Items'].map(x=>({ label:x, onPick:()=>this.setMethodEditField({type:x}), bg:f.type===x?'#2a1210':'#121215', border:f.type===x?'#C6372B':'#242428', color:f.type===x?'#ECEAE4':'#8a8378' }));
-      const placementOptions=((api&&api.PLACEMENTS)||[]).map(x=>{ const on=(f.placements||[]).includes(x); return { label:x, onPick:()=>this.toggleMethodEditPlacement(x), bg:on?'#18230D':'#121215', border:on?'#3D5418':'#242428', color:on?'#BBD382':'#8a8378' }; });
+      const methodOptions=['Screen Print','Embroidery','Heat Press','Promotional Items'].map(x=>({ label:x, onPick:()=>this.setMethodEditField({type:x}), bg:f.type===x?'#2a1210':'#121215', border:f.type===x?'#C6372B':'#242428', color:f.type===x?'#ECEAE4':'var(--text-tertiary)' }));
+      const placementOptions=((api&&api.PLACEMENTS)||[]).map(x=>{ const on=(f.placements||[]).includes(x); return { label:x, onPick:()=>this.toggleMethodEditPlacement(x), bg:on?'#18230D':'#121215', border:on?'#3D5418':'#242428', color:on?'#BBD382':'var(--text-tertiary)' }; });
       view.mf = {
         methodOptions, placementOptions,
         statusOptions:['Pre-Production','Ready for Print','In Production','Post-Production','Completed','Cancelled','On Hold'],
@@ -1734,7 +1734,7 @@ class Component extends DCLogic {
   itemCreateView(orderId, methodId){
     if(!this.state.itemCreateOpen) return null;
     const f=this.state.itemCreateForm||{};
-    const typeOptions=['Screen','Ink','Thread','Digitization','Transfer'].map(x=>{ const on=f.type===x; return { label:x, onPick:()=>this.setItemCreateField({type:x}), bg:on?'#18230D':'#121215', border:on?'#3D5418':'#242428', color:on?'#BBD382':'#8a8378' }; });
+    const typeOptions=['Screen','Ink','Thread','Digitization','Transfer'].map(x=>{ const on=f.type===x; return { label:x, onPick:()=>this.setItemCreateField({type:x}), bg:on?'#18230D':'#121215', border:on?'#3D5418':'#242428', color:on?'#BBD382':'var(--text-tertiary)' }; });
     return {
       typeOptions,
       isScreen:f.type==='Screen', isInk:f.type==='Ink', isThread:f.type==='Thread', isDigit:f.type==='Digitization', isTransfer:f.type==='Transfer',
@@ -2424,7 +2424,7 @@ class Component extends DCLogic {
           unsaved,
           locked, notLocked:!locked,
           lockedLabel: key==='setup' ? 'Set-up complete' : 'Production complete',
-          onToggle:()=>this.toggleTimer(src.id,key), btnLabel:c.running?'Pause':'Start', btnIcon:c.running?'ti-player-pause':'ti-player-play', btnBg:c.running?'#18230D':'#16161a', btnBorder:c.running?'#3D5418':'#2a2a2f', btnText:c.running?'#BBD382':'#9C978C',
+          onToggle:()=>this.toggleTimer(src.id,key), btnLabel:c.running?'Pause':'Start', btnIcon:c.running?'ti-player-pause':'ti-player-play', btnBg:c.running?'#18230D':'#16161a', btnBorder:c.running?'#3D5418':'#2a2a2f', btnText:c.running?'#BBD382':'var(--text-secondary)',
           /* Stop is deliberately quiet until the timer has something to end --
              it is the irreversible one, and a full-strength button sitting
              next to Start invites a mis-tap before the job has even begun. */
@@ -2484,10 +2484,10 @@ class Component extends DCLogic {
                are about to start timing. */
             location: r.printLocation || 'No location set',
             showLocation: !!r.printLocation || locationOn,
-            locationColor: r.printLocation ? '#9C978C' : 'var(--text-faint)',
+            locationColor: r.printLocation ? 'var(--text-secondary)' : 'var(--text-faint)',
             bg: on ? '#2a1210' : '#121215',
             border: on ? '#C6372B' : '#242428',
-            nameColor: on ? '#ECEAE4' : '#9C978C',
+            nameColor: on ? '#ECEAE4' : 'var(--text-secondary)',
             onPick: ()=>this.selectRun(src.id, r.id),
           };
         }),
@@ -2501,7 +2501,7 @@ class Component extends DCLogic {
           : '',
         hasNote: prodRunning,
       };
-      const assignees=['MA','DK','PR','JT'].map(k=>{ const on=src.worker===k; return { key:k, init:k, name:W[k].name, color:W[k].color, onPick:()=>this.assign(src.id,k), bg:on?'#1a1a1e':'transparent', border:on?W[k].color:'#242428', textColor:on?'#ECEAE4':'#8a8378' }; });
+      const assignees=['MA','DK','PR','JT'].map(k=>{ const on=src.worker===k; return { key:k, init:k, name:W[k].name, color:W[k].color, onPick:()=>this.assign(src.id,k), bg:on?'#1a1a1e':'transparent', border:on?W[k].color:'#242428', textColor:on?'#ECEAE4':'var(--text-tertiary)' }; });
       const pkg=st.pkg[src.orderId]||[]; const shp=st.ship[src.orderId]||[]; const nx=NEXT[src.stage];
       /* Post-Production collapses this drawer down to the six things the
          packing bench actually needs: the mockup, the status stepper, the
@@ -2683,7 +2683,7 @@ class Component extends DCLogic {
         deliveryOptions:(window.CAApi&&window.CAApi.deliveryOptions)
           ? window.CAApi.deliveryOptions('— not set —')
           : [{value:'',label:'— not set —'}].concat(['Shipping','Delivery','Pickup','Split Ship','Order Fulfillment'].map(function(v){return {value:v,label:v};})), onDelivery:(e)=>this.setDelivery(src.orderId,e.target.value),
-        labelPrinted:!!d.labelPrinted, onToggleLabel:()=>this.toggleLabel(src.orderId), labelBg:d.labelPrinted?'#18230D':'#16161a', labelBorder:d.labelPrinted?'#3D5418':'#2a2a2f', labelColor:d.labelPrinted?'#BBD382':'#9C978C', labelIcon:d.labelPrinted?'ti-checkbox':'ti-square',
+        labelPrinted:!!d.labelPrinted, onToggleLabel:()=>this.toggleLabel(src.orderId), labelBg:d.labelPrinted?'#18230D':'#16161a', labelBorder:d.labelPrinted?'#3D5418':'#2a2a2f', labelColor:d.labelPrinted?'#BBD382':'var(--text-secondary)', labelIcon:d.labelPrinted?'ti-checkbox':'ti-square',
         // Pre_Production_Item__c records come back per ORDER (an order-wide
         // fetch), so filter down to just this card's own method here --
         // otherwise a card would show its sibling method's screens/inks too.
@@ -2699,7 +2699,7 @@ class Component extends DCLogic {
         // Same resolution order as statusSteps below, so the two never
         // disagree about which step is current.
         statusHelp:(function(){ var cur=src.status||{rfp:'Ready for Print',ip:'In Production',pp:'Post-Production',done:'Completed'}[src.stage]; return (window.CAApi&&window.CAApi.statusHelp)?window.CAApi.statusHelp(cur):''; })(),
-        statusSteps:(function(){ var SS=['Pre-Production','Ready for Print','In Production','Post-Production','Completed']; var curLabel=src.status||{rfp:'Ready for Print',ip:'In Production',pp:'Post-Production',done:'Completed'}[src.stage]; var ci=SS.indexOf(curLabel); return SS.map(function(label,i){ var done=i<ci, current=i===ci, isNext=(i===ci+1), clickable=isNext||done, allowed=isNext; return { label, onClick: clickable?(function(){ this.advanceStatus(src.id,label,src.orderId); }).bind(this):null, textColor: current?'#ECEAE4':(done?'#8a8378':(allowed?'#E0B870':'var(--text-faint)')), border: current?'#C6372B':(allowed?'#5E4214':'#242428'), bg: current?'#2a1210':(done?'#18230D':(allowed?'#241a09':'#121215')) }; }.bind(this)); }).call(this),
+        statusSteps:(function(){ var SS=['Pre-Production','Ready for Print','In Production','Post-Production','Completed']; var curLabel=src.status||{rfp:'Ready for Print',ip:'In Production',pp:'Post-Production',done:'Completed'}[src.stage]; var ci=SS.indexOf(curLabel); return SS.map(function(label,i){ var done=i<ci, current=i===ci, isNext=(i===ci+1), clickable=isNext||done, allowed=isNext; return { label, onClick: clickable?(function(){ this.advanceStatus(src.id,label,src.orderId); }).bind(this):null, textColor: current?'#ECEAE4':(done?'var(--text-tertiary)':(allowed?'#E0B870':'var(--text-faint)')), border: current?'#C6372B':(allowed?'#5E4214':'#242428'), bg: current?'#2a1210':(done?'#18230D':(allowed?'#241a09':'#121215')) }; }.bind(this)); }).call(this),
         packaging:pkg.map((p,idx)=>Object.assign({},p,{onRemove:()=>this.removePkg(src.orderId,idx)})), pkgEmpty:pkg.length===0, onAddPkg:()=>this.addPkg(src.orderId), pkgType:st.pkgType, pkgQty:st.pkgQty, onPkgType:(e)=>this.setState({pkgType:e.target.value}), onPkgQty:(e)=>this.setState({pkgQty:e.target.value}), pkgTypeOptions:[{value:'Standard Culture Box',label:'Standard Culture Box'},{value:'Culture Hat Box',label:'Culture Hat Box'},{value:'Poly Bag',label:'Poly Bag'},{value:'Standard Brown Box',label:'Standard Brown Box'}],
         shipments:shp.map(s=>Object.assign({},s,{onRemove:()=>this.removeShipment(s, src.orderId)})), shipEmpty:shp.length===0,
         // "New" now toggles the Log Shipment form open/closed instead of
@@ -2735,7 +2735,7 @@ class Component extends DCLogic {
     const gateDots=[0,1,2,3].map(i=>{ const f=i<st.gatePin.length; return { bg:f?'#C6372B':'transparent', border:f?'#C6372B':'#3a3a40' }; });
     const gateKeys=['1','2','3','4','5','6','7','8','9'];
     const gatePad=gateKeys.map(k=>({ label:k, isText:true, isIcon:false, onPress:()=>this.onGatePress(k), bg:'#16161a', border:'#242428', color:'#ECEAE4' }));
-    gatePad.push({ label:'', isText:false, isIcon:true, icon:'ti-backspace', onPress:()=>this.onGateBackspace(), bg:'transparent', border:'#242428', color:'#8a8378' });
+    gatePad.push({ label:'', isText:false, isIcon:true, icon:'ti-backspace', onPress:()=>this.onGateBackspace(), bg:'transparent', border:'#242428', color:'var(--text-tertiary)' });
     gatePad.push({ label:'0', isText:true, isIcon:false, onPress:()=>this.onGatePress('0'), bg:'#16161a', border:'#242428', color:'#ECEAE4' });
     gatePad.push({ label:'', isText:false, isIcon:true, icon:'ti-arrow-right', onPress:()=>{ if(st.gatePin.length===4) this.submitGatePin(st.gatePin); }, bg:'#C6372B', border:'#C6372B', color:'#08080A' });
     const gateStatusText = st.gateErr || (st.gateSubmitting ? 'Verifying…' : '');
