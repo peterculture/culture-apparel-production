@@ -61,6 +61,39 @@ const DEFAULT_MANAGER_CAPS = [
   "methods.edit",
   "items.edit",
   "proposals.decide",
+  // The shop-floor set below. A manager standing at a station has to be able to
+  // do what the worker beside them can do, or enforcement would lock the person
+  // in charge out of the counting screen.
+  ...["items.status", "orders.receive", "inventory.edit", "results.submit"],
+];
+
+/**
+ * What a worker can do. (E6.5, 2026-09-01.)
+ *
+ * THIS LIST IS THE DIFFERENCE BETWEEN ENFORCEMENT AND A STOPPED SHOP. Before
+ * it, capsFor() returned [] for anyone who was not an admin or a manager -- so
+ * every worker held zero capabilities, and the moment ACCESS_ENFORCE=1 was set
+ * they would have been locked out of every station: garment count-in, item
+ * sub-status, ink and screen stock, and recording production results. The
+ * roadmap already flagged the last one ("results.submit appears in exactly one
+ * place -- the check itself"); it was not one field, it was the whole
+ * shop-floor surface.
+ *
+ * Each entry maps to exactly one endpoint a worker uses to do their job, and
+ * nothing else. Notably absent: anything under orders.edit, methods.edit or
+ * runs.* -- a worker records what happened, they do not reschedule the shop.
+ *
+ * ⚠️ CONFIRM THIS LIST AGAINST THE REPORT-ONLY LOG BEFORE ENFORCING. Five
+ * working days of `[access] would deny` lines will say whether it is right;
+ * a missing capability here shows up there as a worker being denied something
+ * they legitimately do all day. That log is the point of report-only mode --
+ * do not skip it on the strength of this comment.
+ */
+const DEFAULT_WORKER_CAPS = [
+  "items.status",     // POST /api/update-item-status  -- station sub-status
+  "orders.receive",   // POST /api/update-order-receiving -- garment count-in
+  "inventory.edit",   // POST /api/inventory -- ink and screen stock
+  "results.submit",   // POST /api/run-results -- the counting screen
 ];
 
 const enc = new TextEncoder();
@@ -202,7 +235,11 @@ export function capsFor(env, name) {
 
   if (ADMIN_NAMES.includes(name)) return ["*"];
   if (MANAGER_NAMES.includes(name)) return DEFAULT_MANAGER_CAPS.slice();
-  return [];
+  /* Anyone who reached here signed in with a real personal PIN from
+     WORKER_PINS -- they are shop floor, not a stranger. This used to return []
+     and that was the enforcement trap: a signed-in worker with no capabilities
+     is indistinguishable from no session at all. (E6.5) */
+  return DEFAULT_WORKER_CAPS.slice();
 }
 
 export function hasCap(caps, cap) {
