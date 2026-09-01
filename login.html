@@ -58,7 +58,7 @@ window.__resources = Object.assign({}, window.__resources, {
         </div>
       </div>
       <div style="background:#0D0D0F;border:1px solid #1f1f23;border-radius:18px;padding:30px 28px;box-shadow:0 40px 90px -30px rgba(0,0,0,.8)">
-        <div style="font:500 12px/1.4 'Archivo';color:#8a8378;text-align:center;margin-bottom:22px">Enter your PIN to continue</div>
+        <div style="font:500 12px/1.4 'Archivo';color:var(--text-tertiary);text-align:center;margin-bottom:22px">Enter your PIN to continue</div>
         <div style="display:flex;justify-content:center;gap:14px;margin-bottom:8px;animation:{{shakeAnim}}">
           <sc-for list="{{dots}}" as="d" hint-placeholder-count="4">
             <div style="width:15px;height:15px;border-radius:50%;border:2px solid {{d.border}};background:{{d.bg}};transition:all .12s"></div>
@@ -84,7 +84,7 @@ window.__resources = Object.assign({}, window.__resources, {
             <div style="font:600 19px/1 'Oswald';color:#ECEAE4">Welcome, {{name}}</div>
             <div style="display:inline-flex;align-items:center;gap:6px;font:600 9px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:{{roleColor}};background:{{roleBg}};border:1px solid {{roleBorder}};border-radius:6px;padding:5px 9px;margin-top:9px"><i class="ti {{roleIcon}}"></i>{{roleLabel}}</div>
           </div>
-          <button onClick="{{ onLogout }}" style="margin-left:auto;flex-shrink:0;font:600 10px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#8a8378;background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:9px 11px;cursor:pointer" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-logout"></i></button>
+          <button onClick="{{ onLogout }}" style="margin-left:auto;flex-shrink:0;font:600 10px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:var(--text-tertiary);background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:9px 11px;cursor:pointer" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-logout"></i></button>
         </div>
         <div style="font:600 10px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-faint);margin-bottom:12px">Open a board</div>
         <div style="display:flex;flex-direction:column;gap:9px">
@@ -161,7 +161,7 @@ class Component extends DCLogic {
     const dots=[0,1,2,3].map(i=>{ const f=i<st.pin.length; return { filled:f, bg:f?'#C6372B':'transparent', border:f?'#C6372B':'#3a3a40' }; });
     const keys=['1','2','3','4','5','6','7','8','9'];
     const pad=keys.map(k=>({ label:k, isText:true, isIcon:false, onPress:()=>this.press(k), bg:'#16161a', border:'#242428', color:'#ECEAE4' }));
-    pad.push({ label:'', isText:false, isIcon:true, icon:'ti-backspace', onPress:()=>this.backspace(), bg:'transparent', border:'#242428', color:'#8a8378' });
+    pad.push({ label:'', isText:false, isIcon:true, icon:'ti-backspace', onPress:()=>this.backspace(), bg:'transparent', border:'#242428', color:'var(--text-tertiary)' });
     pad.push({ label:'0', isText:true, isIcon:false, onPress:()=>this.press('0'), bg:'#16161a', border:'#242428', color:'#ECEAE4' });
     pad.push({ label:'', isText:false, isIcon:true, icon:'ti-arrow-right', onPress:()=>{ if(st.pin.length===4) this.submit(st.pin); }, bg:'#C6372B', border:'#C6372B', color:'#08080A' });
 
