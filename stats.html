@@ -49,16 +49,16 @@ window.__resources = Object.assign({}, window.__resources, {
 <div style="display:flex;flex-direction:column;min-height:100vh;background:radial-gradient(circle at 30% -10%,#101013,#08080A 55%)">
 
   <header style="position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:16px;padding:14px 26px;background:rgba(6,6,7,.92);backdrop-filter:blur(10px);border-bottom:1px solid rgba(198,55,43,.4);flex-wrap:wrap">
-    <button onClick="{{ onOpenNav }}" title="All dashboards" style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:9px;background:#16161a;border:1px solid #2a2a2f;color:#9C978C;cursor:pointer;flex-shrink:0" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-menu-2" style="font-size:18px"></i></button>
+    <button onClick="{{ onOpenNav }}" title="All dashboards" style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:9px;background:#16161a;border:1px solid #2a2a2f;color:var(--text-secondary);cursor:pointer;flex-shrink:0" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-menu-2" style="font-size:18px"></i></button>
     <svg width="34" height="34" viewBox="0 0 48 48" aria-hidden="true" style="flex-shrink:0"><g fill="#C6372B"><rect x="12" y="9" width="24" height="3.1" rx="1.5"/><rect x="8" y="14" width="32" height="3.1" rx="1.5"/><rect x="5" y="19" width="38" height="3.1" rx="1.5"/><rect x="5" y="24" width="38" height="3.1" rx="1.5"/><rect x="6" y="29" width="36" height="3.1" rx="1.5"/><rect x="9" y="34" width="30" height="3.1" rx="1.5"/><rect x="13" y="39" width="22" height="3.1" rx="1.5"/></g></svg>
     <div style="min-width:0">
       <div style="font:700 16px/1 'Oswald';letter-spacing:.12em;color:#ECEAE4">CULTURE APPAREL</div>
       <div style="font:500 9px/1 'Oswald';letter-spacing:.4em;text-transform:uppercase;color:#C6372B;margin-top:4px">Production Floor</div>
     </div>
     <div style="margin-left:auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:flex-end">
-      <div style="font:600 13px/1 'Oswald';letter-spacing:.1em;color:#9C978C;white-space:nowrap">{{clock}} <span style="color:var(--text-faint)">·</span> {{dateStr}}</div>
-      <div style="display:flex;align-items:center;gap:7px;font:600 10px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#9C978C;white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:{{connColor}};box-shadow:0 0 7px {{connColor}}"></span>{{connLabel}}</div>
-      <button onClick="{{ onRefresh }}" style="display:inline-flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#9C978C;background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:9px 12px;cursor:pointer" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-refresh"></i>Refresh</button>
+      <div style="font:600 13px/1 'Oswald';letter-spacing:.1em;color:var(--text-secondary);white-space:nowrap">{{clock}} <span style="color:var(--text-faint)">·</span> {{dateStr}}</div>
+      <div style="display:flex;align-items:center;gap:7px;font:600 10px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:var(--text-secondary);white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:{{connColor}};box-shadow:0 0 7px {{connColor}}"></span>{{connLabel}}</div>
+      <button onClick="{{ onRefresh }}" style="display:inline-flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-secondary);background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:9px 12px;cursor:pointer" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-refresh"></i>Refresh</button>
     </div>
   </header>
 
@@ -68,7 +68,7 @@ window.__resources = Object.assign({}, window.__resources, {
       <div style="display:flex;align-items:center;gap:12px;padding:20px 22px;border-bottom:1px solid #1b1b1e">
         <svg width="28" height="28" viewBox="0 0 48 48" aria-hidden="true" style="flex-shrink:0"><g fill="#C6372B"><rect x="12" y="9" width="24" height="3.1" rx="1.5"/><rect x="8" y="14" width="32" height="3.1" rx="1.5"/><rect x="5" y="19" width="38" height="3.1" rx="1.5"/><rect x="5" y="24" width="38" height="3.1" rx="1.5"/><rect x="6" y="29" width="36" height="3.1" rx="1.5"/><rect x="9" y="34" width="30" height="3.1" rx="1.5"/><rect x="13" y="39" width="22" height="3.1" rx="1.5"/></g></svg>
         <div style="font:700 13px/1 'Oswald';letter-spacing:.1em;color:#ECEAE4">CULTURE APPAREL</div>
-        <button onClick="{{ onCloseNav }}" style="margin-left:auto;flex-shrink:0;width:30px;height:30px;border-radius:8px;background:#16161a;border:1px solid #2a2a2f;color:#9C978C;cursor:pointer" style-hover="color:#ECEAE4;border-color:#3a3a40"><i class="ti ti-x"></i></button>
+        <button onClick="{{ onCloseNav }}" style="margin-left:auto;flex-shrink:0;width:30px;height:30px;border-radius:8px;background:#16161a;border:1px solid #2a2a2f;color:var(--text-secondary);cursor:pointer" style-hover="color:#ECEAE4;border-color:#3a3a40"><i class="ti ti-x"></i></button>
       </div>
       <div style="padding:14px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1">
         <sc-for list="{{navBoards}}" as="b" hint-placeholder-count="6">
@@ -80,7 +80,7 @@ window.__resources = Object.assign({}, window.__resources, {
         </sc-for>
       </div>
       <div style="padding:14px;border-top:1px solid #1b1b1e;display:flex;flex-direction:column;gap:8px;flex-shrink:0">
-        <button onClick="{{ onSwitchAccount }}" style="display:flex;align-items:center;gap:10px;background:#141417;border:1px solid #232327;border-radius:10px;padding:12px 14px;color:#ECEAE4;font:600 12px/1 'Oswald';letter-spacing:.03em;cursor:pointer;text-align:left" style-hover="border-color:#3a3a40"><i class="ti ti-repeat" style="color:#8a8378;font-size:15px;flex-shrink:0"></i>Switch Account</button>
+        <button onClick="{{ onSwitchAccount }}" style="display:flex;align-items:center;gap:10px;background:#141417;border:1px solid #232327;border-radius:10px;padding:12px 14px;color:#ECEAE4;font:600 12px/1 'Oswald';letter-spacing:.03em;cursor:pointer;text-align:left" style-hover="border-color:#3a3a40"><i class="ti ti-repeat" style="color:var(--text-tertiary);font-size:15px;flex-shrink:0"></i>Switch Account</button>
         <button onClick="{{ onLogout }}" style="display:flex;align-items:center;gap:10px;background:transparent;border:1px solid #232327;border-radius:10px;padding:12px 14px;color:#E8A89F;font:600 12px/1 'Oswald';letter-spacing:.03em;cursor:pointer;text-align:left" style-hover="border-color:#7A241C;background:#2A100D"><i class="ti ti-logout" style="font-size:15px;flex-shrink:0"></i>Log Out</button>
       </div>
     </aside>
@@ -93,7 +93,7 @@ window.__resources = Object.assign({}, window.__resources, {
       <div style="width:24px;height:24px;border-radius:50%;background:{{statusColor}};--glow-c:{{statusColor}};box-shadow:0 0 14px 4px {{statusColor}};animation:ca-glow-lg 1.9s ease-in-out infinite"></div>
       <div style="font:600 15px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted)">Team Status</div>
       <div style="font:600 30px/1 'Oswald';letter-spacing:.03em;color:#ECEAE4">{{statusLabel}}</div>
-      <div style="font:400 12px/1.5 'Archivo';color:#9C978C;max-width:440px">{{heroSub}}</div>
+      <div style="font:400 12px/1.5 'Archivo';color:var(--text-secondary);max-width:440px">{{heroSub}}</div>
       <div style="font:400 10px/1.4 'Archivo';color:var(--text-faint);max-width:440px;margin-top:2px">Driven by prep-time buffer: worst single order wins, so one order about to blow its print date flips this red even if the rest of the queue looks healthy.</div>
     </div>
 
@@ -287,7 +287,7 @@ class Component extends DCLogic {
           maintainAspectRatio: false,
           interaction: { mode:'index', intersect:false },
           plugins: {
-            legend: { position:'top', align:'end', labels:{ color:'#9C978C', boxWidth:10, boxHeight:10, font:{ family:'Archivo', size:11 } } },
+            legend: { position:'top', align:'end', labels:{ color:'var(--text-secondary)', boxWidth:10, boxHeight:10, font:{ family:'Archivo', size:11 } } },
             tooltip: { backgroundColor:'#141417', borderColor:'#2a2a2f', borderWidth:1, titleColor:'#ECEAE4', bodyColor:'#C9C6BF', titleFont:{ family:'Oswald' }, bodyFont:{ family:'Archivo' } },
           },
           scales: {
