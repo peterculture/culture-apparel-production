@@ -604,7 +604,11 @@ window.__resources = Object.assign({}, window.__resources, {
             <textarea value="{{mgrNotes}}" onInput="{{ onMgrSpecial }}" placeholder="Rush notes, VIP handling, anything the floor needs to know…" style="width:100%;min-height:72px;font:400 13px/1.55 'Archivo';color:#E0B870;white-space:pre-wrap;background:#241a09;border:1px solid #5E4214;border-radius:9px;padding:12px 14px;outline:none;resize:vertical"></textarea>
           </div>
           <div>
-            <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:11px">Print Method</div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:9px">
+              <span style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary)">Print Method</span>
+              <sc-if value="{{methodSuggested}}" hint-placeholder-val="{{ true }}"><span style="font:600 9px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#C9923A;border:1px solid #5E4214;background:#241B0B;border-radius:3px;padding:3px 7px">{{methodSuggestedFrom}}</span></sc-if>
+            </div>
+            <sc-if value="{{methodMissed}}" hint-placeholder-val="{{ false }}"><div style="font:400 10px/1.5 'Archivo';color:var(--text-muted);margin:-3px 0 9px">{{methodMissNote}}</div></sc-if>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <sc-for list="{{formMethodOptions}}" as="m" hint-placeholder-count="4">
                 <button onClick="{{ m.onPick }}" style="font:600 12px/1 'Oswald';letter-spacing:.04em;color:{{m.color}};background:{{m.bg}};border:1px solid {{m.border}};border-radius:9px;padding:11px 15px;cursor:pointer">{{m.label}}</button>
@@ -1257,7 +1261,7 @@ class Component extends DCLogic {
      fully editable, and the marker clears on the first keystroke. Only specs
      and notes can be prefilled; see BEGIN-SETUP-INVENTORY.md for why the other
      five inputs have no source and must render empty. */
-  defaultForm(){ return { method:'', placements:[], planMode:'new', planId:null, planName:'', planQ:'', status:'Pre-Production', items:[], prefilled:{specs:false, notes:false} }; }
+  defaultForm(){ return { method:'', placements:[], planMode:'new', planId:null, planName:'', planQ:'', status:'Pre-Production', items:[], prefilled:{specs:false, notes:false}, methodInferred:null }; }
   // Toggles one location in/out of the form's multi-select Placements list.
   togglePlacement(x){ this.setState(st=>{ const f=Object.assign({},st.form||this.defaultForm()); const cur=f.placements||[]; f.placements = cur.includes(x) ? cur.filter(v=>v!==x) : cur.concat([x]); return {form:f}; }); }
   // Gate: Pre-Production Management is admin (Anthony) / manager (Gian,
@@ -1293,11 +1297,26 @@ class Component extends DCLogic {
     const api=this._api||window.CAApi; const t=(v)=>(api&&api.text?api.text(v):(v||''));
     const seededSpecs=t(rec.Specifications_for_Printing__c)||'';
     const seededNotes=t(rec.Special_Notes__c)||'';
+    /* Print Method is a GUESS, not a fact -- there is no field on Order that
+       says which method a job needs (BEGIN-SETUP-INVENTORY.md). methodGuess()
+       reads the press name and reports whether it actually matched anything.
+       Pre-select ONLY when it did; otherwise leave it blank and say why.
+       Never fall through to a default: a silent wrong guess prints the job
+       wrong, and a wrong method chosen for the manager is worse than no
+       method, because nobody re-reads a field that is already filled in.
+       (E3.3.)
+
+       Placements deliberately get no suggestion at all -- nothing upstream
+       carries a print location, so there is nothing to infer from. */
+    const guess = (api && api.methodGuess) ? api.methodGuess(rec) : null;
     const form=Object.assign(this.defaultForm(),{
       specs:seededSpecs, notes:seededNotes,
       // Marked only when something actually came across. An empty field is not
       // "prefilled with nothing"; it is a field the order had no value for.
       prefilled:{ specs: !!seededSpecs, notes: !!seededNotes },
+      method: (guess && guess.confident) ? guess.type : '',
+      methodInferred: (guess && guess.confident) ? { from:guess.from, reason:guess.reason } : null,
+      methodMiss: (guess && !guess.confident) ? { from:guess.from, reason:guess.reason } : null,
     });
     /* Captured HERE, off the raw inbox record, because this is the last moment
        the order is guaranteed to be resolvable. submitMethod() strips it from
@@ -2237,7 +2256,9 @@ class Component extends DCLogic {
           thumbNode: (!!mu && !st.thumbErr[st.mgrId] && window.CAApi && window.CAApi.mockupThumb) ? window.CAApi.mockupThumb(mu, window.CAApi.THUMB_PANEL, ()=>{ try{ const oid=st.mgrId; this.setState(s2=>({thumbErr:Object.assign({},s2.thumbErr,{[oid]:true})})); }catch(_){} }, (window.CAApi.mockupClick)?window.CAApi.mockupClick(mu,(ord.customer||'')+' - '+(ord.num||'')):null, 'Mockup') : null,
           onMockupOpen: (window.CAApi&&window.CAApi.mockupClick)?window.CAApi.mockupClick(mu,(ord.customer||'')+' - '+(ord.num||'')):null };
       }
-      methodOptions=['Screen Print','Embroidery','Heat Press','Promotional Items'].map(x=>({ label:x, onPick:()=>this.setForm({method:x}), bg:f.method===x?'#2a1210':'#121215', border:f.method===x?'#C6372B':'#242428', color:f.method===x?'#ECEAE4':'var(--text-tertiary)' }));
+      // Choosing by hand makes it the manager's decision, so the "suggested"
+      // label and the miss note both go away (E3.3).
+      methodOptions=['Screen Print','Embroidery','Heat Press','Promotional Items'].map(x=>({ label:x, onPick:()=>this.setForm({method:x, methodInferred:null, methodMiss:null}), bg:f.method===x?'#2a1210':'#121215', border:f.method===x?'#C6372B':'#242428', color:f.method===x?'#ECEAE4':'var(--text-tertiary)' }));
       placementOptions=(api&&api.PLACEMENTS?api.PLACEMENTS:['Front','Back','Left Sleeve','Right Sleeve','Left Chest','Right Chest','Full Front','Full Back','Tag','Hood','Pocket']).map(x=>{ const on=(f.placements||[]).includes(x); return { label:x, onPick:()=>this.togglePlacement(x), bg:on?'#2a1210':'#121215', border:on?'#C6372B':'#242428', color:on?'#ECEAE4':'var(--text-tertiary)' }; });
       statusOptions=['Pre-Production','Ready for Print','In Production','Post-Production','Completed','Cancelled','On Hold'].map(s=>({ value:s, label:s }));
       planResults=(st.planResults||[]).map(p=>({ id:p.Id, name:p.Name, onPick:()=>this.pickPlan(p.Id,p.Name) }));
@@ -2371,6 +2392,18 @@ class Component extends DCLogic {
       // touched it. Drives the marker beside the label; cleared on first keystroke.
       specsPrefilled: !!(f && f.prefilled && f.prefilled.specs),
       notesPrefilled: !!(f && f.prefilled && f.prefilled.notes),
+      /* E3.3. The method is the one field on this form that is GUESSED, so it
+         is the one that has to show its working. Suggested -> say where from.
+         Not suggested -> say why not, so "blank" reads as "we could not tell"
+         rather than as a field somebody forgot to fill in. */
+      methodSuggested: !!(f && f.methodInferred),
+      methodSuggestedFrom: (f && f.methodInferred && f.methodInferred.from) ? ('Suggested from press \u201C' + f.methodInferred.from + '\u201D — check it') : 'Suggested from this order\u2019s prep — check it',
+      methodMissed: !!(f && f.methodMiss),
+      methodMissNote: (f && f.methodMiss)
+        ? (f.methodMiss.reason === 'no-press-name'
+            ? 'No press on this order, so nothing to infer from — pick the method.'
+            : ('Press \u201C' + (f.methodMiss.from||'') + '\u201D doesn\u2019t say which method — pick one.'))
+        : '',
       mgrOrder, mgrSpecs:f?f.specs:'', onMgrSpecs:(e)=>this.setMgrSpecs(e.target.value), mgrNotes:f?f.notes:'', onMgrSpecial:(e)=>this.setMgrSpecial(e.target.value),
       formMethodOptions:methodOptions, formPlacementOptions:placementOptions, statusOptions, formStatus:f?f.status:'Pre-Production',
       // Intake form: the manager is choosing the stage a brand-new method
