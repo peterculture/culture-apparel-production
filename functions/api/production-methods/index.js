@@ -48,6 +48,7 @@
 import { apiVersion, jsonError, runQuery } from "../_sf.js";
 import { rollupOrderSubstatus } from "../_pm-rollup.js";
 import { runComposite, runChunked, rollbackCreated } from "../_composite.js";
+import { requireCap } from "../_session.js";
 
 // ---------------------------------------------------------------------------
 // ORG-SPECIFIC API NAMES  (confirmed against the sandbox 2026-07-02)
@@ -174,6 +175,8 @@ export async function onRequestGet({ env, request }) {
 }
 
 export async function onRequestPost({ env, request }) {
+  const gate = await requireCap(request, env, "methods.edit");
+  if (gate.denied) return gate.response;
   let payload;
   try {
     payload = await request.json();
