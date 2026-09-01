@@ -16,6 +16,7 @@
 import { sfFetch, apiVersion, jsonError } from "../_sf.js";
 import { rollupItemToMethod } from "../_ppi-checklist.js";
 import { statusForSubStatus } from "../_station.js";
+import { requireCap } from "../_session.js";
 
 // If any of these change, the item may have just become (or stopped being)
 // "ready" -- worth recomputing the parent Order's checklist boxes.
@@ -89,7 +90,9 @@ function isSfId(s) {
  * item that was created by mistake (wrong type, duplicate, etc.). Salesforce
  * returns 204 No Content on a successful delete.
  */
-export async function onRequestDelete({ env, params }) {
+export async function onRequestDelete({ env, params, request }) {
+  const gate = await requireCap(request, env, "items.edit");
+  if (gate.denied) return gate.response;
   try {
     const id = params && params.id;
     if (!isSfId(id)) return jsonError("bad_item_id", 400);
@@ -110,6 +113,8 @@ export async function onRequestDelete({ env, params }) {
 }
 
 export async function onRequestPatch({ env, request, params }) {
+  const gate = await requireCap(request, env, "items.edit");
+  if (gate.denied) return gate.response;
   const id = params && params.id;
   if (!isSfId(id)) return jsonError("bad_item_id", 400);
 
