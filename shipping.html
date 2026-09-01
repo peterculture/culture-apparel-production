@@ -866,7 +866,13 @@ class Component extends DCLogic {
     };
     let cards=filtered.map(mk);
     cards.sort((a,b)=>{ const da=(a.days==null)?Infinity:a.days, db=(b.days==null)?Infinity:b.days; return da-db; });
-    const boardEmpty = cards.length===0;
+    /* E4.5. `cards.length===0` alone made the first paint of this board --
+       before anything had loaded -- announce "the shop floor is caught up".
+       The notice now distinguishes loading / demo / genuinely-empty; see
+       listState() in ca-api.js. */
+    const boardState = (api && api.listState) ? api.listState(st.connection, cards.length)
+                                              : (cards.length ? 'ready' : 'empty');
+    const boardEmpty = boardState !== 'ready';
 
     const GROUP_DEFS=[
       { key:'over',  label:'Overdue',     color:'#E24A3A' },
@@ -1026,7 +1032,12 @@ class Component extends DCLogic {
       onLogout:()=>{ if(api&&api.logout) api.logout(); window.location.href='login.html'; },
       tabs, q:st.q, onSearch:(e)=>this.setState({q:e.target.value}),
       cardGroups, boardEmpty,
-      emptyMsg: (boardEmpty && q) ? ('No matches for "'+st.q.trim()+'".') : 'Nothing in Post-Production for this view — the shop floor is caught up.',
+      emptyMsg: (boardState === 'empty' && q)
+        ? ('No matches for "'+st.q.trim()+'". Clear the search to see the whole board.')
+        : (api && api.listNotice)
+          ? api.listNotice(boardState, 'Nothing in Post-Production for this view. Orders arrive here once every production method on them is marked Completed.')
+          : '',
+      emptyIsLoading: boardState === 'loading',
       modalOpen:!!modal, modal, onCloseModal:()=>this.closeModal(),
 
       splitOpen:st.splitOpen, splitOrderLabel:st.splitOrderLabel, splitLoading:st.splitLoading,
