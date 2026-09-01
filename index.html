@@ -1512,10 +1512,31 @@ class Component extends DCLogic {
     if(this.state.runRowSaving[runId]) return;
     const fail=(msg)=>{ this.setState(st=>({ runRowErr:Object.assign({}, st.runRowErr, {[runId]:msg}), runRowMsg:Object.assign({}, st.runRowMsg, {[runId]:''}) })); };
     if(!f.pressId){ fail('Pick a press'); return; }
-    const start=this.buildRunDateTime(f.startDate,f.startTime);
-    if(!start){ fail('Set the scheduled start date & time'); return; }
-    const end=this.buildRunDateTime(f.endDate,f.endTime);
-    if(!end){ fail('Set the scheduled end date & time'); return; }
+    // Scheduled window: set it, or clear it -- but as a pair (E5.11).
+    //
+    // This used to hard-require both halves, so blanking the schedule failed
+    // here with "Set the scheduled start date & time" and never reached the
+    // server at all. A manager who wanted a run to stop claiming a slot had to
+    // DELETE it, taking its press, quantity, size allocation and any recorded
+    // results with it.
+    //
+    // Both halves fully blank now means "un-schedule this run" and sends '' for
+    // each, which production-runs/[id].js writes as null. A HALF-blank window is
+    // still refused -- a run with an end and no start reads as "Not scheduled
+    // yet" on every board, so the orphaned end would be invisible and stuck.
+    //
+    // EDIT ONLY. The create paths (submitRunCreate here, and calendar.html's
+    // combined create/edit run form) still demand both halves, because
+    // production-runs/index.js rejects a create with no schedule -- a run has
+    // to be placed somewhere to exist. Only an existing run can be un-placed.
+    const schedBlank = !f.startDate && !f.startTime && !f.endDate && !f.endTime;
+    let start = '', end = '';
+    if(!schedBlank){
+      start=this.buildRunDateTime(f.startDate,f.startTime);
+      if(!start){ fail('Set the scheduled start date & time, or clear both to un-schedule this run'); return; }
+      end=this.buildRunDateTime(f.endDate,f.endTime);
+      if(!end){ fail('Set the scheduled end date & time, or clear both to un-schedule this run'); return; }
+    }
     const qtyNum=Number(f.qty);
     if(!f.qty || !Number.isFinite(qtyNum) || qtyNum<=0){ fail('Enter the total quantity for this run'); return; }
     if((f.actualStartDate||f.actualStartTime) && !(f.actualStartDate&&f.actualStartTime)){ fail('Actual Start needs both a date and a time'); return; }
