@@ -56,14 +56,14 @@ window.__resources = Object.assign({}, window.__resources, {
 <div style="display:flex;flex-direction:column;min-height:100vh;background:radial-gradient(circle at 50% -8%,#101013,#08080A 55%)">
 
   <header style="position:sticky;top:0;z-index:40;display:flex;align-items:center;flex-wrap:wrap;gap:12px 16px;padding:15px var(--pad-x);background:rgba(6,6,7,.94);backdrop-filter:blur(10px);border-bottom:2px solid #C9923A">
-    <button onClick="{{ onOpenNav }}" title="All dashboards" style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:9px;background:#16161a;border:1px solid #2a2a2f;color:#9C978C;cursor:pointer;flex-shrink:0" style-hover="border-color:#C9923A;color:#C9923A"><i class="ti ti-menu-2" style="font-size:18px"></i></button>
+    <button onClick="{{ onOpenNav }}" title="All dashboards" style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:9px;background:#16161a;border:1px solid #2a2a2f;color:var(--text-secondary);cursor:pointer;flex-shrink:0" style-hover="border-color:#C9923A;color:#C9923A"><i class="ti ti-menu-2" style="font-size:18px"></i></button>
     <div style="width:var(--header-icon);height:var(--header-icon);border-radius:12px;background:#C9923A;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-clipboard-list" style="font-size:24px;color:#08080A"></i></div>
     <div style="min-width:0">
       <div style="font:600 var(--header-title)/1 'Oswald';letter-spacing:.04em;color:#ECEAE4">Run Results</div>
       <div style="font:500 9px/1 'Oswald';letter-spacing:.34em;text-transform:uppercase;color:#C9923A;margin-top:5px">Culture Apparel · Production Results</div>
     </div>
     <div style="margin-left:auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end">
-      <div style="display:flex;align-items:center;gap:7px;font:600 12px/1 'Oswald';letter-spacing:.09em;color:#9C978C;white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:{{connColor}}"></span>{{connLabel}} · {{clock}}</div>
+      <div style="display:flex;align-items:center;gap:7px;font:600 12px/1 'Oswald';letter-spacing:.09em;color:var(--text-secondary);white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:{{connColor}}"></span>{{connLabel}} · {{clock}}</div>
       <button onClick="{{ onNameTap }}" style="display:flex;align-items:center;gap:8px;background:#141417;border:1px solid #2a2a2f;border-radius:22px;padding:6px 12px 6px 6px;cursor:pointer"><span style="width:28px;height:28px;border-radius:50%;background:#C9923A;color:#08080A;font:700 10px/28px 'Oswald';text-align:center">{{workerInit}}</span><span style="font:500 12px/1 'Archivo';color:#ECEAE4;white-space:nowrap">{{worker}}</span></button>
     </div>
   </header>
@@ -74,7 +74,7 @@ window.__resources = Object.assign({}, window.__resources, {
       <div style="display:flex;align-items:center;gap:12px;padding:20px 22px;border-bottom:1px solid #1b1b1e">
         <svg width="28" height="28" viewBox="0 0 48 48" aria-hidden="true" style="flex-shrink:0"><g fill="#C6372B"><rect x="12" y="9" width="24" height="3.1" rx="1.5"/><rect x="8" y="14" width="32" height="3.1" rx="1.5"/><rect x="5" y="19" width="38" height="3.1" rx="1.5"/><rect x="5" y="24" width="38" height="3.1" rx="1.5"/><rect x="6" y="29" width="36" height="3.1" rx="1.5"/><rect x="9" y="34" width="30" height="3.1" rx="1.5"/><rect x="13" y="39" width="22" height="3.1" rx="1.5"/></g></svg>
         <div style="font:700 13px/1 'Oswald';letter-spacing:.1em;color:#ECEAE4">CULTURE APPAREL</div>
-        <button onClick="{{ onCloseNav }}" style="margin-left:auto;flex-shrink:0;width:30px;height:30px;border-radius:8px;background:#16161a;border:1px solid #2a2a2f;color:#9C978C;cursor:pointer" style-hover="color:#ECEAE4;border-color:#3a3a40"><i class="ti ti-x"></i></button>
+        <button onClick="{{ onCloseNav }}" style="margin-left:auto;flex-shrink:0;width:30px;height:30px;border-radius:8px;background:#16161a;border:1px solid #2a2a2f;color:var(--text-secondary);cursor:pointer" style-hover="color:#ECEAE4;border-color:#3a3a40"><i class="ti ti-x"></i></button>
       </div>
       <div style="padding:14px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1">
         <sc-for list="{{navBoards}}" as="b" hint-placeholder-count="6">
@@ -86,7 +86,7 @@ window.__resources = Object.assign({}, window.__resources, {
         </sc-for>
       </div>
       <div style="padding:14px;border-top:1px solid #1b1b1e;display:flex;flex-direction:column;gap:8px;flex-shrink:0">
-        <button onClick="{{ onSwitchAccount }}" style="display:flex;align-items:center;gap:10px;background:#141417;border:1px solid #232327;border-radius:10px;padding:12px 14px;color:#ECEAE4;font:600 12px/1 'Oswald';letter-spacing:.03em;cursor:pointer;text-align:left" style-hover="border-color:#3a3a40"><i class="ti ti-repeat" style="color:#8a8378;font-size:15px;flex-shrink:0"></i>Switch Account</button>
+        <button onClick="{{ onSwitchAccount }}" style="display:flex;align-items:center;gap:10px;background:#141417;border:1px solid #232327;border-radius:10px;padding:12px 14px;color:#ECEAE4;font:600 12px/1 'Oswald';letter-spacing:.03em;cursor:pointer;text-align:left" style-hover="border-color:#3a3a40"><i class="ti ti-repeat" style="color:var(--text-tertiary);font-size:15px;flex-shrink:0"></i>Switch Account</button>
         <button onClick="{{ onLogout }}" style="display:flex;align-items:center;gap:10px;background:transparent;border:1px solid #232327;border-radius:10px;padding:12px 14px;color:#E8A89F;font:600 12px/1 'Oswald';letter-spacing:.03em;cursor:pointer;text-align:left" style-hover="border-color:#7A241C;background:#2A100D"><i class="ti ti-logout" style="font-size:15px;flex-shrink:0"></i>Log Out</button>
       </div>
     </aside>
@@ -97,7 +97,7 @@ window.__resources = Object.assign({}, window.__resources, {
     <div style="padding:60px var(--pad-x);text-align:center;max-width:520px;margin:0 auto">
       <i class="ti ti-database-off" style="font-size:38px;color:var(--text-muted)"></i>
       <div style="font:600 17px/1.3 'Oswald';color:#ECEAE4;margin-top:16px">Not set up in this environment</div>
-      <div style="font:400 13px/1.6 'Archivo';color:#8a8378;margin-top:10px">The production result fields haven't been deployed to the Salesforce org this app is pointed at. Counting will work here as soon as they are.</div>
+      <div style="font:400 13px/1.6 'Archivo';color:var(--text-tertiary);margin-top:10px">The production result fields haven't been deployed to the Salesforce org this app is pointed at. Counting will work here as soon as they are.</div>
       <div style="font:400 11px/1.5 'Archivo';color:#5b564e;margin-top:14px;word-break:break-word">{{notAvailableDetail}}</div>
     </div>
   </sc-if>
@@ -125,7 +125,7 @@ window.__resources = Object.assign({}, window.__resources, {
             <span style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:{{c.statusColor}};background:{{c.statusBg}};border:1px solid {{c.statusBorder}};border-radius:6px;padding:5px 7px">{{c.statusLabel}}</span>
             <sc-if value="{{c.needsReschedule}}" hint-placeholder-val="{{ false }}"><span style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#E0B23C;background:#241C0A;border:1px solid #5E4A14;border-radius:6px;padding:5px 7px">Shortfall</span></sc-if>
           </div>
-          <div style="font:400 12px/1.4 'Archivo';color:#9C978C">{{c.customer}}</div>
+          <div style="font:400 12px/1.4 'Archivo';color:var(--text-secondary)">{{c.customer}}</div>
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font:400 11px/1 'Archivo';color:var(--text-muted)">
             <span><i class="ti ti-printer" style="font-size:12px;margin-right:5px"></i>{{c.runName}}</span>
             <span>{{c.methodType}}</span>
@@ -144,7 +144,7 @@ window.__resources = Object.assign({}, window.__resources, {
     <sc-if value="{{listEmpty}}" hint-placeholder-val="{{ false }}">
       <div style="padding:50px var(--pad-x);text-align:center">
         <i class="ti ti-clipboard-check" style="font-size:34px;color:var(--text-muted)"></i>
-        <div style="font:400 13px/1.6 'Archivo';color:#8a8378;margin-top:14px">{{listEmptyMsg}}</div>
+        <div style="font:400 13px/1.6 'Archivo';color:var(--text-tertiary);margin-top:14px">{{listEmptyMsg}}</div>
       </div>
     </sc-if>
   </sc-if>
@@ -153,7 +153,7 @@ window.__resources = Object.assign({}, window.__resources, {
   <sc-if value="{{showRun}}" hint-placeholder-val="{{ false }}">
     <div style="padding:14px var(--pad-x) 40px;max-width:900px;width:100%;margin:0 auto">
 
-      <button onClick="{{ onBack }}" style="display:inline-flex;align-items:center;gap:7px;font:600 11px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#9C978C;background:transparent;border:1px solid #232327;border-radius:9px;padding:11px 14px;cursor:pointer;margin-bottom:16px" style-hover="border-color:#3a3a40;color:#ECEAE4"><i class="ti ti-arrow-left"></i>All Runs</button>
+      <button onClick="{{ onBack }}" style="display:inline-flex;align-items:center;gap:7px;font:600 11px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-secondary);background:transparent;border:1px solid #232327;border-radius:9px;padding:11px 14px;cursor:pointer;margin-bottom:16px" style-hover="border-color:#3a3a40;color:#ECEAE4"><i class="ti ti-arrow-left"></i>All Runs</button>
 
       <sc-if value="{{runLoading}}" hint-placeholder-val="{{ false }}">
         <div style="padding:40px;text-align:center;font:400 13px/1 'Archivo';color:var(--text-muted)">Loading run…</div>
@@ -165,7 +165,7 @@ window.__resources = Object.assign({}, window.__resources, {
             <span style="font:700 20px/1 'Oswald';letter-spacing:.02em;color:#ECEAE4">{{d.orderNumber}}</span>
             <span style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:{{d.statusColor}};background:{{d.statusBg}};border:1px solid {{d.statusBorder}};border-radius:6px;padding:5px 7px">{{d.statusLabel}}</span>
           </div>
-          <div style="font:400 13px/1.4 'Archivo';color:#9C978C">{{d.customer}}</div>
+          <div style="font:400 13px/1.4 'Archivo';color:var(--text-secondary)">{{d.customer}}</div>
           <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;font:400 11px/1 'Archivo';color:var(--text-muted)">
             <span><i class="ti ti-printer" style="font-size:12px;margin-right:5px"></i>{{d.runName}}</span>
             <span>{{d.methodType}}</span>
@@ -209,7 +209,7 @@ window.__resources = Object.assign({}, window.__resources, {
             </div>
           </sc-if>
           <sc-if value="{{rowsEmpty}}" hint-placeholder-val="{{ false }}">
-            <div style="padding:30px 20px;text-align:center;font:400 12px/1.6 'Archivo';color:#8a8378">This run has no rows to count — it was created before the app started generating them.<br><strong style="color:#ECEAE4">Submit it anyway.</strong> That marks it counted so the rest of the order can finish; nothing is recorded against it.</div>
+            <div style="padding:30px 20px;text-align:center;font:400 12px/1.6 'Archivo';color:var(--text-tertiary)">This run has no rows to count — it was created before the app started generating them.<br><strong style="color:#ECEAE4">Submit it anyway.</strong> That marks it counted so the rest of the order can finish; nothing is recorded against it.</div>
           </sc-if>
         </div>
 
@@ -248,7 +248,7 @@ window.__resources = Object.assign({}, window.__resources, {
         <div style="background:#0D0D0F;border:1px solid #1f1f23;border-radius:16px;padding:24px;text-align:center;animation:ca-fade .18s ease">
           <i class="ti ti-circle-check" style="font-size:40px;color:#7FA644"></i>
           <div style="font:600 18px/1.2 'Oswald';color:#ECEAE4;margin-top:14px">{{res.title}}</div>
-          <div style="font:400 13px/1.6 'Archivo';color:#9C978C;margin-top:9px">{{res.summary}}</div>
+          <div style="font:400 13px/1.6 'Archivo';color:var(--text-secondary);margin-top:9px">{{res.summary}}</div>
         </div>
 
         <sc-if value="{{res.hasReprint}}" hint-placeholder-val="{{ false }}">
@@ -260,8 +260,8 @@ window.__resources = Object.assign({}, window.__resources, {
 
         <sc-if value="{{res.hasReworkNote}}" hint-placeholder-val="{{ false }}">
           <div style="display:flex;gap:11px;align-items:flex-start;background:#0F0F12;border:1px solid #232327;border-radius:13px;padding:16px;margin-top:12px">
-            <i class="ti ti-clock" style="color:#8a8378;font-size:18px;flex-shrink:0;margin-top:1px"></i>
-            <div style="font:400 12px/1.6 'Archivo';color:#8a8378;text-align:left">{{res.reworkNote}}</div>
+            <i class="ti ti-clock" style="color:var(--text-tertiary);font-size:18px;flex-shrink:0;margin-top:1px"></i>
+            <div style="font:400 12px/1.6 'Archivo';color:var(--text-tertiary);text-align:left">{{res.reworkNote}}</div>
           </div>
         </sc-if>
 
@@ -278,7 +278,7 @@ window.__resources = Object.assign({}, window.__resources, {
           </div>
         </sc-if>
 
-        <button onClick="{{ onBack }}" style="width:100%;font:600 12px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#9C978C;background:transparent;border:1px solid #232327;border-radius:11px;padding:16px;cursor:pointer;margin-top:12px" style-hover="border-color:#3a3a40;color:#ECEAE4">Back To Runs</button>
+        <button onClick="{{ onBack }}" style="width:100%;font:600 12px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-secondary);background:transparent;border:1px solid #232327;border-radius:11px;padding:16px;cursor:pointer;margin-top:12px" style-hover="border-color:#3a3a40;color:#ECEAE4">Back To Runs</button>
       </sc-if>
     </div>
   </sc-if>
@@ -287,7 +287,7 @@ window.__resources = Object.assign({}, window.__resources, {
     <div style="position:fixed;inset:0;z-index:90;background:rgba(6,6,7,.88);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:var(--pad-x)">
       <div style="width:100%;max-width:380px;background:#0D0D0F;border:1px solid #1f1f23;border-radius:18px;padding:30px 26px;text-align:center;box-shadow:0 40px 90px -30px rgba(0,0,0,.8)">
         <div style="font:600 19px/1.1 'Oswald';color:#ECEAE4;margin-bottom:8px">Who's this?</div>
-        <div style="font:400 12px/1.5 'Archivo';color:#8a8378;margin-bottom:20px">Enter your PIN. Counts get stamped with your name so anyone reading the numbers later knows who was at the press.</div>
+        <div style="font:400 12px/1.5 'Archivo';color:var(--text-tertiary);margin-bottom:20px">Enter your PIN. Counts get stamped with your name so anyone reading the numbers later knows who was at the press.</div>
         <div style="display:flex;justify-content:center;gap:12px;margin-bottom:8px;animation:{{gateShakeAnim}}">
           <sc-for list="{{gateDots}}" as="d" hint-placeholder-count="4">
             <div style="width:13px;height:13px;border-radius:50%;border:2px solid {{d.border}};background:{{d.bg}};transition:all .12s"></div>
@@ -514,7 +514,7 @@ class Component extends DCLogic {
 
     const gateDots=[0,1,2,3].map(i=>{ const f=i<st.gatePin.length; return { bg:f?ACCENT:'transparent', border:f?ACCENT:'#3a3a40' }; });
     const gatePad=['1','2','3','4','5','6','7','8','9'].map(k=>({ label:k, isText:true, isIcon:false, onPress:()=>this.onGatePress(k), bg:'#16161a', border:'#242428', color:'#ECEAE4' }));
-    gatePad.push({ label:'', isText:false, isIcon:true, icon:'ti-backspace', onPress:()=>this.onGateBackspace(), bg:'transparent', border:'#242428', color:'#8a8378' });
+    gatePad.push({ label:'', isText:false, isIcon:true, icon:'ti-backspace', onPress:()=>this.onGateBackspace(), bg:'transparent', border:'#242428', color:'var(--text-tertiary)' });
     gatePad.push({ label:'0', isText:true, isIcon:false, onPress:()=>this.onGatePress('0'), bg:'#16161a', border:'#242428', color:'#ECEAE4' });
     gatePad.push({ label:'', isText:false, isIcon:true, icon:'ti-arrow-right', onPress:()=>{ if(st.gatePin.length===4) this.submitGatePin(st.gatePin); }, bg:ACCENT, border:ACCENT, color:'#08080A' });
 
@@ -522,7 +522,7 @@ class Component extends DCLogic {
     const isDone=(r)=>r.resultStatus==='Submitted';
     const todo=st.runs.filter(r=>!isDone(r)), done=st.runs.filter(isDone);
     const mkTab=(key,label,count)=>({ label, count:String(count), onPick:()=>this.setState({tab:key},()=>this.syncUrl()),
-      color: st.tab===key?'#08080A':'#9C978C', bg: st.tab===key?ACCENT:'#111114', border: st.tab===key?ACCENT:'#232327',
+      color: st.tab===key?'#08080A':'var(--text-secondary)', bg: st.tab===key?ACCENT:'#111114', border: st.tab===key?ACCENT:'#232327',
       countColor: st.tab===key?'#08080A':'var(--text-muted)' });
     const tabs=[ mkTab('todo','To Count',todo.length), mkTab('done','Counted',done.length) ];
 
