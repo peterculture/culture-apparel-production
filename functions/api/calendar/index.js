@@ -413,9 +413,16 @@ export async function onRequestGet({ env, request }) {
             // none set and when the org has no such field -- the grid treats
             // the two the same (show nothing), so neither needs a code path.
             Print_Location__c: run[RUN_LOCATION_FIELD] || null,
-            // Proposal = the machine suggested it. Confirmed = a human placed it
-            // and nothing should move it again. Uros's field, doing exactly the
-            // job a drag-to-reschedule calendar needs.
+            // Uros's field, doing exactly the job a drag-to-reschedule calendar
+            // needs. Three values reach this board, not two (E5.13):
+            //   Proposal   the machine suggested it; it may move again
+            //   Confirmed  a human placed it, and it is on the shop calendar
+            //   Planned    NOT "awaiting confirmation" -- runs publish at
+            //              creation now, so a run still sitting on Planned is
+            //              one whose PATCH to Confirmed failed. calendar.html's
+            //              schedState() words it as a publish failure, and it
+            //              is the state the auto-scheduler must still treat as
+            //              booked. See _run-schedule-status.js.
             Auto_Scheduling_Status__c: run.Auto_Scheduling_Status__c,
             LastModifiedDate: run.LastModifiedDate,
           });
