@@ -590,11 +590,17 @@ window.__resources = Object.assign({}, window.__resources, {
 
         <div style="display:flex;flex-direction:column;gap:22px">
           <div>
-            <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:9px">Specifications for Printing</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">
+            <span style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary)">Specifications for Printing</span>
+            <sc-if value="{{specsPrefilled}}" hint-placeholder-val="{{ true }}"><span style="font:600 9px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#5E9B9A;border:1px solid #2F5150;background:#0E1E1E;border-radius:3px;padding:3px 7px">From Salesforce</span></sc-if>
+          </div>
             <textarea value="{{mgrSpecs}}" onInput="{{ onMgrSpecs }}" placeholder="Print specs — placement, colors, screens, digitizing notes…" style="width:100%;min-height:72px;font:400 13px/1.55 'Archivo';color:#C9C6BF;white-space:pre-wrap;background:#121215;border:1px solid #232327;border-radius:9px;padding:12px 14px;outline:none;resize:vertical"></textarea>
           </div>
           <div>
-            <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#E0B870;margin-bottom:9px">Special Notes</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">
+            <span style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#E0B870">Special Notes</span>
+            <sc-if value="{{notesPrefilled}}" hint-placeholder-val="{{ true }}"><span style="font:600 9px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#5E9B9A;border:1px solid #2F5150;background:#0E1E1E;border-radius:3px;padding:3px 7px">From Salesforce</span></sc-if>
+          </div>
             <textarea value="{{mgrNotes}}" onInput="{{ onMgrSpecial }}" placeholder="Rush notes, VIP handling, anything the floor needs to know…" style="width:100%;min-height:72px;font:400 13px/1.55 'Archivo';color:#E0B870;white-space:pre-wrap;background:#241a09;border:1px solid #5E4214;border-radius:9px;padding:12px 14px;outline:none;resize:vertical"></textarea>
           </div>
           <div>
@@ -1204,6 +1210,15 @@ class Component extends DCLogic {
   // -- shared across every card from the same order, so these apply the
   // change to ALL sibling cards, not just the one whose drawer is open.
   updateOrderFieldLocally(orderId,fields){ this.setState(st=>({ orders: st.orders.map(o=>o.orderId===orderId?Object.assign({},o,fields):o) })); }
+  /* The same edit, written into the cached INBOX record (E3.2).
+     updateOrderFieldLocally above only touches st.orders -- the board's cards --
+     and pickInbox() seeds the form from st.inbox, which nothing refreshed.
+     So: edit the specs, go Back to incoming, open the same order again, and
+     the form came back holding the ORIGINAL text. Not merely stale on screen:
+     submitMethod() flushes f.specs to the Order before creating the method, so
+     saving from that reopened form wrote the old value back over the edit that
+     had already reached Salesforce. Reproduced before fixing. */
+  updateInboxFieldLocally(orderId,fields){ this.setState(st=>({ inbox: (st.inbox||[]).map(r=>r.Id===orderId?Object.assign({},r,fields):r) })); }
   /* ── writes (E4.3, 2026-08-31) — see index.html's matching pair ────────
      canWriteNow() replaces the inline `this._api && connection==='live'` test
      that used to silently skip a write; writeFailed() replaces `.catch(()=>{})`.
@@ -1236,7 +1251,13 @@ class Component extends DCLogic {
     this._api.patchMethodStatus(cardId,'Ready for Print',card.orderId).catch(e=>this.writeFailed('The status change',e));
   }
 
-  defaultForm(){ return { method:'', placements:[], planMode:'new', planId:null, planName:'', planQ:'', status:'Pre-Production', items:[] }; }
+  /* `prefilled` tracks which fields arrived from Salesforce and have NOT been
+     touched yet (E3.2). It drives the "From Salesforce" marker beside the
+     label and nothing else -- the values themselves are ordinary form state,
+     fully editable, and the marker clears on the first keystroke. Only specs
+     and notes can be prefilled; see BEGIN-SETUP-INVENTORY.md for why the other
+     five inputs have no source and must render empty. */
+  defaultForm(){ return { method:'', placements:[], planMode:'new', planId:null, planName:'', planQ:'', status:'Pre-Production', items:[], prefilled:{specs:false, notes:false} }; }
   // Toggles one location in/out of the form's multi-select Placements list.
   togglePlacement(x){ this.setState(st=>{ const f=Object.assign({},st.form||this.defaultForm()); const cur=f.placements||[]; f.placements = cur.includes(x) ? cur.filter(v=>v!==x) : cur.concat([x]); return {form:f}; }); }
   // Gate: Pre-Production Management is admin (Anthony) / manager (Gian,
@@ -1270,7 +1291,14 @@ class Component extends DCLogic {
   pickInbox(id){
     const rec=(this.state.inbox||[]).find(r=>r.Id===id)||{};
     const api=this._api||window.CAApi; const t=(v)=>(api&&api.text?api.text(v):(v||''));
-    const form=Object.assign(this.defaultForm(),{ specs:t(rec.Specifications_for_Printing__c)||'', notes:t(rec.Special_Notes__c)||'' });
+    const seededSpecs=t(rec.Specifications_for_Printing__c)||'';
+    const seededNotes=t(rec.Special_Notes__c)||'';
+    const form=Object.assign(this.defaultForm(),{
+      specs:seededSpecs, notes:seededNotes,
+      // Marked only when something actually came across. An empty field is not
+      // "prefilled with nothing"; it is a field the order had no value for.
+      prefilled:{ specs: !!seededSpecs, notes: !!seededNotes },
+    });
     /* Captured HERE, off the raw inbox record, because this is the last moment
        the order is guaranteed to be resolvable. submitMethod() strips it from
        st.inbox the instant a method exists, and load() may not have put it on
@@ -1310,9 +1338,11 @@ class Component extends DCLogic {
     // mgrOrder lookup (line ~955), which both already do this correctly.
     const src=(this.state.orders||[]).find(o=>o.orderId===orderId);
     const ref=this.referenceForOrder(orderId);
+    const seededSpecs = (seed && seed.specs != null) ? seed.specs : ((src&&src.printSpecs) || ref.printSpecs || '');
+    const seededNotes = (seed && seed.notes != null) ? seed.notes : ((src&&src.specialNotes) || ref.specialNotes || '');
     const form=Object.assign(this.defaultForm(),{
-      specs: (seed && seed.specs != null) ? seed.specs : ((src&&src.printSpecs) || ref.printSpecs || ''),
-      notes: (seed && seed.notes != null) ? seed.notes : ((src&&src.specialNotes) || ref.specialNotes || ''),
+      specs: seededSpecs, notes: seededNotes,
+      prefilled:{ specs: !!seededSpecs, notes: !!seededNotes },   // E3.2
     });
     // Persist the Management view for this entry point too, so refreshing
     // after arriving via index.html's "Add another method" keeps the form up
@@ -1336,8 +1366,8 @@ class Component extends DCLogic {
   // cards never saw the edit until the next 15s poll. Now mirrors
   // setSpecs/setSpecial: updates every sibling card immediately (a no-op
   // .map() if mgrId isn't actually an order id with cards yet).
-  setMgrSpecs(v){ const oid=this.state.mgrId; this.setForm({specs:v}); if(!oid) return; this.updateOrderFieldLocally(oid,{printSpecs:v}); clearTimeout(this._mgrSpecsT); this._mgrSpecsT=setTimeout(()=>{ if(!this.canWriteNow('Print specs')) return; this._api.patchOrder(oid,{Specifications_for_Printing__c:v}).catch(e=>this.writeFailed('The print specs',e)); },600); }
-  setMgrSpecial(v){ const oid=this.state.mgrId; this.setForm({notes:v}); if(!oid) return; this.updateOrderFieldLocally(oid,{specialNotes:v}); clearTimeout(this._mgrSpecialT); this._mgrSpecialT=setTimeout(()=>{ if(!this.canWriteNow('Special notes')) return; this._api.patchOrder(oid,{Special_Notes__c:v}).catch(e=>this.writeFailed('The special notes',e)); },600); }
+  setMgrSpecs(v){ const oid=this.state.mgrId; this.setForm({specs:v, prefilled:Object.assign({},(this.state.form||{}).prefilled,{specs:false})}); if(!oid) return; this.updateOrderFieldLocally(oid,{printSpecs:v}); this.updateInboxFieldLocally(oid,{Specifications_for_Printing__c:v}); clearTimeout(this._mgrSpecsT); this._mgrSpecsT=setTimeout(()=>{ if(!this.canWriteNow('Print specs')) return; this._api.patchOrder(oid,{Specifications_for_Printing__c:v}).catch(e=>this.writeFailed('The print specs',e)); },600); }
+  setMgrSpecial(v){ const oid=this.state.mgrId; this.setForm({notes:v, prefilled:Object.assign({},(this.state.form||{}).prefilled,{notes:false})}); if(!oid) return; this.updateOrderFieldLocally(oid,{specialNotes:v}); this.updateInboxFieldLocally(oid,{Special_Notes__c:v}); clearTimeout(this._mgrSpecialT); this._mgrSpecialT=setTimeout(()=>{ if(!this.canWriteNow('Special notes')) return; this._api.patchOrder(oid,{Special_Notes__c:v}).catch(e=>this.writeFailed('The special notes',e)); },600); }
   backToInbox(){ this.setState({mgrId:null, mgrMultiMethod:false, mgrErr:'', mgrMsg:''}); }
   // Pre_Production_Item__c records come back per ORDER (one fetch covers
   // every sibling method's items), cached under ppItemsById[orderId] and
@@ -2337,6 +2367,10 @@ class Component extends DCLogic {
       inboxNoMatches: inboxAll.length>0 && inbox.length===0,
       mgrQ:st.mgrQ, onMgrSearch:(e)=>this.setState({mgrQ:e.target.value}),
       onCloseMgr:()=>this.closeMgr(), onBackToInbox:()=>this.backToInbox(),
+      // E3.2: true only while the value came from Salesforce and nobody has
+      // touched it. Drives the marker beside the label; cleared on first keystroke.
+      specsPrefilled: !!(f && f.prefilled && f.prefilled.specs),
+      notesPrefilled: !!(f && f.prefilled && f.prefilled.notes),
       mgrOrder, mgrSpecs:f?f.specs:'', onMgrSpecs:(e)=>this.setMgrSpecs(e.target.value), mgrNotes:f?f.notes:'', onMgrSpecial:(e)=>this.setMgrSpecial(e.target.value),
       formMethodOptions:methodOptions, formPlacementOptions:placementOptions, statusOptions, formStatus:f?f.status:'Pre-Production',
       // Intake form: the manager is choosing the stage a brand-new method
