@@ -165,7 +165,7 @@ window.__resources = Object.assign({}, window.__resources, {
           </div>
         </sc-for>
         <sc-if value="{{col.isEmpty}}" hint-placeholder-val="{{ false }}">
-          <div style="border:1px dashed #2a2a2f;border-radius:11px;padding:22px 12px;text-align:center;font:400 11px/1.4 'Archivo';color:#4d483f">Nothing in pre-production.</div>
+          <div style="border:1px dashed #2a2a2f;border-radius:11px;padding:22px 12px;text-align:center;font:400 11px/1.4 'Archivo';color:{{col.emptyColor}}">{{col.emptyMsg}}</div>
         </sc-if>
       </div>
     </sc-for>
@@ -2531,7 +2531,19 @@ class Component extends DCLogic {
     const columns=methMeta.map(s=>{
       const items=visible.filter(o=>o.meth===s.key).map(mk).sort((a,b)=>(a.urg==='over'?0:1)-(b.urg==='over'?0:1));
       const ready=items.filter(o=>o.ready).length;
-      return Object.assign({},s,{ items, count:items.length, isEmpty:items.length===0, readyLabel: ready+' ready to send · '+items.length+' in prep' });
+      /* E4.5: was `items.length===0` with "Nothing in pre-production."
+         hardcoded, so an unloaded board asserted the shop had no prep work.
+         See listState() in ca-api.js. */
+      const colState = (window.CAApi && window.CAApi.listState)
+        ? window.CAApi.listState(st.connection, items.length)
+        : (items.length ? 'ready' : 'empty');
+      return Object.assign({},s,{ items, count:items.length,
+        isEmpty: colState !== 'ready',
+        emptyMsg: (colState === 'empty')
+          ? ('Nothing in ' + s.label + '. Orders appear here once a production method is created for them from the Management inbox.')
+          : ((window.CAApi && window.CAApi.listNotice) ? window.CAApi.listNotice(colState, '') : ''),
+        emptyColor: colState === 'error' ? '#C9923A' : '#6C665C',
+        readyLabel: ready+' ready to send · '+items.length+' in prep' });
     });
 
     const now=st.now;
