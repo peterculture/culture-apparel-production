@@ -45,8 +45,9 @@
  * can only ever create these objects with these fields, and picklist values are
  * checked against allow-lists below.
  */
-import { sfFetch, apiVersion, jsonError, runQuery } from "../_sf.js";
+import { apiVersion, jsonError, runQuery } from "../_sf.js";
 import { rollupOrderSubstatus } from "../_pm-rollup.js";
+import { runComposite, runChunked, rollbackCreated } from "../_composite.js";
 
 // ---------------------------------------------------------------------------
 // ORG-SPECIFIC API NAMES  (confirmed against the sandbox 2026-07-02)
@@ -231,11 +232,23 @@ export async function onRequestPost({ env, request }) {
   // freshly-created chain.
   const planRef = hasExistingPlan ? planId : "@{plan.id}";
 
-  const compositeRequest = [];
+  // -----------------------------------------------------------------------
+  // Write in two phases. See ../_composite.js.
+  //
+  // This used to be one composite with allOrNone:true and no cap check, which
+  // is 1-3 parent records plus ONE PER PRE-PRODUCTION ITEM. A method carrying
+  // more than ~22 screens/inks/threads emits over 25 and Salesforce rejects the
+  // whole request -- the method included -- rather than the overflow. (E5.10.)
+  //
+  //   HEAD  requirement + plan + method. At most three records, and the only
+  //         ones anything references by @{ref.id}, so this always fits.
+  //   TAIL  the pre-production items, chunked against the method's real Id.
+  // -----------------------------------------------------------------------
+  const head = [];
 
   // Path B: create Requirement + Plan first.
   if (!hasExistingPlan) {
-    compositeRequest.push(
+    head.push(
       {
         method: "POST",
         url: `${base}/${REQ_OBJECT}`,
@@ -252,7 +265,7 @@ export async function onRequestPost({ env, request }) {
   }
 
   // Method (both paths).
-  compositeRequest.push({
+  head.push({
     method: "POST",
     url: `${base}/${PM_OBJECT}`,
     referenceId: "pm",
@@ -265,75 +278,81 @@ export async function onRequestPost({ env, request }) {
     },
   });
 
-  // Items (both paths). Each item carries only its type-specific fields.
-  // Sub-status fields are intentionally omitted (default blank in SF).
-  itemList.forEach((item, i) => {
-    const body = {
-      [ITEM_PM_FIELD]:     "@{pm.id}",
-      [ITEM_TYPE_FIELD]:   item.type,
-      [ITEM_STATUS_FIELD]: item.status || ITEM_STATUS_DEFAULT,
-    };
-    if (by) body.Last_Updated_By__c = by;
-    if (item.type === "Screen") {
-      if (item.mesh) body[ITEM_MESH_FIELD] = String(item.mesh);
-    } else if (item.type === "Ink") {
-      if (item.pantone) body[ITEM_PANTONE_FIELD] = String(item.pantone);
-    } else if (item.type === "Thread") {
-      if (item.threadColor)  body[ITEM_THREADCOLOR_FIELD] = String(item.threadColor);
-      if (item.threadNumber) body[ITEM_THREADNUM_FIELD]   = String(item.threadNumber);
-    } else if (item.type === "Digitization") {
-      if (item.stitchCount != null && item.stitchCount !== "") {
-        const n = Number(item.stitchCount);
-        if (!Number.isNaN(n)) body[ITEM_STITCH_FIELD] = n;
-      }
-    } else if (item.type === "Transfer") {
-      if (item.transferType) body[ITEM_TRANSFERTYPE_FIELD] = String(item.transferType);
-    }
-    compositeRequest.push({
-      method: "POST",
-      url: `${base}/${ITEM_OBJECT}`,
-      referenceId: `item${i}`,
-      body,
-    });
-  });
-
   try {
-    const resp = await sfFetch(env, `/services/data/${v}/composite`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ allOrNone: true, compositeRequest }),
-    });
-    const data = await resp.json();
-
-    // /composite returns HTTP 200 even when a sub-request failed; inspect each.
-    const subResults = Array.isArray(data.compositeResponse) ? data.compositeResponse : [];
-
-    // Pull the code out of a sub-result's body (body can be an array of errors).
-    const codeOf = (r) => {
-      const b = r && r.body;
-      if (Array.isArray(b) && b[0]) return b[0].errorCode || "";
-      if (b && b.errorCode) return b.errorCode;
-      return "";
-    };
-    const isErr = (r) => r.httpStatusCode < 200 || r.httpStatusCode >= 300;
-
-    // The REAL failure is the errored sub-result that ISN'T just a rolled-back
-    // sibling. PROCESSING_HALTED means "some OTHER record failed", so skip those
-    // and report the record that actually caused the rollback.
-    const errored = subResults.filter(isErr);
-    const realFailure =
-      errored.find((r) => codeOf(r) !== "PROCESSING_HALTED") || errored[0] || null;
-
-    if (!resp.ok || realFailure) {
-      console.error("Method create failed", resp.status, JSON.stringify(data));
+    const headRes = await runComposite(env, head, "method create");
+    if (!headRes.ok) {
       return Response.json(
         {
           error: "create_failed",
-          // Which record failed (referenceId: req | plan | pm | itemN) + SF's message.
-          failedRef: realFailure ? realFailure.referenceId : null,
-          detail: realFailure ? realFailure.body : data,
-          // Full array so every sub-result is visible in the Network response.
-          all: subResults.map((r) => ({ referenceId: r.referenceId, httpStatusCode: r.httpStatusCode, body: r.body })),
+          // Which record failed (referenceId: req | plan | pm) + SF's message.
+          failedRef: headRes.failedRef,
+          detail: headRes.detail,
+          all: headRes.all,
+        },
+        { status: 502 }
+      );
+    }
+
+    const requirementId = hasExistingPlan ? null : headRes.ids.req || null;
+    const newPlanId     = hasExistingPlan ? planId : headRes.ids.plan || null;
+    const pmId          = headRes.ids.pm || null;
+
+    // Newest first, so a rollback deletes children before their parents.
+    // Requirement -> Plan -> Method is master-detail (see _rework.js's
+    // rollback), so deleting the requirement would cascade -- but deleting
+    // explicitly in child order works whether or not it does, and
+    // rollbackCreated treats an already-gone 404 as success.
+    const created = [];
+    if (!hasExistingPlan && requirementId) created.unshift({ object: REQ_OBJECT, id: requirementId });
+    if (!hasExistingPlan && newPlanId)     created.unshift({ object: PLAN_OBJECT, id: newPlanId });
+    if (pmId)                              created.unshift({ object: PM_OBJECT, id: pmId });
+
+    // TAIL: items (both paths). Each item carries only its type-specific
+    // fields. Sub-status fields are intentionally omitted (default blank in SF).
+    const tail = itemList.map((item, i) => {
+      const body = {
+        [ITEM_PM_FIELD]:     pmId,
+        [ITEM_TYPE_FIELD]:   item.type,
+        [ITEM_STATUS_FIELD]: item.status || ITEM_STATUS_DEFAULT,
+      };
+      if (by) body.Last_Updated_By__c = by;
+      if (item.type === "Screen") {
+        if (item.mesh) body[ITEM_MESH_FIELD] = String(item.mesh);
+      } else if (item.type === "Ink") {
+        if (item.pantone) body[ITEM_PANTONE_FIELD] = String(item.pantone);
+      } else if (item.type === "Thread") {
+        if (item.threadColor)  body[ITEM_THREADCOLOR_FIELD] = String(item.threadColor);
+        if (item.threadNumber) body[ITEM_THREADNUM_FIELD]   = String(item.threadNumber);
+      } else if (item.type === "Digitization") {
+        if (item.stitchCount != null && item.stitchCount !== "") {
+          const n = Number(item.stitchCount);
+          if (!Number.isNaN(n)) body[ITEM_STITCH_FIELD] = n;
+        }
+      } else if (item.type === "Transfer") {
+        if (item.transferType) body[ITEM_TRANSFERTYPE_FIELD] = String(item.transferType);
+      }
+      return {
+        method: "POST",
+        url: `${base}/${ITEM_OBJECT}`,
+        referenceId: `item${i}`,
+        body,
+      };
+    });
+
+    const tailRes = await runChunked(env, tail, { label: "method items", refPrefix: "i" });
+    if (!tailRes.ok) {
+      // A method with only some of its screens is worse than no method: it
+      // reaches the floor looking complete. Undo the whole thing. Items are
+      // a lookup off the method, not master-detail, so they go first and
+      // explicitly (same reason _rework.js deletes Pre-Production Items itself).
+      const strandedItems = (tailRes.createdIds || []).map((id) => ({ object: ITEM_OBJECT, id }));
+      await rollbackCreated(env, [...strandedItems, ...created], "method create");
+      return Response.json(
+        {
+          error: "create_failed",
+          failedRef: tailRes.failedRef || null,
+          detail: tailRes.detail,
+          rolledBack: strandedItems.length + created.length,
         },
         { status: 502 }
       );
@@ -352,15 +371,14 @@ export async function onRequestPost({ env, request }) {
       return null;
     });
 
-    const byRef = (ref) => subResults.find((r) => r.referenceId === ref)?.body?.id ?? null;
     return Response.json(
       {
         ok: true,
-        requirementId: hasExistingPlan ? null : byRef("req"),
-        planId: hasExistingPlan ? planId : byRef("plan"),
-        productionMethodId: byRef("pm"),
+        requirementId,
+        planId: newPlanId,
+        productionMethodId: pmId,
         rolledUpSubstatus,
-        raw: data.compositeResponse,
+        raw: [...(headRes.all || []), ...(tailRes.all || [])],
       },
       { headers: { "Cache-Control": "no-store" } }
     );
