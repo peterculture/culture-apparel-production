@@ -234,6 +234,9 @@ window.__resources = Object.assign({}, window.__resources, {
               <div style="flex:1;background:#121215;border:1px solid #232327;border-radius:11px;padding:13px 14px">
                 <div style="font:500 9px/1 'Oswald';letter-spacing:.11em;text-transform:uppercase;color:var(--text-muted);margin-bottom:9px">{{t.label}} · this method</div>
                 <div style="font:600 25px/0.9 'Oswald';color:{{t.timeColor}};font-variant-numeric:tabular-nums;margin-bottom:11px">{{t.display}}</div>
+                <sc-if value="{{t.autoStopped}}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;align-items:flex-start;gap:6px;background:#241B0B;border:1px solid #5E4214;border-radius:8px;padding:8px 9px;margin-bottom:11px"><i class="ti ti-clock-exclamation" style="color:#C9923A;font-size:12px;flex-shrink:0;margin-top:1px"></i><span style="font:400 9px/1.35 'Archivo';color:#C9923A">Left running {{t.autoStopHours}} hours without a break, so it stopped itself and capped that stretch at {{t.autoStopHours}}h. That is a limit, not a measurement — press Start to carry on, or correct the time on the run.</span></div>
+                </sc-if>
                 <sc-if value="{{t.unsaved}}" hint-placeholder-val="{{ false }}">
                   <div style="display:flex;align-items:flex-start;gap:6px;background:#2A100D;border:1px solid #7A241C;border-radius:8px;padding:8px 9px;margin-bottom:11px"><i class="ti ti-alert-triangle" style="color:#E8A89F;font-size:12px;flex-shrink:0;margin-top:1px"></i><span style="font:400 9px/1.35 'Archivo';color:#E8A89F">Not saved to Salesforce — this time is only on this tablet. Press Stop again once the connection is back.</span></div>
                 </sc-if>
@@ -734,6 +737,24 @@ const CARRIER_OPTIONS = ['UPS','FedEx','USPS','DHL','Local Courier','Other'];
    just sit there; they are a few bytes each and selectedRunId() ignores any id
    that is not in the method's current run list. */
 const RUN_SEL_KEY = 'caTimerRunByMethod';
+
+/* ── Timer ceiling (E2.4) ──────────────────────────────────────────────
+   Nothing used to stop a timer that was left running. A worker starts the
+   production timer, gets pulled onto something else, and the tile keeps
+   counting -- overnight, over a weekend -- until somebody presses Stop and
+   writes fourteen hours to Production_Timer__c. That number then feeds every
+   efficiency figure built on it, and it looks like data rather than an
+   accident.
+
+   Past this many hours the timer stops itself, records the CEILING rather than
+   the wild number, and says so on the tile. Nine hours is the shop day
+   (SHOP 07:00-16:00 in functions/api/_priority.js); twelve leaves room for a
+   genuinely long day without letting an overnight through.
+
+   Editing this is a deploy, not a Salesforce change -- same as WEIGHTS in
+   _priority.js. */
+const TIMER_MAX_HOURS = 12;
+const TIMER_MAX_SECONDS = TIMER_MAX_HOURS * 3600;
 function loadRunSel(){
   try { return JSON.parse(localStorage.getItem(RUN_SEL_KEY) || '{}') || {}; }
   catch (_) { return {}; }
@@ -784,6 +805,13 @@ class Component extends DCLogic {
          Keyed cardId -> {setup:true, prod:true}. Drives the "not saved" strip
          on the tile AND protects the local value from the 15s poll. */
       timerSaveErr:{},
+      /* Timers this session stopped by itself at the ceiling (E2.4). Keyed
+         cardId -> {setup:true, prod:true}. UI-only: there is no Salesforce
+         field for "this number is not trustworthy", so the flag does not
+         survive a reload. Adding one belongs with the other timer fields in
+         E2.3. What DOES survive is the capped value, which is the half that
+         protects the efficiency numbers. */
+      timerAutoStopped:{},
       q:'', methods:{ sp:true, em:true, hp:true, promo:true },
       // Outstanding shortfalls -- garments a run finished without ever putting
       // on the press, which need a make-up run on the SAME method before the
@@ -934,7 +962,7 @@ class Component extends DCLogic {
   // dashboards". Every later refresh, save and drawer-open stays silent.
   // See the header comment in ca-api.js.
   fg(fn){ const a=window.CAApi; return (a&&a.foregroundLoad) ? a.foregroundLoad(fn) : fn(); }
-  componentDidMount(){ this._t = setInterval(()=>this.setState({ now:new Date() }), 1000); this.fg(()=>this.load()); this.bg(()=>this.loadSfEnv()); this.bg(()=>this.loadPrep()); this.bg(()=>this.loadShipped7d()); this.bg(()=>this.loadShortfall()); this._ar = setInterval(()=>{ /* shouldPoll(): demo boards retry every 5th tick so a board that lost the API recovers on its own -- see ca-api.js */ if(!this.state.openId && !this.state.dragId && ((window.CAApi&&window.CAApi.shouldPoll)?window.CAApi.shouldPoll(this.state.connection,'index'):this.state.connection==='live')) this.bg(()=>this.load()); }, 15000); this._pr = setInterval(()=>{ this.bg(()=>this.loadPrep()); this.bg(()=>this.loadShipped7d()); }, 30000); this._sr = setInterval(()=>this.bg(()=>this.loadShortfall()), 30000); }
+  componentDidMount(){ this._t = setInterval(()=>{ this.setState({ now:new Date() }); this.enforceTimerCeiling(); }, 1000); this.fg(()=>this.load()); this.bg(()=>this.loadSfEnv()); this.bg(()=>this.loadPrep()); this.bg(()=>this.loadShipped7d()); this.bg(()=>this.loadShortfall()); this._ar = setInterval(()=>{ /* shouldPoll(): demo boards retry every 5th tick so a board that lost the API recovers on its own -- see ca-api.js */ if(!this.state.openId && !this.state.dragId && ((window.CAApi&&window.CAApi.shouldPoll)?window.CAApi.shouldPoll(this.state.connection,'index'):this.state.connection==='live')) this.bg(()=>this.load()); }, 15000); this._pr = setInterval(()=>{ this.bg(()=>this.loadPrep()); this.bg(()=>this.loadShipped7d()); }, 30000); this._sr = setInterval(()=>this.bg(()=>this.loadShortfall()), 30000); }
   componentWillUnmount(){ clearInterval(this._t); clearInterval(this._ar); clearInterval(this._pr); clearInterval(this._sr); this.clearPoll(); }
   // Independent fetch/failure path from load() -- a hiccup fetching the
   // Pre-Production queue shouldn't flip this board's own "Live · Salesforce"
@@ -1239,6 +1267,93 @@ class Component extends DCLogic {
      the stale server number on the next poll and the worker's time was gone
      with no trace at all. The poll is already suppressed while a drawer is
      open, so this covers the case where the worker closes it. */
+  /* ── The ceiling (E2.4) ──────────────────────────────────────────────
+     Runs on the 1s clock tick. Any timer still running past TIMER_MAX_HOURS
+     stops itself.
+
+     THIS IS NOT stopTimer(). Stop means "this run is finished": it stamps the
+     run's Actual End, releases the worker's run pick, and advances the method
+     to Post-Production. None of that is true here. Nobody finished anything --
+     a tile was left counting, and all we know is that the number on it is not a
+     duration anybody worked. So this writes the capped value and stops, and
+     touches nothing else. Advancing a method's status because a timer expired
+     overnight would move a job on the board with no human involved, which is a
+     considerably worse bug than the one being fixed.
+
+     The value written is the CEILING, not the elapsed. Neither is the truth --
+     the truth is unknown and unknowable after the fact -- but a defensible
+     upper bound keeps the efficiency numbers in a sane range, and the marker
+     on the tile says not to trust it. */
+  enforceTimerCeiling(){
+    const timers=this.state.timers||{};
+    /* Only cards actually on the board. A timer entry can outlive its card:
+       mergeServerTimers() keeps entries the server did not mention, so the
+       DEMO fixtures -- which include a running production timer on GOA-4809 --
+       survive the demo-to-live transition. Acting on one would PATCH
+       production-methods/GOA-4809, a demo card id that is not a Salesforce Id.
+       Caught in testing, which is the only way it would ever have been. */
+    const onBoard=new Set((this.state.orders||[]).map(o=>o.id));
+    this._autoStopping=this._autoStopping||{};
+    const over=[];
+    Object.keys(timers).forEach(cardId=>{
+      if(!onBoard.has(cardId)) return;
+      ['setup','prod'].forEach(which=>{
+        const c=(timers[cardId]||{})[which];
+        if(!c || !c.running || !c.startedAt) return;
+        /* Measured on THIS CONTINUOUS STRETCH, not the accumulated total.
+           Two reasons, one of them found by testing:
+
+           A job can legitimately take more than TIMER_MAX_HOURS across several
+           sittings -- a long embroidery run picked up over two days is not an
+           accident, and stopping it would be the guardrail causing the very
+           data loss it exists to prevent.
+
+           And against cumulative elapsed the guardrail traps itself: after an
+           auto-stop the elapsed IS the ceiling, so pressing Start re-trips it
+           on the next tick and the worker can never resume. */
+        const sinceStart=Math.floor((Date.now()-c.startedAt)/1000);
+        if(sinceStart<TIMER_MAX_SECONDS) return;
+        /* setState is async, so two ticks can both see running:true before the
+           first commit lands and each would fire its own write. */
+        const k=cardId+'\u0000'+which;
+        if(this._autoStopping[k]) return;
+        this._autoStopping[k]=true;
+        over.push({cardId,which});
+      });
+    });
+    over.forEach(({cardId,which})=>this.autoStopTimer(cardId,which));
+  }
+  autoStopTimer(cardId,which){
+    /* Prior accumulated time plus the stretch, capped. Deliberately not the
+       real elapsed -- see enforceTimerCeiling(). Whatever was legitimately
+       banked before this stretch is kept; only the runaway stretch is clamped. */
+    const prior=(((this.state.timers||{})[cardId]||{})[which]||{}).elapsed||0;
+    const capped=prior+TIMER_MAX_SECONDS;
+    this.setState(st=>{
+      const timers=Object.assign({},st.timers);
+      const g=Object.assign({},timers[cardId]||{});
+      g[which]={elapsed:capped, running:false, startedAt:0};
+      timers[cardId]=g;
+      const flags=Object.assign({},st.timerAutoStopped||{});
+      const gf=Object.assign({},flags[cardId]||{}); gf[which]=true; flags[cardId]=gf;
+      return {timers, timerAutoStopped:flags};
+    });
+    this.pushMethodFields(cardId,{[which==='setup'?'Print_Setup_Timer__c':'Production_Timer__c']:capped})
+      .then(saved=>this.noteTimerSave(cardId,which,saved));
+    const a=window.CAApi;
+    if(a && a.toast) a.toast('warn', 'A timer was left running for over '+TIMER_MAX_HOURS+' hours, so it was stopped at '+TIMER_MAX_HOURS+'h. That is a cap, not a measurement — correct it if you know the real time.');
+  }
+  /* Starting again is the worker taking the timer back, so the marker goes. */
+  clearAutoStop(cardId,which){
+    if(this._autoStopping) delete this._autoStopping[cardId+'\u0000'+which];
+    if(!((this.state.timerAutoStopped||{})[cardId]||{})[which]) return;
+    this.setState(st=>{
+      const flags=Object.assign({},st.timerAutoStopped||{});
+      const gf=Object.assign({},flags[cardId]||{}); delete gf[which];
+      if(Object.keys(gf).length) flags[cardId]=gf; else delete flags[cardId];
+      return {timerAutoStopped:flags};
+    });
+  }
   mergeServerTimers(st, fromServer){
     const out=Object.assign({},st.timers,fromServer);
     const errs=st.timerSaveErr||{};
@@ -1775,6 +1890,7 @@ class Component extends DCLogic {
     if(cur.running){ const el=cur.elapsed+Math.floor((Date.now()-cur.startedAt)/1000); next={elapsed:el,running:false,startedAt:0}; this.pushMethodFields(cardId,{[which==='setup'?'Print_Setup_Timer__c':'Production_Timer__c']:el}).then(saved=>this.noteTimerSave(cardId,which,saved)); }
     else {
       next={elapsed:cur.elapsed,running:true,startedAt:Date.now()};
+      this.clearAutoStop(cardId,which);   // E2.4: the worker has taken it back
       /* Starting the PRODUCTION timer stamps the current run's actual start --
          but only the first time this run is started. Pause/Resume within the
          same run must not re-stamp it, or a mid-job coffee break would move
@@ -2420,8 +2536,12 @@ class Component extends DCLogic {
            can retype how long a job took and a tile that silently reads 47:13
            is indistinguishable from one that saved. */
         const unsaved=!!((st.timerSaveErr||{})[src.id]||{})[key];
-        return { label, display:this.fmtDur(disp), timeColor:unsaved?'#E8A89F':(locked?'var(--text-muted)':(c.running?'#7FA644':'#ECEAE4')),
-          unsaved,
+        /* E2.4: this number is a ceiling the app imposed, not something anybody
+           timed. Say so on the tile -- a capped figure that looks like a
+           measurement is exactly what this story exists to prevent. */
+        const autoStopped=!!((st.timerAutoStopped||{})[src.id]||{})[key];
+        return { label, display:this.fmtDur(disp), timeColor:unsaved?'#E8A89F':(autoStopped?'#C9923A':(locked?'var(--text-muted)':(c.running?'#7FA644':'#ECEAE4'))),
+          unsaved, autoStopped, autoStopHours:String(TIMER_MAX_HOURS),
           locked, notLocked:!locked,
           lockedLabel: key==='setup' ? 'Set-up complete' : 'Production complete',
           onToggle:()=>this.toggleTimer(src.id,key), btnLabel:c.running?'Pause':'Start', btnIcon:c.running?'ti-player-pause':'ti-player-play', btnBg:c.running?'#18230D':'#16161a', btnBorder:c.running?'#3D5418':'#2a2a2f', btnText:c.running?'#BBD382':'var(--text-secondary)',
