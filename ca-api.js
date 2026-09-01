@@ -936,6 +936,48 @@
      boards used to inline `this._api && this.state.connection === 'live'` and
      then just return, which is the silent half of the bug. Callers should say
      something when this is false; reportBlockedWrite() is the standard way. */
+  /* ── loading vs empty vs error, told apart (E4.5) ──────────────────────
+     Every board computed its empty state as `count === 0` and nothing else,
+     so the FIRST PAINT of every board -- before a single row had arrived --
+     asserted the board was empty. shipping.html said "Nothing in
+     Post-Production for this view -- the shop floor is caught up." while it
+     was still fetching. index.html and pre-production.html said "No orders --
+     drag one here" in every column. That is not a missing spinner; it is the
+     app making a confident, false statement about the shop, in the same words
+     it uses when the statement is true.
+
+     Three states, and they have to look different:
+
+       loading  the answer is not known yet. Say nothing ABOUT THE WORK --
+                no counts, no "caught up", no "nothing here".
+       error    the fetch failed and what is on screen is demo fixtures. The
+                amber chip already says so; this says it where the rows would
+                have been, because that is where someone is looking.
+       empty    genuinely nothing, and the copy says WHAT WOULD PUT SOMETHING
+                HERE. An empty board that does not explain itself is
+                indistinguishable from a broken one.
+
+     `ready` means there are rows and no notice belongs on screen at all.
+
+     Demo counts as `error` on purpose. A board only falls back to demo when
+     its fetch failed (see the demo-recovery note above), so "these are not
+     your numbers" is the honest reading even when the fixtures are non-empty. */
+  function listState(connection, count){
+    if (connection === 'loading') return 'loading';
+    if (connection === 'demo') return 'error';
+    return (Number(count) > 0) ? 'ready' : 'empty';
+  }
+  /* The generic half of the notice. The `empty` case deliberately carries NO
+     copy of its own -- only the board knows what would put something in it,
+     and a generic "nothing here" is precisely what this story exists to
+     remove. Callers pass their own sentence. */
+  function listNotice(state, emptyMsg){
+    if (state === 'loading') return 'Loading…';
+    if (state === 'error') return 'Could not reach Salesforce — showing demo data. Do not work from these numbers.';
+    if (state === 'empty') return emptyMsg || '';
+    return '';
+  }
+
   function canWrite(connection){ return connection === 'live'; }
   function reportBlockedWrite(what){
     toast('warn', (what ? what + ': ' : '') + 'not saved — this board is on demo data, not connected to Salesforce.');
@@ -1960,6 +2002,7 @@
     SIZE_ORDER: SIZE_ORDER, text: text, initials: initials, colorForName: colorForName, methodOf: methodOf, dueInfo: dueInfo, parseSfDate: parseSfDate, pivotItems: pivotItems, runQtyHint: runQtyHint,
     backgroundLoad: backgroundLoad, foregroundLoad: foregroundLoad,
     toast: toast, errText: errText, canWrite: canWrite, reportBlockedWrite: reportBlockedWrite, reportFailedWrite: reportFailedWrite,
+    listState: listState, listNotice: listNotice,
     trackRequest: trackRequest, hideLoader: hideLoader, showLoaderNow: showLoaderNow,
     STATUS_HELP: STATUS_HELP, statusHelp: statusHelp,
     locationAvailable: locationAvailable, locationsForMethod: locationsForMethod,
