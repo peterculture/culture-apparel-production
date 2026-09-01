@@ -69,15 +69,15 @@ window.__resources = Object.assign({}, window.__resources, {
 <div style="display:flex;flex-direction:column;min-height:100vh;background:radial-gradient(circle at 50% -8%,#101013,#08080A 55%)">
 
   <header style="position:sticky;top:0;z-index:40;display:flex;align-items:center;flex-wrap:wrap;gap:12px 16px;padding:15px var(--pad-x);background:rgba(6,6,7,.94);backdrop-filter:blur(10px);border-bottom:2px solid {{accent}}">
-    <button onClick="{{ onOpenNav }}" title="All dashboards" style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:9px;background:#16161a;border:1px solid #2a2a2f;color:#9C978C;cursor:pointer;flex-shrink:0" style-hover="border-color:{{accent}};color:{{accent}}"><i class="ti ti-menu-2" style="font-size:18px"></i></button>
+    <button onClick="{{ onOpenNav }}" title="All dashboards" style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:9px;background:#16161a;border:1px solid #2a2a2f;color:var(--text-secondary);cursor:pointer;flex-shrink:0" style-hover="border-color:{{accent}};color:{{accent}}"><i class="ti ti-menu-2" style="font-size:18px"></i></button>
     <div style="width:var(--header-icon);height:var(--header-icon);border-radius:12px;background:{{accent}};display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti {{stationIcon}}" style="font-size:24px;color:#08080A"></i></div>
     <div style="min-width:0">
       <div style="font:600 var(--header-title)/1 'Oswald';letter-spacing:.04em;color:#ECEAE4">{{stationName}}</div>
       <div style="font:500 9px/1 'Oswald';letter-spacing:.34em;text-transform:uppercase;color:{{accent}};margin-top:5px">Culture Apparel · Pre-Production</div>
     </div>
     <div style="margin-left:auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end">
-      <div style="display:flex;align-items:center;gap:7px;font:600 12px/1 'Oswald';letter-spacing:.09em;color:#9C978C;white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:{{connColor}}"></span>{{connLabel}} · {{clock}}</div>
-      <sc-if value="{{isAdmin}}" hint-placeholder-val="{{ false }}"><button onClick="{{ onOpenSfEnv }}" title="Salesforce environment -- click to switch" style="display:flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#9C978C;background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:8px 11px;cursor:pointer;white-space:nowrap" style-hover="border-color:{{accent}};color:{{accent}}"><i class="ti ti-cloud" style="font-size:12px"></i>{{sfEnvLabel}}</button></sc-if>
+      <div style="display:flex;align-items:center;gap:7px;font:600 12px/1 'Oswald';letter-spacing:.09em;color:var(--text-secondary);white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:{{connColor}}"></span>{{connLabel}} · {{clock}}</div>
+      <sc-if value="{{isAdmin}}" hint-placeholder-val="{{ false }}"><button onClick="{{ onOpenSfEnv }}" title="Salesforce environment -- click to switch" style="display:flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-secondary);background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:8px 11px;cursor:pointer;white-space:nowrap" style-hover="border-color:{{accent}};color:{{accent}}"><i class="ti ti-cloud" style="font-size:12px"></i>{{sfEnvLabel}}</button></sc-if>
       <button onClick="{{ onNameTap }}" style="display:flex;align-items:center;gap:8px;background:#141417;border:1px solid #2a2a2f;border-radius:22px;padding:6px 12px 6px 6px;cursor:pointer"><span style="width:28px;height:28px;border-radius:50%;background:{{accent}};color:#08080A;font:700 10px/28px 'Oswald';text-align:center">{{workerInit}}</span><span style="font:500 12px/1 'Archivo';color:#ECEAE4;white-space:nowrap">{{worker}}</span></button>
     </div>
   </header>
@@ -88,7 +88,7 @@ window.__resources = Object.assign({}, window.__resources, {
       <div style="display:flex;align-items:center;gap:12px;padding:20px 22px;border-bottom:1px solid #1b1b1e">
         <svg width="28" height="28" viewBox="0 0 48 48" aria-hidden="true" style="flex-shrink:0"><g fill="#C6372B"><rect x="12" y="9" width="24" height="3.1" rx="1.5"/><rect x="8" y="14" width="32" height="3.1" rx="1.5"/><rect x="5" y="19" width="38" height="3.1" rx="1.5"/><rect x="5" y="24" width="38" height="3.1" rx="1.5"/><rect x="6" y="29" width="36" height="3.1" rx="1.5"/><rect x="9" y="34" width="30" height="3.1" rx="1.5"/><rect x="13" y="39" width="22" height="3.1" rx="1.5"/></g></svg>
         <div style="font:700 13px/1 'Oswald';letter-spacing:.1em;color:#ECEAE4">CULTURE APPAREL</div>
-        <button onClick="{{ onCloseNav }}" style="margin-left:auto;flex-shrink:0;width:30px;height:30px;border-radius:8px;background:#16161a;border:1px solid #2a2a2f;color:#9C978C;cursor:pointer" style-hover="color:#ECEAE4;border-color:#3a3a40"><i class="ti ti-x"></i></button>
+        <button onClick="{{ onCloseNav }}" style="margin-left:auto;flex-shrink:0;width:30px;height:30px;border-radius:8px;background:#16161a;border:1px solid #2a2a2f;color:var(--text-secondary);cursor:pointer" style-hover="color:#ECEAE4;border-color:#3a3a40"><i class="ti ti-x"></i></button>
       </div>
       <div style="padding:14px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1">
         <sc-for list="{{navBoards}}" as="b" hint-placeholder-count="6">
@@ -100,7 +100,7 @@ window.__resources = Object.assign({}, window.__resources, {
         </sc-for>
       </div>
       <div style="padding:14px;border-top:1px solid #1b1b1e;display:flex;flex-direction:column;gap:8px;flex-shrink:0">
-        <button onClick="{{ onSwitchAccount }}" style="display:flex;align-items:center;gap:10px;background:#141417;border:1px solid #232327;border-radius:10px;padding:12px 14px;color:#ECEAE4;font:600 12px/1 'Oswald';letter-spacing:.03em;cursor:pointer;text-align:left" style-hover="border-color:#3a3a40"><i class="ti ti-repeat" style="color:#8a8378;font-size:15px;flex-shrink:0"></i>Switch Account</button>
+        <button onClick="{{ onSwitchAccount }}" style="display:flex;align-items:center;gap:10px;background:#141417;border:1px solid #232327;border-radius:10px;padding:12px 14px;color:#ECEAE4;font:600 12px/1 'Oswald';letter-spacing:.03em;cursor:pointer;text-align:left" style-hover="border-color:#3a3a40"><i class="ti ti-repeat" style="color:var(--text-tertiary);font-size:15px;flex-shrink:0"></i>Switch Account</button>
         <button onClick="{{ onLogout }}" style="display:flex;align-items:center;gap:10px;background:transparent;border:1px solid #232327;border-radius:10px;padding:12px 14px;color:#E8A89F;font:600 12px/1 'Oswald';letter-spacing:.03em;cursor:pointer;text-align:left" style-hover="border-color:#7A241C;background:#2A100D"><i class="ti ti-logout" style="font-size:15px;flex-shrink:0"></i>Log Out</button>
       </div>
     </aside>
@@ -129,7 +129,7 @@ window.__resources = Object.assign({}, window.__resources, {
   <div style="flex:1;padding:12px var(--pad-x) 44px">
     <sc-if value="{{showInventory}}" hint-placeholder-val="{{ false }}">
       <div style="max-width:640px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><span style="font:600 12px/1 'Oswald';letter-spacing:.12em;text-transform:uppercase;color:#8a8378">{{invTitle}}</span><span style="margin-left:auto;font:600 12px/1 'Oswald';color:#9C978C">Total {{invTotal}}</span></div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><span style="font:600 12px/1 'Oswald';letter-spacing:.12em;text-transform:uppercase;color:var(--text-tertiary)">{{invTitle}}</span><span style="margin-left:auto;font:600 12px/1 'Oswald';color:var(--text-secondary)">Total {{invTotal}}</span></div>
         <div style="display:flex;flex-direction:column;gap:8px">
           <sc-for list="{{inventory}}" as="i" hint-placeholder-count="4">
             <div style="display:flex;align-items:center;gap:12px;background:#121215;border:1px solid {{i.border}};border-radius:12px;padding:14px 16px">
@@ -158,7 +158,7 @@ window.__resources = Object.assign({}, window.__resources, {
               <div style="width:7px;background:{{o.urgColor}};flex-shrink:0"></div>
               <div style="padding:16px 17px;flex:1;min-width:0;display:flex;flex-direction:column;gap:12px">
                 <div style="display:flex;align-items:flex-start;gap:10px">
-                  <div style="min-width:0"><div style="font:700 15px/1.2 'Oswald';letter-spacing:.02em;color:#ECEAE4">{{o.order}} <span style="color:var(--text-muted)">·</span> {{o.customer}}</div><div style="font:500 15px/1.2 'Oswald';color:#9C978C;margin-top:6px">{{o.ident}}</div><sc-if value="{{o.hasSizes}}" hint-placeholder-val="{{ false }}"><div style="font:400 11px/1.4 'Archivo';color:var(--text-muted);margin-top:6px">{{o.sizes}}</div></sc-if></div>
+                  <div style="min-width:0"><div style="font:700 15px/1.2 'Oswald';letter-spacing:.02em;color:#ECEAE4">{{o.order}} <span style="color:var(--text-muted)">·</span> {{o.customer}}</div><div style="font:500 15px/1.2 'Oswald';color:var(--text-secondary);margin-top:6px">{{o.ident}}</div><sc-if value="{{o.hasSizes}}" hint-placeholder-val="{{ false }}"><div style="font:400 11px/1.4 'Archivo';color:var(--text-muted);margin-top:6px">{{o.sizes}}</div></sc-if></div>
                   <span style="margin-left:auto;flex-shrink:0;font:600 12px/1 'Oswald';color:#ECEAE4;background:#1e1e22;border-radius:6px;padding:6px 9px">{{o.qty}}</span>
                 </div>
                 <div style="display:inline-flex;align-items:center;gap:6px;align-self:flex-start;font:600 10px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:{{o.stageColor}};background:{{o.stageBg}};border:1px solid {{o.stageBorder}};border-radius:7px;padding:6px 10px">{{o.stage}}</div>
@@ -190,7 +190,7 @@ window.__resources = Object.assign({}, window.__resources, {
         </div>
         <div style="margin-bottom:26px">
           <div style="font:600 26px/1.15 'Oswald';color:#ECEAE4">{{modal.ident}}</div>
-          <div style="font:400 13px/1 'Archivo';color:#8a8378;margin-top:10px">{{modal.order}} · {{modal.customer}} · {{modal.qty}}</div>
+          <div style="font:400 13px/1 'Archivo';color:var(--text-tertiary);margin-top:10px">{{modal.order}} · {{modal.customer}} · {{modal.qty}}</div>
           <sc-if value="{{modal.hasSizes}}" hint-placeholder-val="{{ false }}"><div style="font:400 12px/1.5 'Archivo';color:var(--text-muted);margin-top:9px">{{modal.sizes}}</div></sc-if>
         </div>
 
@@ -202,11 +202,11 @@ window.__resources = Object.assign({}, window.__resources, {
         </div>
 
         <sc-if value="{{modal.hasNotes}}" hint-placeholder-val="{{ false }}">
-          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:9px">Notes</div>
+          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:9px">Notes</div>
           <div style="font:400 14px/1.55 'Archivo';color:#C9C6BF;white-space:pre-wrap;background:#121215;border:1px solid #232327;border-radius:11px;padding:14px 16px;margin-bottom:26px">{{modal.notes}}</div>
         </sc-if>
         <sc-if value="{{modal.isGarment}}" hint-placeholder-val="{{ false }}">
-          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:16px">Status — tap any to set</div>
+          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:16px">Status — tap any to set</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
             <sc-for list="{{modal.statusOptions}}" as="s" hint-placeholder-count="4">
               <button onClick="{{ s.onPick }}" class="ca-status-btn" style="display:flex;align-items:center;justify-content:center;gap:8px;font:700 13px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:{{s.color}};background:{{s.bg}};border:1px solid {{s.border}};border-radius:12px;padding:18px 10px;cursor:pointer"><i class="ti ti-circle-check"></i>{{s.label}}</button>
@@ -215,7 +215,7 @@ window.__resources = Object.assign({}, window.__resources, {
           <sc-if value="{{modal.showMissing}}" hint-placeholder-val="{{ false }}">
             <div style="background:#141013;border:1px solid #4A2420;border-radius:14px;padding:16px 17px;margin-bottom:12px">
               <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#E8A89F;margin-bottom:8px">Missing Items</div>
-              <div style="font:400 12px/1.5 'Archivo';color:#9C978C;margin-bottom:11px">What is short in this delivery. Saved onto the order in Salesforce. Tapping a status on its own never changes this &mdash; only saving here does.</div>
+              <div style="font:400 12px/1.5 'Archivo';color:var(--text-secondary);margin-bottom:11px">What is short in this delivery. Saved onto the order in Salesforce. Tapping a status on its own never changes this &mdash; only saving here does.</div>
               <textarea value="{{modal.missingValue}}" onInput="{{ modal.onMissingInput }}" disabled="{{modal.missingDisabled}}" placeholder="e.g. short 12 M, 5 L" style="width:100%;box-sizing:border-box;min-height:88px;background:#0D0D0F;border:1px solid #2a2a2f;border-radius:11px;padding:14px;font:400 16px/1.5 'Archivo';color:#ECEAE4;outline:none;resize:vertical"></textarea>
               <button onClick="{{ modal.onMissingSave }}" disabled="{{modal.missingDisabled}}" style="width:100%;min-height:52px;margin-top:11px;display:flex;align-items:center;justify-content:center;gap:8px;font:700 14px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#ECEAE4;background:#2a1210;border:1px solid #7A241C;border-radius:11px;padding:15px;cursor:pointer"><i class="ti ti-device-floppy"></i>{{modal.missingSaveLabel}}</button>
               <sc-if value="{{modal.missingOffline}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:7px;font:400 12px/1.4 'Archivo';color:#C9923A;margin-top:10px"><i class="ti ti-plug-connected-x" style="font-size:14px"></i>Demo data &mdash; not connected to Salesforce, so this can&rsquo;t be saved.</div></sc-if>
@@ -226,7 +226,7 @@ window.__resources = Object.assign({}, window.__resources, {
         </sc-if>
 
         <sc-if value="{{modal.isStepStation}}" hint-placeholder-val="{{ true }}">
-          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:16px">Station Pipeline</div>
+          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:16px">Station Pipeline</div>
           <div style="display:flex;flex-direction:column;gap:0;margin-bottom:30px">
             <sc-for list="{{modal.stages}}" as="s" hint-placeholder-count="4">
               <div style="display:flex;align-items:center;gap:14px;padding:4px 0">
@@ -239,7 +239,7 @@ window.__resources = Object.assign({}, window.__resources, {
             </sc-for>
           </div>
 
-          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#8a8378;margin-bottom:16px">Status — tap any to set</div>
+          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:16px">Status — tap any to set</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
             <sc-for list="{{modal.statusOptions}}" as="s" hint-placeholder-count="4">
               <button onClick="{{ s.onPick }}" class="ca-status-btn" style="display:flex;align-items:center;justify-content:center;gap:8px;font:700 13px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:{{s.color}};background:{{s.bg}};border:1px solid {{s.border}};border-radius:12px;padding:18px 10px;cursor:pointer"><i class="ti ti-circle-check"></i>{{s.label}}</button>
@@ -259,7 +259,7 @@ window.__resources = Object.assign({}, window.__resources, {
             <div style="font:600 17px/1.1 'Oswald';color:#ECEAE4">Salesforce Environment</div>
             <div style="font:400 11px/1.4 'Archivo';color:var(--text-muted);margin-top:4px">Switches which org every tablet talks to — applies to everyone immediately.</div>
           </div>
-          <button onClick="{{ onCloseSfEnv }}" style="margin-left:auto;flex-shrink:0;width:32px;height:32px;border-radius:9px;background:#16161a;border:1px solid #2a2a2f;color:#9C978C;cursor:pointer;font-size:15px" style-hover="color:#ECEAE4;border-color:#3a3a40"><i class="ti ti-x"></i></button>
+          <button onClick="{{ onCloseSfEnv }}" style="margin-left:auto;flex-shrink:0;width:32px;height:32px;border-radius:9px;background:#16161a;border:1px solid #2a2a2f;color:var(--text-secondary);cursor:pointer;font-size:15px" style-hover="color:#ECEAE4;border-color:#3a3a40"><i class="ti ti-x"></i></button>
         </div>
         <div style="padding:20px 22px;display:flex;flex-direction:column;gap:14px">
           <div style="display:flex;flex-direction:column;gap:8px">
@@ -276,7 +276,7 @@ window.__resources = Object.assign({}, window.__resources, {
           </div>
 
           <div>
-            <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#8a8378;margin-bottom:6px">Switch PIN</div>
+            <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:6px">Switch PIN</div>
             <input type="password" value="{{sfEnvPin}}" onInput="{{ onSfEnvPin }}" placeholder="Enter PIN to confirm switch" style="width:100%;background:#121215;border:1px solid #232327;border-radius:9px;padding:11px 13px;font-size:13px;color:#ECEAE4;outline:none">
           </div>
 
@@ -293,7 +293,7 @@ window.__resources = Object.assign({}, window.__resources, {
     <div style="position:fixed;inset:0;z-index:90;background:rgba(6,6,7,.88);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:var(--pad-x)">
       <div style="width:100%;max-width:380px;background:#0D0D0F;border:1px solid #1f1f23;border-radius:18px;padding:30px 26px;text-align:center;box-shadow:0 40px 90px -30px rgba(0,0,0,.8)">
         <div style="font:600 19px/1.1 'Oswald';color:#ECEAE4;margin-bottom:8px">Who's this?</div>
-        <div style="font:400 12px/1.5 'Archivo';color:#8a8378;margin-bottom:20px">Enter your PIN so status changes on this station can be traced back to you.</div>
+        <div style="font:400 12px/1.5 'Archivo';color:var(--text-tertiary);margin-bottom:20px">Enter your PIN so status changes on this station can be traced back to you.</div>
         <div style="display:flex;justify-content:center;gap:12px;margin-bottom:8px;animation:{{gateShakeAnim}}">
           <sc-for list="{{gateDots}}" as="d" hint-placeholder-count="4">
             <div style="width:13px;height:13px;border-radius:50%;border:2px solid {{d.border}};background:{{d.bg}};transition:all .12s"></div>
@@ -630,12 +630,12 @@ class Component extends DCLogic {
     const q=st.q.trim().toLowerCase();
     const items=(st.items[st.station]||[]).filter(o=>!q || (o.order+' '+o.customer).toLowerCase().includes(q));
 
-    const stationPills=Object.keys(this.STATIONS).map(k=>{ const c=this.STATIONS[k], on=k===st.station; return { key:k, label:c.label.replace('The ',''), icon:c.icon, onPick:()=>this.pickStation(k), bg:on?c.accent:'#141417', border:on?c.accent:'#242428', textColor:on?'#08080A':'#8a8378' }; });
+    const stationPills=Object.keys(this.STATIONS).map(k=>{ const c=this.STATIONS[k], on=k===st.station; return { key:k, label:c.label.replace('The ',''), icon:c.icon, onPick:()=>this.pickStation(k), bg:on?c.accent:'#141417', border:on?c.accent:'#242428', textColor:on?'#08080A':'var(--text-tertiary)' }; });
 
     const nonDone=cfg.stages.filter(s=>s!==doneStage);
     const tabDefs=[{key:'master',label:'All'}].concat(nonDone.map(s=>({key:s,label:s})));
     if(cfg.inventory) tabDefs.push({key:'inventory',label:'Inventory'});
-    const tabs=tabDefs.map(t=>{ const on=st.tab===t.key; let count=''; if(t.key==='master') count=String(items.filter(o=>o.stage!==doneStage).length); else if(t.key==='inventory') count=String((st.inv[cfg.inventory]||[]).length); else count=String(items.filter(o=>o.stage===t.key).length); return { key:t.key, label:t.label, count, onPick:()=>{ this.setState({tab:t.key}); this.syncUrl(null,t.key); }, bg:on?'#1a1a1e':'#121215', border:on?accent:'#232327', textColor:on?'#ECEAE4':'#8a8378', countColor:on?'#08080A':'#9C978C', countBg:on?accent:'#242428' }; });
+    const tabs=tabDefs.map(t=>{ const on=st.tab===t.key; let count=''; if(t.key==='master') count=String(items.filter(o=>o.stage!==doneStage).length); else if(t.key==='inventory') count=String((st.inv[cfg.inventory]||[]).length); else count=String(items.filter(o=>o.stage===t.key).length); return { key:t.key, label:t.label, count, onPick:()=>{ this.setState({tab:t.key}); this.syncUrl(null,t.key); }, bg:on?'#1a1a1e':'#121215', border:on?accent:'#232327', textColor:on?'#ECEAE4':'var(--text-tertiary)', countColor:on?'#08080A':'var(--text-secondary)', countBg:on?accent:'#242428' }; });
 
     const stageColor=(stage)=> stage===doneStage ? '#7FA644' : accent;
     // Only the garment station's items ARE Orders (id === the real Order Id) --
@@ -683,7 +683,7 @@ class Component extends DCLogic {
     if(src){
       const isGarment=cfg.source==='order';
       const curIdx=cfg.stages.indexOf(src.stage);
-      const stages=cfg.stages.map((label,i)=>{ const done=i<curIdx, cur=i===curIdx; return { label, icon:done?'ti-check':(cur?'ti-point-filled':''), dotBg:done?accent:(cur?accent:'transparent'), dotBorder:done||cur?accent:'#3a3a40', lineColor:i<curIdx?accent:'#242428', textColor:done?'#8a8378':(cur?'#ECEAE4':'#5a554c') }; });
+      const stages=cfg.stages.map((label,i)=>{ const done=i<curIdx, cur=i===curIdx; return { label, icon:done?'ti-check':(cur?'ti-point-filled':''), dotBg:done?accent:(cur?accent:'transparent'), dotBorder:done||cur?accent:'#3a3a40', lineColor:i<curIdx?accent:'#242428', textColor:done?'var(--text-tertiary)':(cur?'#ECEAE4':'#5a554c') }; });
       // Every station now gets the same free-pick status grid garment used to
       // be the only one to have -- any status, any time, no forced order.
       // The pipeline dots above still show progress at a glance; these
@@ -727,7 +727,7 @@ class Component extends DCLogic {
     const gateDots=[0,1,2,3].map(i=>{ const f=i<st.gatePin.length; return { bg:f?accent:'transparent', border:f?accent:'#3a3a40' }; });
     const gateKeys=['1','2','3','4','5','6','7','8','9'];
     const gatePad=gateKeys.map(k=>({ label:k, isText:true, isIcon:false, onPress:()=>this.onGatePress(k), bg:'#16161a', border:'#242428', color:'#ECEAE4' }));
-    gatePad.push({ label:'', isText:false, isIcon:true, icon:'ti-backspace', onPress:()=>this.onGateBackspace(), bg:'transparent', border:'#242428', color:'#8a8378' });
+    gatePad.push({ label:'', isText:false, isIcon:true, icon:'ti-backspace', onPress:()=>this.onGateBackspace(), bg:'transparent', border:'#242428', color:'var(--text-tertiary)' });
     gatePad.push({ label:'0', isText:true, isIcon:false, onPress:()=>this.onGatePress('0'), bg:'#16161a', border:'#242428', color:'#ECEAE4' });
     gatePad.push({ label:'', isText:false, isIcon:true, icon:'ti-arrow-right', onPress:()=>{ if(st.gatePin.length===4) this.submitGatePin(st.gatePin); }, bg:accent, border:accent, color:'#08080A' });
     const gateStatusText = st.gateErr || (st.gateSubmitting ? 'Verifying…' : '');
