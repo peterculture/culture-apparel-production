@@ -664,7 +664,11 @@ class Component extends DCLogic {
     // Soonest print date first -- unknown dates sort to the end -- so the
     // board reads like a schedule instead of whatever order the API returned.
     cards.sort((a,b)=>{ const da=(a.days==null)?Infinity:a.days, db=(b.days==null)?Infinity:b.days; return da-db; });
-    if(showBoard) boardEmpty=cards.length===0;
+    /* E4.5: was `cards.length===0`, so an unloaded board claimed "All screens
+       ready -- board clear." before it had asked. See listState() in ca-api.js. */
+    const boardState = (api2 && api2.listState) ? api2.listState(st.connection, cards.length)
+                                                : (cards.length ? 'ready' : 'empty');
+    if(showBoard) boardEmpty = boardState !== 'ready';
 
     // Split into labeled sections (dividers) using the same due-date buckets
     // dueInfo() already computes (urg) -- keeps a busy board from reading as
@@ -773,7 +777,10 @@ class Component extends DCLogic {
       // A search with zero matches gets its own message instead of the
       // station's normal "nothing waiting" copy, which would otherwise read
       // as if the whole queue were clear.
-      emptyMsg: (boardEmpty && q) ? ('No matches for "'+st.q.trim()+'".') : cfg.empty,
+      emptyMsg: (boardState === 'empty' && q)
+        ? ('No matches for "'+st.q.trim()+'". Clear the search to see the whole board.')
+        : (api2 && api2.listNotice) ? api2.listNotice(boardState, cfg.empty) : cfg.empty,
+      emptyIsLoading: boardState === 'loading',
       q:st.q, onSearch:(e)=>this.setState({q:e.target.value}),
       inventory, invTotal, invTitle,
       modalOpen:!!modal, modal, onCloseModal:()=>this.setState({modalId:null}),
