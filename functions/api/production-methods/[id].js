@@ -79,6 +79,7 @@ import { rollupOrderSubstatus, rollupChecklistToOrder, rollupTimerToOrder } from
 import { cascadeChecklistToItems } from "../_ppi-checklist.js";
 import { orderIdForMethod } from "../_print-date-rollup.js";
 import { createReworkIfNeeded } from "../_rework.js";
+import { requireCap } from "../_session.js";
 
 const PM_OBJECT = "Production_Method__c";
 
@@ -127,6 +128,8 @@ const TIMER_FIELDS = new Set([
 const SF_ID = /^[a-zA-Z0-9]{15,18}$/;
 
 export async function onRequestPatch({ params, request, env }) {
+  const gate = await requireCap(request, env, "methods.edit");
+  if (gate.denied) return gate.response;
   try {
     const id = params && params.id;
     if (!SF_ID.test(id)) return jsonError("invalid_id", 400);
@@ -306,7 +309,9 @@ export async function onRequestPatch({ params, request, env }) {
   }
 }
 
-export async function onRequestDelete({ params, env }) {
+export async function onRequestDelete({ params, env, request }) {
+  const gate = await requireCap(request, env, "methods.edit");
+  if (gate.denied) return gate.response;
   try {
     const id = params && params.id;
     if (!SF_ID.test(id)) return jsonError("invalid_id", 400);
