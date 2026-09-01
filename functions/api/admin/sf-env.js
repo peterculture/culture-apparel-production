@@ -20,6 +20,7 @@
  */
 import { SF_ENVIRONMENTS, getActiveSfEnv, setActiveSfEnv, isEnvConfigured, jsonError } from "../_sf.js";
 import { safeEqual } from "../_station.js";
+import { requireCap } from "../_session.js";
 
 export async function onRequestGet({ env }) {
   try {
@@ -38,6 +39,8 @@ export async function onRequestGet({ env }) {
 }
 
 export async function onRequestPost({ env, request }) {
+  const gate = await requireCap(request, env, "env.switch");
+  if (gate.denied) return gate.response;
   try {
     let body;
     try {
