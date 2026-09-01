@@ -26,11 +26,36 @@
  *   4. If a weight was given, one child zkmulti__MCPackage__c under that
  *      shipment (same convention as ../index.js's onRequestPost).
  *
- * Everything runs in ONE Salesforce Composite request with allOrNone: true
- * (same pattern as ../../orders/[id]/reprint.js) -- either every leg/tag/
- * shipment/package gets created together, or none of it does. A half-split
- * order (some items tagged, some not, some shipments missing) would be
- * worse than the whole action just failing and asking the manager to retry.
+ * A half-split order -- some items tagged, some not, some shipments missing --
+ * would be worse than the whole action just failing and asking the manager to
+ * retry, because it looks FINISHED on the board. That requirement has not
+ * changed. How it is met has.
+ *
+ * This used to run as ONE Composite request with allOrNone:true, which is the
+ * nicest possible shape because Salesforce makes it atomic for free. But
+ * /composite caps at 25 sub-requests and this array is
+ * 1 leg + N items + 1 shipment (+1 package) PER GROUP. An order with 20 line
+ * items split across two boxes emits 26, and Salesforce rejects the entire
+ * thing. That is not an exotic order, it is a Tuesday, and the ceiling was
+ * never checked -- so the manager just got a bare failure with nothing to act
+ * on. (E5.10.)
+ *
+ * It now runs in three phases -- see ../_composite.js for the full reasoning:
+ *
+ *   HEAD 1  the legs        -- referenced by @{legN.id} later, so one call
+ *   HEAD 2  the shipments   -- referenced by @{shipN.id} later, so one call
+ *   TAIL    item PATCHes + packages, chunked freely against real Ids
+ *
+ * Both heads are sized by the number of BOXES, never the number of line items,
+ * so the guard on them is a genuine backstop rather than a limit anyone meets.
+ * The item PATCHes -- the part that actually scales with order size -- now
+ * chunk without a ceiling.
+ *
+ * Atomicity across chunks is not free, so a tail failure rolls back the legs
+ * and shipments this request created. Deleting a leg clears the
+ * Shipment_Order__c lookup on any OrderItem already pointing at it, which is
+ * what un-tags the items. Best-effort, and loud when it cannot: see
+ * rollbackCreated.
  *
  * Body:
  *   {
@@ -45,7 +70,8 @@
  * need at least one item and a carrier + tracking number, same minimum
  * ../index.js already requires for a normal shipment log.
  */
-import { sfFetch, apiVersion, jsonError, runQuery } from "../_sf.js";
+import { apiVersion, jsonError, runQuery } from "../_sf.js";
+import { runComposite, runChunked, rollbackCreated, COMPOSITE_LIMIT } from "../_composite.js";
 
 const SF_ID = /^[a-zA-Z0-9]{15,18}$/;
 
@@ -113,96 +139,109 @@ export async function onRequestPost({ env, request }) {
     const v = apiVersion(env);
     const base = `/services/data/${v}/sobjects`;
     const today = new Date().toISOString().slice(0, 10);
-    const compositeRequest = [];
 
-    groups.forEach((g, i) => {
-      const legRef = `leg${i}`;
-      compositeRequest.push({
-        method: "POST",
-        url: `${base}/Shipment_Order__c`,
-        referenceId: legRef,
-        body: {
-          Name__c: `${orderLabel} - Leg ${i + 1}`,
-          Order__c: orderId,
-          Ship_Date__c: today,
-        },
-      });
-
-      g.itemIds.forEach((itemId, j) => {
-        compositeRequest.push({
-          method: "PATCH",
-          url: `${base}/OrderItem/${itemId}`,
-          referenceId: `${legRef}item${j}`,
-          body: { Shipment_Order__c: `@{${legRef}.id}` },
-        });
-      });
-
-      const shipRef = `ship${i}`;
-      compositeRequest.push({
-        method: "POST",
-        url: `${base}/zkmulti__MCShipment__c`,
-        referenceId: shipRef,
-        body: {
-          Order__c: orderId,
-          Shipment_Order__c: `@{${legRef}.id}`,
-          zkmulti__Carrier__c: g.carrier,
-          zkmulti__Service_Type_Name__c: g.serviceType || null,
-          zkmulti__Tracking_Number__c: g.tracking,
-          zkmulti__Ship_Date__c: today,
-        },
-      });
-
-      if (g.weight != null) {
-        compositeRequest.push({
-          method: "POST",
-          url: `${base}/zkmulti__MCPackage__c`,
-          referenceId: `pkg${i}`,
-          body: {
-            zkmulti__Shipment__c: `@{${shipRef}.id}`,
-            zkmulti__Weight__c: g.weight,
-            zkmulti__Weight_Units__c: "lbs",
-          },
-        });
-      }
-    });
-
-    const resp = await sfFetch(env, `/services/data/${v}/composite`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ allOrNone: true, compositeRequest }),
-    });
-    const data = await resp.json();
-
-    const subResults = Array.isArray(data.compositeResponse) ? data.compositeResponse : [];
-    const codeOf = (r) => {
-      const b = r && r.body;
-      if (Array.isArray(b) && b[0]) return b[0].errorCode || "";
-      if (b && b.errorCode) return b.errorCode;
-      return "";
-    };
-    const isErr = (r) => r.httpStatusCode < 200 || r.httpStatusCode >= 300;
-    const errored = subResults.filter(isErr);
-    const realFailure = errored.find((r) => codeOf(r) !== "PROCESSING_HALTED") || errored[0] || null;
-
-    if (!resp.ok || realFailure) {
-      console.error("split: composite failed", resp.status, JSON.stringify(data));
+    // Ids of everything this request creates, newest first, so a rollback
+    // deletes children before their parents.
+    const created = [];
+    const bail = async (detail, failedRef) => {
+      await rollbackCreated(env, created, "split");
       return Response.json(
-        {
-          error: "create_failed",
-          failedRef: realFailure ? realFailure.referenceId : null,
-          detail: realFailure ? realFailure.body : data,
-          all: subResults.map((r) => ({ referenceId: r.referenceId, httpStatusCode: r.httpStatusCode, body: r.body })),
-        },
+        { error: "create_failed", failedRef: failedRef || null, detail, rolledBack: created.length },
         { status: 502 },
+      );
+    };
+
+    // --- HEAD 1: the legs. Referenced by @{legN.id} from here on. ---
+    if (groups.length > COMPOSITE_LIMIT) {
+      // One order split into more than 25 boxes. Fail loudly rather than
+      // half-build: something is wrong upstream, not with this request.
+      return Response.json(
+        { error: "too_many_groups", detail: `${groups.length} groups exceeds the composite ceiling of ${COMPOSITE_LIMIT}` },
+        { status: 400 },
       );
     }
 
-    const byRef = (ref) => subResults.find((r) => r.referenceId === ref)?.body?.id ?? null;
+    const legReq = groups.map((g, i) => ({
+      method: "POST",
+      url: `${base}/Shipment_Order__c`,
+      referenceId: `leg${i}`,
+      body: {
+        Name__c: `${orderLabel} - Leg ${i + 1}`,
+        Order__c: orderId,
+        Ship_Date__c: today,
+      },
+    }));
+    const legRes = await runComposite(env, legReq, "split legs");
+    if (!legRes.ok) return bail(legRes.detail, legRes.failedRef);
+    const legIds = groups.map((_, i) => legRes.ids[`leg${i}`]);
+    // Unshift: legs are the last thing a rollback should remove.
+    legIds.forEach((id) => created.unshift({ object: "Shipment_Order__c", id }));
+
+    // --- HEAD 2: the shipments. Referenced by @{shipN.id} by the packages. ---
+    const shipReq = groups.map((g, i) => ({
+      method: "POST",
+      url: `${base}/zkmulti__MCShipment__c`,
+      referenceId: `ship${i}`,
+      body: {
+        Order__c: orderId,
+        Shipment_Order__c: legIds[i],
+        zkmulti__Carrier__c: g.carrier,
+        zkmulti__Service_Type_Name__c: g.serviceType || null,
+        zkmulti__Tracking_Number__c: g.tracking,
+        zkmulti__Ship_Date__c: today,
+      },
+    }));
+    const shipRes = await runComposite(env, shipReq, "split shipments");
+    if (!shipRes.ok) return bail(shipRes.detail, shipRes.failedRef);
+    const shipIds = groups.map((_, i) => shipRes.ids[`ship${i}`]);
+    shipIds.forEach((id) => created.unshift({ object: "zkmulti__MCShipment__c", id }));
+
+    // --- TAIL: item PATCHes and packages. Real Ids only, so chunk freely. ---
+    //
+    // Item PATCHes go FIRST. They are the part that scales with order size and
+    // the part a manager would most notice missing, so if anything is going to
+    // fail on a big order, fail before the packages rather than after.
+    const tail = [];
+    groups.forEach((g, i) => {
+      g.itemIds.forEach((itemId, j) => {
+        tail.push({
+          method: "PATCH",
+          url: `${base}/OrderItem/${itemId}`,
+          referenceId: `leg${i}item${j}`,
+          body: { Shipment_Order__c: legIds[i] },
+        });
+      });
+    });
+    groups.forEach((g, i) => {
+      if (g.weight == null) return;
+      tail.push({
+        method: "POST",
+        url: `${base}/zkmulti__MCPackage__c`,
+        referenceId: `pkg${i}`,
+        body: {
+          zkmulti__Shipment__c: shipIds[i],
+          zkmulti__Weight__c: g.weight,
+          zkmulti__Weight_Units__c: "lbs",
+        },
+      });
+    });
+
+    const tailRes = await runChunked(env, tail, { label: "split tail", refPrefix: "t" });
+    if (!tailRes.ok) {
+      // Packages created by an earlier chunk have to go too. They are children
+      // of the shipments, so they are unshifted ahead of them.
+      for (let i = 0; i < groups.length; i++) {
+        const pkgId = tailRes.ids && tailRes.ids[`pkg${i}`];
+        if (pkgId) created.unshift({ object: "zkmulti__MCPackage__c", id: pkgId });
+      }
+      return bail(tailRes.detail, tailRes.failedRef);
+    }
+
     return Response.json(
       {
         ok: true,
-        legs: groups.map((_, i) => byRef(`leg${i}`)),
-        shipments: groups.map((_, i) => byRef(`ship${i}`)),
+        legs: legIds,
+        shipments: shipIds,
       },
       { headers: { "Cache-Control": "no-store" } },
     );
