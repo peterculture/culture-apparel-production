@@ -7,10 +7,13 @@
  * to cascade-delete in this org) then the shipment itself.
  */
 import { sfFetch, apiVersion, jsonError, runQuery } from "../_sf.js";
+import { requireCap } from "../_session.js";
 
 const SF_ID = /^[a-zA-Z0-9]{15,18}$/;
 
-export async function onRequestDelete({ env, params }) {
+export async function onRequestDelete({ env, params, request }) {
+  const gate = await requireCap(request, env, "orders.edit");
+  if (gate.denied) return gate.response;
   try {
     const id = params && params.id;
     if (!SF_ID.test(id)) return jsonError("invalid_id", 400);
