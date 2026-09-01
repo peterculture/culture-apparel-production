@@ -245,6 +245,9 @@ window.__resources = Object.assign({}, window.__resources, {
               <div style="flex:1;background:#121215;border:1px solid #232327;border-radius:11px;padding:13px 14px">
                 <div style="font:500 9px/1 'Oswald';letter-spacing:.11em;text-transform:uppercase;color:#6C665C;margin-bottom:9px">{{t.label}} · this method</div>
                 <div style="font:600 25px/0.9 'Oswald';color:{{t.timeColor}};font-variant-numeric:tabular-nums;margin-bottom:11px">{{t.display}}</div>
+                <sc-if value="{{t.unsaved}}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;align-items:flex-start;gap:6px;background:#2A100D;border:1px solid #7A241C;border-radius:8px;padding:8px 9px;margin-bottom:11px"><i class="ti ti-alert-triangle" style="color:#E8A89F;font-size:12px;flex-shrink:0;margin-top:1px"></i><span style="font:400 9px/1.35 'Archivo';color:#E8A89F">Not saved to Salesforce — this time is only on this tablet. Press Stop again once the connection is back.</span></div>
+                </sc-if>
                 <sc-if value="{{t.notLocked}}" hint-placeholder-val="{{ true }}">
                   <div style="display:flex;gap:6px">
                     <button onClick="{{ t.onToggle }}" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:{{t.btnText}};background:{{t.btnBg}};border:1px solid {{t.btnBorder}};border-radius:8px;padding:9px;cursor:pointer"><i class="ti {{t.btnIcon}}"></i>{{t.btnLabel}}</button>
@@ -788,6 +791,10 @@ class Component extends DCLogic {
       // before the switch takes effect. See submitGatePin() below.
       gatePin:'', gateErr:'', gateSubmitting:false, gateShake:false,
       orders: [], connection:'loading',
+      /* Timers whose seconds are known NOT to have reached Salesforce (E2.2).
+         Keyed cardId -> {setup:true, prod:true}. Drives the "not saved" strip
+         on the tile AND protects the local value from the 15s poll. */
+      timerSaveErr:{},
       q:'', methods:{ sp:true, em:true, hp:true, promo:true },
       // Outstanding shortfalls -- garments a run finished without ever putting
       // on the press, which need a make-up run on the SAME method before the
@@ -1073,7 +1080,7 @@ class Component extends DCLogic {
          refills these per order from Salesforce. Only fires on the demo->live
          transition, so a live board's already-fetched rows survive a refresh. */
       const wasDemo = this.state.connection==='demo';
-      this.setState(st=>({ orders:cards, connection:'live', timers:Object.assign({},st.timers,timers), misDetails:Object.assign({},st.misDetails,misD),
+      this.setState(st=>({ orders:cards, connection:'live', timers:this.mergeServerTimers(st,timers), misDetails:Object.assign({},st.misDetails,misD),
         pkg: wasDemo ? {} : st.pkg, ship: wasDemo ? {} : st.ship }),
         ()=>this.applyDeepLink(cards));
     } catch(_) {
@@ -1207,8 +1214,53 @@ class Component extends DCLogic {
   // checklist fields (production-methods/[id].js accepts any allow-listed
   // field). Used for this card's own timer fields.
   pushMethodFields(cardId,fields){
-    if(!this.canWriteNow('Method update')) return;
-    this._api.patchMethodChecklist(cardId,fields).catch(e=>this.writeFailed('That method update',e));
+    if(!this.canWriteNow('Method update')) return Promise.resolve(false);
+    return this._api.patchMethodChecklist(cardId,fields)
+      .then(()=>true)
+      .catch(e=>{ this.writeFailed('That method update',e); return false; });
+  }
+  /* E2.2. A toast is the right alarm for a failed checklist tick -- the worker
+     re-ticks the box. It is NOT enough for a timer, for two reasons.
+
+     The seconds are unrecoverable. Nobody can retype how long a job took, so
+     the elapsed value sitting in this tab is the ONLY copy the moment the
+     write loses. And once the toast fades, a tile showing 47:13 that never
+     reached Salesforce looks exactly like one that did -- which is the
+     "indistinguishable from a successful one" this story is named for.
+
+     So a failed or blocked timer write is recorded durably here: the tile
+     carries a standing "not saved" strip until a later write succeeds, and
+     mergeServerTimers() stops the poll overwriting the local seconds with the
+     stale server value.
+
+     Called for BLOCKED writes too (demo mode). Those are the same lie from the
+     worker's side -- the number is on the tablet and nowhere else. */
+  noteTimerSave(cardId,which,saved){
+    this.setState(st=>{
+      const errs=Object.assign({},st.timerSaveErr||{});
+      const g=Object.assign({},errs[cardId]||{});
+      if(saved) delete g[which]; else g[which]=true;
+      if(Object.keys(g).length) errs[cardId]=g; else delete errs[cardId];
+      return {timerSaveErr:errs};
+    });
+  }
+  /* Server timer values win, EXCEPT for a timer we know failed to save.
+     load() runs every 15s and rebuilds timers from Print_Setup_Timer__c /
+     Production_Timer__c; without this, a failed stop was silently reverted to
+     the stale server number on the next poll and the worker's time was gone
+     with no trace at all. The poll is already suppressed while a drawer is
+     open, so this covers the case where the worker closes it. */
+  mergeServerTimers(st, fromServer){
+    const out=Object.assign({},st.timers,fromServer);
+    const errs=st.timerSaveErr||{};
+    Object.keys(errs).forEach(cardId=>{
+      const localCard=(st.timers||{})[cardId];
+      if(!localCard) return;
+      const merged=Object.assign({},out[cardId]||{});
+      Object.keys(errs[cardId]||{}).forEach(k=>{ if(localCard[k]) merged[k]=localCard[k]; });
+      out[cardId]=merged;
+    });
+    return out;
   }
   // Per-order write -- everything else on the drawer (specs, notes,
   // packaging, shipments, misprints, delivery) still lives on the Order.
@@ -1731,7 +1783,7 @@ class Component extends DCLogic {
     if(this.timerLocked(cardId,which)) return;   // stopped for good -- see stopTimer()
     const t=this.state.timers[cardId]||{}; const cur=Object.assign({elapsed:0,running:false,startedAt:0},t[which]||{});
     let next;
-    if(cur.running){ const el=cur.elapsed+Math.floor((Date.now()-cur.startedAt)/1000); next={elapsed:el,running:false,startedAt:0}; this.pushMethodFields(cardId,{[which==='setup'?'Print_Setup_Timer__c':'Production_Timer__c']:el}); }
+    if(cur.running){ const el=cur.elapsed+Math.floor((Date.now()-cur.startedAt)/1000); next={elapsed:el,running:false,startedAt:0}; this.pushMethodFields(cardId,{[which==='setup'?'Print_Setup_Timer__c':'Production_Timer__c']:el}).then(saved=>this.noteTimerSave(cardId,which,saved)); }
     else {
       next={elapsed:cur.elapsed,running:true,startedAt:Date.now()};
       /* Starting the PRODUCTION timer stamps the current run's actual start --
@@ -1884,7 +1936,7 @@ class Component extends DCLogic {
     const t=this.state.timers[cardId]||{};
     const cur=Object.assign({elapsed:0,running:false,startedAt:0},t[which]||{});
     const el=cur.elapsed+(cur.running?Math.floor((Date.now()-cur.startedAt)/1000):0);
-    this.pushMethodFields(cardId,{[which==='setup'?'Print_Setup_Timer__c':'Production_Timer__c']:el});
+    this.pushMethodFields(cardId,{[which==='setup'?'Print_Setup_Timer__c':'Production_Timer__c']:el}).then(saved=>this.noteTimerSave(cardId,which,saved));
     this.setState(st=>{ const timers=Object.assign({},st.timers); const g=Object.assign({},timers[cardId]||{}); g[which]={elapsed:el,running:false,startedAt:0}; timers[cardId]=g; return {timers}; });
 
     const run=this.currentRunFor(cardId);
@@ -2361,7 +2413,13 @@ class Component extends DCLogic {
         const runLabel = (runsHere.length>1 && curRun)
           ? ((curRun.name || 'This run')+' · '+runsLeft+' of '+runsHere.length+' left')
           : '';
-        return { label, display:this.fmtDur(disp), timeColor:locked?'#6C665C':(c.running?'#7FA644':'#ECEAE4'),
+        /* E2.2: these seconds are on this tablet and nowhere else. Shown as a
+           standing strip rather than only the transient toast, because nobody
+           can retype how long a job took and a tile that silently reads 47:13
+           is indistinguishable from one that saved. */
+        const unsaved=!!((st.timerSaveErr||{})[src.id]||{})[key];
+        return { label, display:this.fmtDur(disp), timeColor:unsaved?'#E8A89F':(locked?'#6C665C':(c.running?'#7FA644':'#ECEAE4')),
+          unsaved,
           locked, notLocked:!locked,
           lockedLabel: key==='setup' ? 'Set-up complete' : 'Production complete',
           onToggle:()=>this.toggleTimer(src.id,key), btnLabel:c.running?'Pause':'Start', btnIcon:c.running?'ti-player-pause':'ti-player-play', btnBg:c.running?'#18230D':'#16161a', btnBorder:c.running?'#3D5418':'#2a2a2f', btnText:c.running?'#BBD382':'#9C978C',
