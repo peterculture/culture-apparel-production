@@ -117,22 +117,47 @@ window.__resources = Object.assign({}, window.__resources, {
   <sc-for list="{{grids}}" as="g" hint-placeholder-count="2">
     <div style="margin-bottom:16px;break-inside:avoid">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="font:700 11px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;border:1.5px solid #141210;border-radius:100px;padding:5px 12px;color:{{g.tagColor}};background:{{g.tagBg}}">{{g.colorLabel}}</span><span style="font:400 12px/1 'Archivo';color:#6b645c">{{g.garment}}</span></div>
-      <table style="width:100%;border-collapse:collapse">
-        <thead><tr>
-          <th style="border:1.5px solid #141210;width:64px;text-align:left;padding:8px 10px;font:700 10px/1 'Oswald';background:#f2ede6"></th>
+      <!-- CSS table, NOT a <table>. This is not a style preference (E4.6).
+           The HTML parser only allows table-related elements inside <table>,
+           so a <sc-for> written between <tr> and <th> is FOSTER-PARENTED out
+           of the table before any script runs. dc-runtime adopts the template
+           from the live DOM (parseDcDocument -> dc.innerHTML in support.js),
+           so what it compiled was a table with the loops removed: this grid
+           printed with no size columns and no per-size quantities, just "Qty"
+           and a grand total. Measured on the raw source vs the parsed DOM:
+           2 <sc-for> inside <table> became 0.
+
+           support.js DOES have a repair for this -- it refetches the page as
+           raw text and re-parses the unmangled template -- but that path is
+           gated on `if (!window.__resources)`, and E4.4 set window.__resources
+           on every page to self-host React. So the repair has been dead since
+           2026-08-31 and cannot be relied on again.
+
+           display:table/table-row/table-cell lays out identically and the
+           parser leaves custom elements alone, because none of this is a
+           <table>. sc-for renders as a React Fragment (walkFor in support.js),
+           so its children land as direct children of the row -- no anonymous
+           cell box, no layout change.
+
+           text-align:center and vertical-align:middle are spelled out where
+           the old <th>/<td> got them from the UA stylesheet for free; a div
+           does not. -->
+      <div style="width:100%;display:table;border-collapse:collapse">
+        <div style="display:table-row">
+          <div style="display:table-cell;vertical-align:middle;border:1.5px solid #141210;width:64px;text-align:left;padding:8px 10px;font:700 10px/1 'Oswald';background:#f2ede6"></div>
           <sc-for list="{{cols}}" as="c" hint-placeholder-count="5">
-            <th style="border:1.5px solid #141210;padding:8px 4px;font:700 12px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#6b645c;background:#f2ede6">{{c}}</th>
+            <div style="display:table-cell;vertical-align:middle;border:1.5px solid #141210;padding:8px 4px;text-align:center;font:700 12px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#6b645c;background:#f2ede6">{{c}}</div>
           </sc-for>
-          <th style="border:1.5px solid #141210;padding:8px 4px;font:700 12px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#fff;background:#141210">Total</th>
-        </tr></thead>
-        <tbody><tr>
-          <td style="border:1.5px solid #141210;padding:10px;font:700 11px/1 'Oswald';letter-spacing:.12em;text-transform:uppercase;color:#6b645c;text-align:left">Qty</td>
+          <div style="display:table-cell;vertical-align:middle;border:1.5px solid #141210;padding:8px 4px;text-align:center;font:700 12px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#fff;background:#141210">Total</div>
+        </div>
+        <div style="display:table-row">
+          <div style="display:table-cell;vertical-align:middle;border:1.5px solid #141210;padding:10px;font:700 11px/1 'Oswald';letter-spacing:.12em;text-transform:uppercase;color:#6b645c;text-align:left">Qty</div>
           <sc-for list="{{g.cells}}" as="cell" hint-placeholder-count="5">
-            <td style="border:1.5px solid #141210;text-align:center;padding:12px 4px;font-family:'Archivo';font-size:22px;font-weight:{{cell.weight}};color:{{cell.color}}">{{cell.qty}}</td>
+            <div style="display:table-cell;vertical-align:middle;border:1.5px solid #141210;text-align:center;padding:12px 4px;font-family:'Archivo';font-size:22px;font-weight:{{cell.weight}};color:{{cell.color}}">{{cell.qty}}</div>
           </sc-for>
-          <td style="border:1.5px solid #141210;text-align:center;font:700 22px/1 'Archivo';padding:12px 4px;background:#141210;color:#fff">{{g.total}}</td>
-        </tr></tbody>
-      </table>
+          <div style="display:table-cell;vertical-align:middle;border:1.5px solid #141210;text-align:center;font:700 22px/1 'Archivo';padding:12px 4px;background:#141210;color:#fff">{{g.total}}</div>
+        </div>
+      </div>
     </div>
   </sc-for>
 
