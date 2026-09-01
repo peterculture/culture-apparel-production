@@ -10,8 +10,10 @@
  * Body (send any subset -- only the keys present are written):
  *   {
  *     "pressId":        "001...",                    // Account Id, Type='Press'
- *     "scheduledStart":  "2026-07-25T14:00:00.000Z",  // ISO datetime
- *     "scheduledEnd":    "2026-07-25T17:00:00.000Z",  // ISO datetime
+ *     "scheduledStart":  "2026-07-25T14:00:00.000Z",  // ISO datetime, OR
+ *                     "" / null to CLEAR -- but only alongside a blank
+ *                     scheduledEnd; see the pair rule below
+ *     "scheduledEnd":    "2026-07-25T17:00:00.000Z",  // same clear rule
  *     "quantity": 48,                                  // positive integer
  *     "actualStart": "2026-07-25T14:05:00.000Z",       // ISO datetime, OR
  *                     "" / null to CLEAR the field
@@ -29,12 +31,25 @@
  *
  * scheduledStart/scheduledEnd are sent together by the UI every save (same
  * as the create endpoint) so the end>=start check below only fires when
- * both are present in one request. actualStart/actualEnd are independently
- * nullable -- the drawer lets a manager blank out either date/time pair to
- * clear it (e.g. correcting a mis-logged Actual Start) without touching the
- * other. Field names match production-runs/index.js exactly -- see that
- * file's docblock for the Quantity_Planned_c__c naming quirk AND the
- * Auto-Scheduling (POC) trigger gotcha.
+ * both are present in one request.
+ *
+ * They are also CLEARABLE as of E5.11, but only as a pair -- blanking one
+ * while setting the other returns "scheduled_window_must_clear_together". A
+ * run with an end and no start renders as "Not scheduled yet" everywhere, so
+ * the orphaned end would be invisible and unrecoverable. actualStart/actualEnd
+ * are different: they ARE independently nullable, because a run legitimately
+ * has a start logged and no end yet while it is on the press.
+ *
+ * NOTE the asymmetry with the CREATE endpoint: production-runs/index.js
+ * REQUIRES a schedule (bad_scheduledStart on a blank), because a run has to be
+ * placed somewhere to exist. Only an existing run can be un-placed. That is
+ * why calendar.html's run form -- which creates and edits through one code
+ * path -- still demands both halves, while the run-row drawers on index.html
+ * and pre-production.html, which only ever edit, do not.
+ *
+ * Field names match production-runs/index.js exactly -- see that file's
+ * docblock for the Quantity_Planned_c__c naming quirk AND the Auto-Scheduling
+ * (POC) trigger gotcha.
  *
  * REMOVED 2026-08-21: the "confirm": true|false key, and with it the Confirm /
  * Unconfirm actions on every board. Runs are published when they are created
@@ -120,16 +135,50 @@ export async function onRequestPatch({ params, request, env }) {
       if (loc.value !== undefined) payload[PR_LOCATION_FIELD] = loc.value;
     }
 
+    // Scheduled Start/End. Settable, and since E5.11 clearable -- but only as
+    // a PAIR.
+    //
+    // Before E5.11 an empty string here did nothing whatsoever. parseIso("")
+    // returns undefined, so neither field reached the payload, and a request
+    // carrying nothing else fell through to "no_valid_fields" at the bottom of
+    // this handler -- an error that names no field and reads like a client bug.
+    // There was no way to un-schedule a run short of DELETING it, which throws
+    // away its press, quantity, line-item allocation and any recorded results
+    // along with the date nobody wanted. Empty string / null now means null,
+    // exactly like the actualStart/actualEnd path below.
+    //
+    // WHY A PAIR. A run holding an end with no start (or the reverse) is not a
+    // state any board renders or any human can act on: the boards test
+    // Scheduled_Start__c alone to decide "Not scheduled yet"
+    // (pre-production.html's `when`, calendar.html's schedState), so a stranded
+    // end would be both invisible and permanent. Clearing therefore requires
+    // BOTH keys present and BOTH blank. A half-clear is rejected rather than
+    // half-applied -- the same instinct as the drawer's "Actual Start needs
+    // both a date and a time".
     if ("scheduledStart" in body || "scheduledEnd" in body) {
-      const start = parseIso(body.scheduledStart);
-      const end = parseIso(body.scheduledEnd);
-      if (start === null) return jsonError("bad_scheduledStart", 400);
-      if (end === null) return jsonError("bad_scheduledEnd", 400);
-      if (start && end && end.getTime() < start.getTime()) {
-        return jsonError("scheduledEnd_before_scheduledStart", 400);
+      const isBlank = (v) => v == null || v === "";
+      const clearStart = "scheduledStart" in body && isBlank(body.scheduledStart);
+      const clearEnd = "scheduledEnd" in body && isBlank(body.scheduledEnd);
+
+      if (clearStart || clearEnd) {
+        if (!(clearStart && clearEnd)) {
+          return jsonError("scheduled_window_must_clear_together", 400);
+        }
+        payload[PR_SCHED_START_FIELD] = null;
+        payload[PR_SCHED_END_FIELD] = null;
+        scheduleTouched = true;
+      } else {
+        const start = parseIso(body.scheduledStart);
+        const end = parseIso(body.scheduledEnd);
+        if (start === null) return jsonError("bad_scheduledStart", 400);
+        if (end === null) return jsonError("bad_scheduledEnd", 400);
+        if (start && end && end.getTime() < start.getTime()) {
+          return jsonError("scheduledEnd_before_scheduledStart", 400);
+        }
+        if (start) payload[PR_SCHED_START_FIELD] = start.toISOString();
+        if (end) payload[PR_SCHED_END_FIELD] = end.toISOString();
+        if (start || end) scheduleTouched = true;
       }
-      if (start) payload[PR_SCHED_START_FIELD] = start.toISOString();
-      if (end) payload[PR_SCHED_END_FIELD] = end.toISOString();
       // See production-runs/index.js for the full writeup: the org's
       // "Auto-Scheduling (POC)" trigger rewrites Scheduled_Start__c/
       // Scheduled_End__c on every insert/update unless the run carries a
@@ -140,7 +189,18 @@ export async function onRequestPatch({ params, request, env }) {
       // -- see statusForScheduleWrite(). Dragging a machine suggestion onto the
       // calendar IS a person choosing it, and there is no Confirm button left
       // to finish the job with afterwards.
-      if (start || end) scheduleTouched = true;
+      //
+      // A CLEAR LANDS ON CONFIRMED TOO -- product decision, Anthony, 2026-09-01.
+      // The alternative considered was dropping the run back to Proposal so the
+      // auto-scheduler could re-slot it. Confirmed was chosen because nothing
+      // should silently re-book a slot a manager just cleared. Know the cost:
+      // Confirmed means pinned AND published, so a cleared run still reads as
+      // "On the shop calendar" in calendar.html's schedState() while carrying
+      // no time, and ProductionEventPublisher is handed an Event with null
+      // start/end. What the Apex does with that is UNVERIFIED -- no org was
+      // reachable when this shipped. Check it before production (E8.3), and if
+      // the publisher chokes, this is the decision to revisit, not the pairing
+      // rule above.
     }
 
     if ("quantity" in body) {
