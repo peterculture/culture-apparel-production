@@ -11,7 +11,7 @@
  * needs no child-relationship name. Same fixed-query, no-client-SOQL shape as
  * /api/orders — the browser can't run arbitrary queries.
  */
-import { runQuery, jsonError } from "../_sf.js";
+import { runQuery, jsonError, runChunkedIdQuery } from "../_sf.js";
 import { runQueryOptionalField } from "../_placements.js";
 import { fetchMockupsByOpportunity } from "../_mockup.js";
 const FIELDS = [
@@ -57,18 +57,6 @@ const FIELDS = [
  */
 const ITEM_FIELDS = ["OrderId", "Product2.Name", "Color__c", "Size__c", "Quantity"];
 
-/**
- * Order Ids per follow-up query.
- *
- * Salesforce takes the SOQL in the GET /query URL, and that URL has a length
- * ceiling -- the calendar endpoint runs into it somewhere around 700-800 Ids
- * (E5.12). The inbox is "Pre-Production orders with no method yet" and is
- * normally small, but nothing bounds it, and swapping a nested subquery for an
- * unbounded IN list would just trade a silent truncation for a silent 414.
- * 200 x 18 chars plus quoting is about 4KB of query, comfortably inside it.
- */
-const ID_CHUNK = 200;
-
 /** Attach each order's line items as the {records:[...]} shape pivotItems reads. */
 async function attachOrderItems(env, records) {
   const ids = records.map((r) => r.Id).filter(Boolean);
@@ -80,29 +68,33 @@ async function attachOrderItems(env, records) {
   });
   if (!ids.length) return;
 
-  const byOrder = new Map();
-  for (let i = 0; i < ids.length; i += ID_CHUNK) {
-    const quoted = ids.slice(i, i + ID_CHUNK).map((id) => `'${id}'`).join(",");
-    const soql = `SELECT ${ITEM_FIELDS.join(", ")} FROM OrderItem WHERE OrderId IN (${quoted})`;
-    const res = await runQuery(env, soql);
-    if (!res.ok) {
-      // Fail OPEN for the items, same call orders/index.js makes: the inbox's
-      // job is listing orders that need a method, and losing a size preview
-      // must not empty the board. But say so -- an empty breakdown that is
-      // really a failed fetch is precisely the "wrong number, no error" shape
-      // this story exists to remove.
-      console.error("Inbox order-item fetch failed", res.status, `chunk ${i / ID_CHUNK}`);
-      records.forEach((r) => {
-        r.OrderItemsError = true;
-      });
-      return;
-    }
-    res.records.forEach((it) => {
-      const arr = byOrder.get(it.OrderId) || [];
-      arr.push(it);
-      byOrder.set(it.OrderId, arr);
+  // Chunked because the SOQL rides in the GET /query URL and that URL has a
+  // length ceiling -- swapping a nested subquery for an UNBOUNDED IN list would
+  // only have traded a silent truncation for a silent 414. runChunkedIdQuery
+  // owns that in one place now; the calendar endpoint uses the same helper
+  // against four IN lists of its own (E5.12).
+  const res = await runChunkedIdQuery(ids, (quoted) =>
+    runQuery(env, `SELECT ${ITEM_FIELDS.join(", ")} FROM OrderItem WHERE OrderId IN (${quoted})`),
+  );
+  if (!res.ok) {
+    // Fail OPEN for the items, same call orders/index.js makes: the inbox's
+    // job is listing orders that need a method, and losing a size preview must
+    // not empty the board. But say so -- an empty breakdown that is really a
+    // failed fetch is precisely the "wrong number, no error" shape this story
+    // exists to remove.
+    console.error("Inbox order-item fetch failed", res.status);
+    records.forEach((r) => {
+      r.OrderItemsError = true;
     });
+    return;
   }
+
+  const byOrder = new Map();
+  res.records.forEach((it) => {
+    const arr = byOrder.get(it.OrderId) || [];
+    arr.push(it);
+    byOrder.set(it.OrderId, arr);
+  });
 
   records.forEach((r) => {
     const recs = byOrder.get(r.Id) || [];
