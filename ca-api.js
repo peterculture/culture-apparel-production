@@ -1741,7 +1741,40 @@
   var SIZE_ORDER = ['YXS','YS','YM','YL','YXL','OS','XS','S','M','L','XL','2XL','3XL','4XL','5XL'];
   var WORKER_COLORS = ['#C6372B','#5E9B9A','#C9923A','#7FA644','#8E6FB0','#3E7CB1'];
 
-  function text(v){ if (v == null) return ''; var s = String(v); if (s.indexOf('<') >= 0) { var el = document.createElement('div'); el.innerHTML = s; s = el.textContent || el.innerText || ''; } return s.replace(/\s+/g, ' ').trim(); }
+  /* Strip markup out of a Salesforce value and return the visible text.
+   *
+   * EVERY formula field on every board comes through here -- trap 6 in
+   * CLAUDE.md. GOA_Order_Number__c and Customer_Order_Name__c are HYPERLINK()
+   * formulas and arrive as `<a href="/801ca...">20484-3</a>`, so without this
+   * the boards render the anchor tag as visible text. That has shipped as a
+   * visible bug twice.
+   *
+   * WHY NOT innerHTML (E6.7). This used to build a detached <div> and assign
+   * s to its innerHTML. A detached element does not run <script>, which is
+   * presumably why it looked safe -- but it DOES load resources, so
+   * `<img src=x onerror=...>` fires the handler anyway. Measured in Chrome
+   * against this very function, not assumed: the payload executed.
+   *
+   * The input is Salesforce rich text, which means it is whatever somebody
+   * typed into a Salesforce field. Nothing between that field and this line
+   * sanitises it.
+   *
+   * DOMParser builds an INERT document: no scripts, no resource loads, no
+   * handlers. Same parser, same entity handling, same textContent -- verified
+   * to produce byte-identical output to the old version across every real
+   * input shape, including both HYPERLINK formulas, nested tags, entities,
+   * <br>, multi-paragraph rich text and the whitespace collapsing below.
+   * Do not "improve" the entity or spacing behaviour here; the boards depend
+   * on the current strings. */
+  function text(v){
+    if (v == null) return '';
+    var s = String(v);
+    if (s.indexOf('<') >= 0) {
+      var doc = new DOMParser().parseFromString(s, 'text/html');
+      s = (doc.body && doc.body.textContent) || '';
+    }
+    return s.replace(/\s+/g, ' ').trim();
+  }
   function initials(name){
     var parts = String(name || '').trim().split(/\s+/).filter(Boolean);
     if (!parts.length) return '\u2014';
