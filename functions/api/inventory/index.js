@@ -14,6 +14,7 @@
  * Cloudflare Access in front of /api/*.
  */
 import { jsonError } from "../_sf.js";
+import { requireCap } from "../_session.js";
 
 const THREAD_STATUS = ["In-Stock (8+)", "REORDER (7-)"]; // toggle values
 
@@ -216,6 +217,8 @@ export async function onRequestGet({ env, request }) {
 }
 
 export async function onRequestPost({ env, request }) {
+  const gate = await requireCap(request, env, "inventory.edit");
+  if (gate.denied) return gate.response;
   if (!env.INVENTORY) return jsonError("kv_not_bound", 500);
   let body;
   try {
