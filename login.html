@@ -28,6 +28,7 @@ window.__resources = Object.assign({}, window.__resources, {
   "https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js": "./vendor/react-dom-18.3.1.production.min.js"
 });
 </script>
+<link rel="stylesheet" href="./tokens.css">
 <script src="./support.js"></script>
 <script src="./ca-api.js"></script>
 </head>
@@ -39,13 +40,8 @@ window.__resources = Object.assign({}, window.__resources, {
   <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css" rel="stylesheet">
   <style>
-    *{box-sizing:border-box}
-    body{margin:0;background:#08080A;font-family:'Archivo',system-ui,sans-serif;-webkit-font-smoothing:antialiased;color:#ECEAE4}
-    a{color:#E24A3A;text-decoration:none}
-    .ti{font-size:inherit;line-height:1;display:inline-block}
     input{font-family:inherit}
-    input::placeholder{color:#4d483f}
-    @keyframes ca-shake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(4px)}30%,50%,70%{transform:translateX(-7px)}40%,60%{transform:translateX(7px)}}
+    input::placeholder{color:var(--text-faint)}
     @keyframes ca-fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
   </style>
 </helmet>
@@ -75,7 +71,7 @@ window.__resources = Object.assign({}, window.__resources, {
           </sc-for>
         </div>
       </div>
-      <div style="text-align:center;font:400 11px/1.5 'Archivo';color:#4d483f;margin-top:18px">Forgot your PIN? Ask a manager to look it up.</div>
+      <div style="text-align:center;font:400 11px/1.5 'Archivo';color:var(--text-faint);margin-top:18px">Forgot your PIN? Ask a manager to look it up.</div>
     </div>
   </sc-if>
 
@@ -90,13 +86,13 @@ window.__resources = Object.assign({}, window.__resources, {
           </div>
           <button onClick="{{ onLogout }}" style="margin-left:auto;flex-shrink:0;font:600 10px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#8a8378;background:transparent;border:1px solid #2a2a2f;border-radius:8px;padding:9px 11px;cursor:pointer" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-logout"></i></button>
         </div>
-        <div style="font:600 10px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#4d483f;margin-bottom:12px">Open a board</div>
+        <div style="font:600 10px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-faint);margin-bottom:12px">Open a board</div>
         <div style="display:flex;flex-direction:column;gap:9px">
           <sc-for list="{{boards}}" as="b" hint-placeholder-count="3">
             <a href="{{b.href}}" style="display:flex;align-items:center;gap:13px;background:#141417;border:1px solid #232327;border-left:4px solid {{b.color}};border-radius:11px;padding:15px 16px" style-hover="border-color:#3a3a40;border-left-color:{{b.color}}">
               <i class="ti {{b.icon}}" style="color:{{b.color}};font-size:20px"></i>
-              <div style="min-width:0"><div style="font:600 15px/1 'Oswald';color:#ECEAE4">{{b.label}}</div><div style="font:400 11px/1 'Archivo';color:#6C665C;margin-top:4px">{{b.sub}}</div></div>
-              <i class="ti ti-arrow-right" style="margin-left:auto;color:#4d483f;font-size:17px"></i>
+              <div style="min-width:0"><div style="font:600 15px/1 'Oswald';color:#ECEAE4">{{b.label}}</div><div style="font:400 11px/1 'Archivo';color:var(--text-muted);margin-top:4px">{{b.sub}}</div></div>
+              <i class="ti ti-arrow-right" style="margin-left:auto;color:var(--text-faint);font-size:17px"></i>
             </a>
           </sc-for>
         </div>
@@ -199,7 +195,7 @@ class Component extends DCLogic {
     // otherwise "Verifying…" (neutral) while the round trip to
     // /api/worker-login is in flight, otherwise blank.
     const statusText = st.err || (st.submitting ? 'Verifying…' : '');
-    const statusColor = st.err ? '#E8A89F' : '#6C665C';
+    const statusColor = st.err ? '#E8A89F' : 'var(--text-muted)';
     return {
       screenPin:st.screen==='pin', screenDone:st.screen==='done',
       dots, pad, statusText, statusColor, shakeAnim: st.shake?'ca-shake .45s':'none',
