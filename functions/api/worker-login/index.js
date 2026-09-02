@@ -12,14 +12,18 @@
  * Response, success:  { ok:true, name:"Anthony", role:"admin"|"manager"|"worker" }
  * Response, no match: 401 { error:"invalid_pin" }
  * Response, WORKER_PINS unset/invalid: 500 { error:"server_misconfigured" }
+ * Response, PIN shared by two people: 500 { error:"pin_ambiguous" } (E6.8)
  *
- * Not a session/cookie endpoint -- login.html writes the returned name/role
- * into localStorage exactly like before, so every other board's existing
- * localStorage-based identity check keeps working with no changes needed
- * there. See ../_worker-auth.js's header comment for the full rationale.
+ * login.html writes the returned name/role into localStorage, so every board's
+ * localStorage-based identity check keeps working unchanged -- but this DOES
+ * also issue the signed HttpOnly ca_sess cookie (see the Set-Cookie below),
+ * which is what requireCap() reads on every mutating route. The header used to
+ * say "not a session/cookie endpoint" and had done since before the cookie was
+ * added forty lines further down its own file. See ../_worker-auth.js's header
+ * comment for the full rationale.
  */
 import { jsonError } from "../_sf.js";
-import { matchWorkerPin } from "../_worker-auth.js";
+import { matchWorkerPin, AmbiguousPinError } from "../_worker-auth.js";
 import { issueSession, sessionCookieHeader } from "../_session.js";
 
 export async function onRequestPost({ env, request }) {
@@ -37,6 +41,16 @@ export async function onRequestPost({ env, request }) {
     try {
       match = await matchWorkerPin(env, pin);
     } catch (e) {
+      /* Named in the log because the fix is a thirty-second edit in the Pages
+         settings, and unfindable without knowing WHICH two people collided.
+         The PIN itself is never logged. The browser is told only
+         "pin_ambiguous" -- login.html turns any 500 into "ask a manager",
+         which is the right instruction and, unlike "incorrect PIN", doesn't
+         send someone away retyping a PIN that was correct. (E6.8) */
+      if (e instanceof AmbiguousPinError) {
+        console.error(`worker-login: that PIN is configured for more than one person: ${e.names.join(", ")}`);
+        return jsonError("pin_ambiguous", 500);
+      }
       console.error("worker-login: WORKER_PINS misconfigured", e);
       return jsonError("server_misconfigured", 500);
     }
@@ -50,6 +64,12 @@ export async function onRequestPost({ env, request }) {
     // which is what makes per-person capability checks possible at all.
     // localStorage decides which buttons get drawn; the cookie decides what the
     // API will actually do.
+    // The cookie is issued for EVERY successful check, including the manager
+    // PIN typed into confirmManager()'s prompt -- which therefore leaves that
+    // tablet's server session as the manager. Accepted by Anthony 2026-09-02
+    // on the basis that the manager logs out when they walk away; the full
+    // reasoning, and what would have to change if that ever stops holding, is
+    // in ca-api.js above confirmManager(). (E6.8)
     const headers = { "Cache-Control": "no-store" };
     const session = await issueSession(env, match.name);
     if (session) headers["Set-Cookie"] = sessionCookieHeader(session);
