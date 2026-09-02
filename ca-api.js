@@ -2079,6 +2079,70 @@
     };
   }
 
+  /* ── the size grid, one garment+colour per row (E1.5) ──
+     Turns /api/order-sizes rows (one OrderItem = ONE size of one garment)
+     into the grid the printed order sheet and the calendar drawer both show:
+     an ordered size column list, and one row per garment+colour with its
+     per-size quantities and a total.
+
+     GROUPED BY GARMENT **AND** COLOUR, and that pairing is the whole point.
+     order-sheet.html grouped by colour alone and took the garment name from
+     whichever row happened to arrive first. On an order with black tees and
+     black hoodies -- an ordinary order -- the two merged into one row labelled
+     with only the tee, quantities summed. Measured: 50 tees and 15 hoodies
+     printed as "Black, Next Level 3600 Tee, S 12 / M 24 / L 29". The hoodies
+     did not appear anywhere on the sheet, and the press was told to run 65 of
+     a garment only 50 of which existed. On the one document whose entire job
+     is telling the press what to pull off the shelf.
+
+     SORTED, not left in arrival order. Without an ORDER BY -- and
+     /api/order-sizes has none -- Salesforce makes no promise about row order,
+     so the same order could print its rows differently on two different days.
+     Garment then colour, so a reprint of the same sheet is the same sheet.
+
+     Sizes that aren't in SIZE_ORDER sort to the end rather than being dropped;
+     a size nobody anticipated is still a size somebody has to print. Rows with
+     a blank Size__c are skipped -- those are the non-garment lines (setup
+     fees, digitising) and the endpoint deliberately returns them intact for
+     callers that do want them. */
+  function sizeGrid(rows){
+    var groups = {}, colSet = {}, order = [];
+    (rows || []).forEach(function (r) {
+      var sz = String((r && r.Size__c) || '').toUpperCase();
+      if (!sz) return;
+      var color = (r && r.Color__c) || '\u2014';
+      var garment = text(r && r.Product2 && r.Product2.Name) || '';
+      // \u0000 can't occur in a Salesforce name, so it can't collide the way
+      // a visible separator could ("Tee - Red" + "Black" vs "Tee" + "Red - Black").
+      var key = garment + '\u0000' + color;
+      var g = groups[key];
+      if (!g) { g = groups[key] = { garment: garment, colorLabel: color, qtys: {}, total: 0 }; order.push(key); }
+      var q = Number(r.Quantity) || 0;
+      g.qtys[sz] = (g.qtys[sz] || 0) + q;
+      g.total += q;
+      colSet[sz] = true;
+    });
+    var cols = Object.keys(colSet).sort(function (a, b) {
+      var ia = SIZE_ORDER.indexOf(a), ib = SIZE_ORDER.indexOf(b);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
+    var list = order.map(function (k) { return groups[k]; }).sort(function (a, b) {
+      return a.garment.localeCompare(b.garment) || a.colorLabel.localeCompare(b.colorLabel);
+    });
+    /* The zebra flag alternates by COLOUR, not by row index. It used to be the
+       row's position, which was equivalent while one colour meant one row --
+       but now that black tees and black hoodies are two rows, index striping
+       renders two tags both reading "BLACK" in different styles, which looks
+       like one of them means something. Same colour, same tag. */
+    var grand = 0, seen = {}, colorIdx = 0;
+    list.forEach(function (g) {
+      if (!(g.colorLabel in seen)) seen[g.colorLabel] = colorIdx++;
+      g.dark = seen[g.colorLabel] % 2 === 1;
+      grand += g.total;
+    });
+    return { cols: cols, groups: list, grand: grand };
+  }
+
   // Placement__c picklist values. MUST match Salesforce (Setup -> Object
   // Manager -> Production Method -> Fields -> Placement) and the server-side
   // ALLOWED_PLACEMENTS in functions/api/production-methods/index.js -- all
@@ -2111,7 +2175,7 @@
     getStationItems: getStationItems, updateItemStatus: updateItemStatus, updateOrderReceiving: updateOrderReceiving,
     getInventory: getInventory, postInventory: postInventory,
     methodGuess: methodGuess,
-    SIZE_ORDER: SIZE_ORDER, text: text, initials: initials, colorForName: colorForName, methodOf: methodOf, dueInfo: dueInfo, parseSfDate: parseSfDate, pivotItems: pivotItems, runQtyHint: runQtyHint,
+    SIZE_ORDER: SIZE_ORDER, text: text, initials: initials, colorForName: colorForName, methodOf: methodOf, dueInfo: dueInfo, parseSfDate: parseSfDate, pivotItems: pivotItems, sizeGrid: sizeGrid, runQtyHint: runQtyHint,
     backgroundLoad: backgroundLoad, foregroundLoad: foregroundLoad,
     toast: toast, errText: errText, canWrite: canWrite, reportBlockedWrite: reportBlockedWrite, reportFailedWrite: reportFailedWrite,
     listState: listState, listNotice: listNotice,
