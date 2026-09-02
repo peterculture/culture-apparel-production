@@ -99,8 +99,26 @@ window.__resources = Object.assign({}, window.__resources, {
 
     <!-- Trend: last 7 days, real Salesforce history (CreatedDate / LastModifiedDate) -->
     <div style="font:600 11px/1 'Oswald';letter-spacing:.16em;text-transform:uppercase;color:var(--text-muted);margin:26px 0 10px;padding-left:2px">Last 7 Days</div>
-    <div style="background:#0D0D0F;border:1px solid #1b1b1e;border-radius:12px;padding:16px;height:220px;position:relative">
-      <canvas id="ca-trend-chart"></canvas>
+    <div style="background:var(--surface-raised);border:1px solid var(--border-card);border-radius:12px;padding:16px;height:220px;position:relative">
+      <canvas id="ca-trend-chart" role="img" aria-label="{{trendLabel}}"></canvas>
+    </div>
+    <!-- The chart's numbers, for anyone the canvas is a blank rectangle to.
+         Divs with explicit ARIA roles, not a <table>: sc-for inside a table is
+         foster-parented out of it by the HTML parser before the runtime sees
+         it, and display:table alone styles a grid without announcing as one. -->
+    <div role="table" aria-label="Last 7 working days, new orders and orders shipped" style="display:table;width:100%;border-collapse:collapse;margin-top:10px;font:400 11px/1.4 'Archivo'">
+      <div role="row" style="display:table-row">
+        <div role="columnheader" style="display:table-cell;text-align:left;padding:6px 8px;border-bottom:1px solid var(--border-card);font:600 10px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)">Day</div>
+        <div role="columnheader" style="display:table-cell;text-align:right;padding:6px 8px;border-bottom:1px solid var(--border-card);font:600 10px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)">New Orders</div>
+        <div role="columnheader" style="display:table-cell;text-align:right;padding:6px 8px;border-bottom:1px solid var(--border-card);font:600 10px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)">Shipped</div>
+      </div>
+      <sc-for list="{{trendRows}}" as="d" hint-placeholder-count="7">
+        <div role="row" style="display:table-row">
+          <div role="cell" style="display:table-cell;text-align:left;vertical-align:middle;padding:5px 8px;color:var(--text-secondary)">{{d.day}}</div>
+          <div role="cell" style="display:table-cell;text-align:right;vertical-align:middle;padding:5px 8px;color:var(--text-primary)">{{d.newOrders}}</div>
+          <div role="cell" style="display:table-cell;text-align:right;vertical-align:middle;padding:5px 8px;color:var(--text-primary)">{{d.shipped}}</div>
+        </div>
+      </sc-for>
     </div>
 
     <!-- Prep Time -->
@@ -148,6 +166,44 @@ window.__resources = Object.assign({}, window.__resources, {
         </div>
       </sc-for>
     </div>
+
+    <!-- Actual vs Scheduled (E2.5) -- the read surface for the timers -->
+    <div style="font:600 11px/1 'Oswald';letter-spacing:.16em;text-transform:uppercase;color:var(--text-muted);margin:26px 0 10px;padding-left:2px">Actual vs Scheduled</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <sc-for list="{{timingKpis}}" as="k" hint-placeholder-count="4">
+        <div style="flex:1;min-width:150px;display:flex;gap:11px;align-items:stretch;background:var(--surface-raised);border:1px solid var(--border-card);border-radius:12px;padding:14px 16px">
+          <div style="width:4px;border-radius:3px;background:{{k.accent}};flex-shrink:0"></div>
+          <div style="min-width:0">
+            <div style="font:500 10px/1 'Oswald';letter-spacing:.13em;text-transform:uppercase;color:var(--text-muted);margin-bottom:9px">{{k.label}}</div>
+            <div style="display:flex;align-items:baseline;gap:4px"><span style="font:600 27px/0.85 'Oswald';color:{{k.accent}}">{{k.value}}</span><span style="font:500 10px/1 'Archivo';color:var(--text-muted)">{{k.unit}}</span></div>
+            <div style="margin-top:8px"><span style="font:400 9px/1.3 'Archivo';color:var(--text-faint)">{{k.sub}}</span></div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="margin-top:9px;padding-left:2px;font:400 11px/1.5 'Archivo';color:var(--text-tertiary)">{{timingNote}}</div>
+
+    <sc-if value="{{hasTimingRows}}" hint-placeholder-val="{{ true }}">
+      <div role="table" aria-label="Scheduled versus actual hours by print method, single-method orders only" style="display:table;width:100%;border-collapse:collapse;margin-top:14px;font:400 12px/1.4 'Archivo'">
+        <div role="row" style="display:table-row">
+          <div role="columnheader" style="display:table-cell;text-align:left;padding:7px 8px;border-bottom:1px solid var(--border-card);font:600 10px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)">Method</div>
+          <div role="columnheader" style="display:table-cell;text-align:right;padding:7px 8px;border-bottom:1px solid var(--border-card);font:600 10px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)">Jobs</div>
+          <div role="columnheader" style="display:table-cell;text-align:right;padding:7px 8px;border-bottom:1px solid var(--border-card);font:600 10px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)">Scheduled h</div>
+          <div role="columnheader" style="display:table-cell;text-align:right;padding:7px 8px;border-bottom:1px solid var(--border-card);font:600 10px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)">Actual h</div>
+          <div role="columnheader" style="display:table-cell;text-align:right;padding:7px 8px;border-bottom:1px solid var(--border-card);font:600 10px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)">Variance</div>
+        </div>
+        <sc-for list="{{timingRows}}" as="row" hint-placeholder-count="3">
+          <div role="row" style="display:table-row">
+            <div role="cell" style="display:table-cell;text-align:left;vertical-align:middle;padding:7px 8px;color:var(--text-secondary)">{{row.label}}</div>
+            <div role="cell" style="display:table-cell;text-align:right;vertical-align:middle;padding:7px 8px;color:var(--text-primary)">{{row.jobs}}</div>
+            <div role="cell" style="display:table-cell;text-align:right;vertical-align:middle;padding:7px 8px;color:var(--text-primary)">{{row.planned}}</div>
+            <div role="cell" style="display:table-cell;text-align:right;vertical-align:middle;padding:7px 8px;color:var(--text-primary)">{{row.actual}}</div>
+            <div role="cell" style="display:table-cell;text-align:right;vertical-align:middle;padding:7px 8px;color:{{row.varianceColor}}">{{row.variance}}</div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="margin-top:7px;padding-left:2px;font:400 10px/1.4 'Archivo';color:var(--text-faint)">Single-method orders only. Scheduled duration is one figure per order, so on a multi-method job there is no honest way to split it between the methods.</div>
+    </sc-if>
 
     <!-- Shipping -->
     <div style="font:600 11px/1 'Oswald';letter-spacing:.16em;text-transform:uppercase;color:var(--text-muted);margin:26px 0 10px;padding-left:2px">Shipping</div>
@@ -201,6 +257,9 @@ class Component extends DCLogic {
       preprod: { activeJobs:0, staged:0, ready:0, awaiting:0, overdue:0 },
       prod: { pipeline:0, onPressUnits:0, onPressJobs:0, misprints:0 },
       ship: { over:0, today:0, soon:0, ok:0, total:0 },
+      // Actual vs scheduled (E2.5). byType only covers single-method
+      // orders -- see computeTiming's header for why.
+      timing: { jobs:0, plannedH:0, actualH:0, finished:0, noTimer:0, noEstimate:0, byType:[] },
       // Day-over-day trend (added 2026-08-11) -- real Salesforce history,
       // not a snapshot system (see /api/stats-trend's header for why).
       // dates/newOrders/shipped are parallel arrays, oldest day first.
@@ -349,6 +408,66 @@ class Component extends DCLogic {
     return { pipeline, onPressUnits, onPressJobs, misprints };
   }
 
+  /* ── Actual vs scheduled (E2.5) ──────────────────────────────────────
+     The timers have been collecting real seconds since 2026-07-22 and nothing
+     has ever displayed them anywhere except live, on the card being timed.
+     This is the read surface.
+
+     WHAT IS COMPARED. Planned is Order.Duration__c, the hours the
+     OrderScheduling flow writes. Actual is Print_Setup_Timer__c +
+     Production_Timer__c, summed across the order's methods by
+     production-orders/index.js before it ever reaches us. Both are already on
+     every card this board fetches -- no new query, and therefore none of the
+     FLS risk that comes with adding a field to a SELECT.
+
+     ONLY FINISHED ORDERS COUNT. A job still on the press has banked part of
+     its hours, so including it would report the shop as permanently ahead of
+     estimate. Status === 'Complete' (the standard Order field -- no "d", and
+     not the same string as a method's 'Completed') is the same test the
+     production KPIs above use for "done".
+
+     A JOB WITH NO TIMER IS EXCLUDED, NOT COUNTED AS ZERO. This is the whole
+     reason this function is longer than it looks like it should be. A worker
+     who never tapped Start leaves 0 seconds, and averaging that in would
+     report a shop that finishes in no time at all -- a wrong answer that
+     looks like a good one. Same rule the counting screen follows: blank means
+     nobody touched it, a number means somebody decided. Those jobs are
+     counted separately and shown on the page, because "we only actually timed
+     6 of 19 finished jobs" is the more useful finding in the first place.
+
+     PER-TYPE ONLY WHERE ATTRIBUTION IS UNAMBIGUOUS. Duration__c is one number
+     per ORDER, while timers are per method. On a two-method order there is no
+     honest way to say how many of the planned hours belonged to the screen
+     print half, so those orders are left out of the per-type table (they stay
+     in the headline, which is order-level anyway). Splitting them would be
+     inventing data, and inventing it is worse than not having it. */
+  computeTiming(recs, api){
+    const HOUR = 3600;
+    let jobs=0, plannedH=0, actualH=0, finished=0, noTimer=0, noEstimate=0;
+    const byType = new Map();
+    (recs||[]).forEach(r=>{
+      if (r.Status !== 'Complete') return;
+      finished++;
+      const planned = Number(r.Duration__c) || 0;
+      const actual = ((Number(r.Print_Setup_Timer__c)||0) + (Number(r.Production_Timer__c)||0)) / HOUR;
+      if (planned <= 0 && actual <= 0) return;   // never estimated, never timed
+      if (actual <= 0) { noTimer++; return; }
+      if (planned <= 0) { noEstimate++; return; }
+      jobs++; plannedH += planned; actualH += actual;
+
+      const live = (r.ProductionMethods||[]).filter(pm => pm.Status__c !== 'Cancelled');
+      if (live.length !== 1) return;             // see PER-TYPE note above
+      const key = methodKeyFor(live[0].Type__c, api);
+      const row = byType.get(key) || { key, jobs:0, plannedH:0, actualH:0 };
+      row.jobs++; row.plannedH += planned; row.actualH += actual;
+      byType.set(key, row);
+    });
+    return {
+      jobs, plannedH, actualH, finished, noTimer, noEstimate,
+      byType: Array.from(byType.values()).sort((a,b)=>b.jobs-a.jobs),
+    };
+  }
+
   // ── Shipping: same over/today/soon/ok buckets as shipping.html's own
   // GROUP_DEFS, keyed off the same dueInfo() urgency used everywhere else.
   computeShippingStats(recs, api){
@@ -372,6 +491,7 @@ class Component extends DCLogic {
         preprod: this.computePreProdStats(prepOrders, api),
         prod: this.computeProductionStats(prodRecs, api),
         ship: this.computeShippingStats(shipRecs, api),
+        timing: this.computeTiming(prodRecs, api),
         trend: (trend && trend.dates) ? trend : this.state.trend,
         connection: 'live',
       });
@@ -385,6 +505,14 @@ class Component extends DCLogic {
         preprod: { activeJobs:9, staged:4, ready:3, awaiting:6, overdue:1 },
         prod: { pipeline:11, onPressUnits:396, onPressJobs:2, misprints:6 },
         ship: { over:1, today:2, soon:3, ok:6, total:12 },
+        // Demo timing runs OVER estimate and leaves most finished jobs
+        // untimed on purpose -- same reasoning as the mixed prep-time
+        // snapshot above. A demo that shows a shop hitting its
+        // estimates perfectly is the one shape this panel must never
+        // invent, because it is the answer somebody would act on.
+        timing: { jobs:6, plannedH:41.5, actualH:48.25, finished:19, noTimer:11, noEstimate:2,
+          byType:[ { key:'sp', jobs:4, plannedH:28, actualH:33.5 },
+                   { key:'em', jobs:2, plannedH:13.5, actualH:14.75 } ] },
         // Real (not label-only) dates here too, same YYYY-MM-DD shape and
         // same weekdays-only rule /api/stats-trend uses (the shop doesn't
         // run Sat/Sun -- see that endpoint's header), so the demo chart's
@@ -445,7 +573,81 @@ class Component extends DCLogic {
       { label:'On Schedule', value:num(st.ship.ok), unit:'orders', sub:kpiLoading ? 'total post-production' : (st.ship.total+' total post-production'), accent:'var(--text-muted)' },
     ];
 
+    /* ── Actual vs scheduled view model (E2.5) ──
+       Variance is signed against PLANNED: positive means the shop took longer
+       than it said it would. Colour follows that sign and nothing else -- over
+       is warn, at-or-under is ok -- rather than trying to be clever about a
+       band of "close enough", which would need a threshold nobody has agreed. */
+    const t = st.timing || { jobs:0, plannedH:0, actualH:0, finished:0, noTimer:0, noEstimate:0, byType:[] };
+    const hrs = (n)=> (Math.round(n*10)/10).toFixed(1);
+    const pctOf = (planned, actual)=> planned > 0 ? Math.round(((actual-planned)/planned)*100) : null;
+    const varPct = pctOf(t.plannedH, t.actualH);
+    const signed = (v)=> v===null ? '—' : (v>0?'+':'') + v + '%';
+    const varColor = (v)=> v===null ? 'var(--text-muted)' : (v>0 ? 'var(--warn)' : 'var(--ok)');
+    const haveTiming = !kpiLoading && t.jobs > 0;
+
+    const timingKpis = [
+      { label:'Jobs Compared', value: kpiLoading ? '—' : String(t.jobs), unit:'orders',
+        sub: kpiLoading ? 'finished and timed' : ('of ' + t.finished + ' finished'), accent:'var(--teal)' },
+      { label:'Scheduled', value: haveTiming ? hrs(t.plannedH) : '—', unit:'hours',
+        sub:'Duration on the order', accent:'var(--text-muted)' },
+      { label:'Actual', value: haveTiming ? hrs(t.actualH) : '—', unit:'hours',
+        sub:'setup + production timers', accent:'var(--text-muted)' },
+      { label:'Variance', value: haveTiming ? signed(varPct) : '—', unit: haveTiming && varPct>0 ? 'over' : 'vs scheduled',
+        sub: haveTiming ? (hrs(Math.abs(t.actualH-t.plannedH)) + (t.actualH>t.plannedH?' hours over':' hours under')) : 'needs a timed job',
+        accent: haveTiming ? varColor(varPct) : 'var(--text-muted)' },
+    ];
+
+    /* The excluded count is deliberately as prominent as the comparison. If
+       most finished jobs were never timed, that -- not the variance -- is the
+       thing to act on, and a panel that hid it would be quietly reporting a
+       confident number drawn from a handful of jobs. */
+    const skipped = t.noTimer + t.noEstimate;
+    const timingNote = kpiLoading ? 'Loading…'
+      : t.finished === 0 ? 'No finished orders on the board yet, so there is nothing to compare.'
+      : t.jobs === 0 ? ('None of the ' + t.finished + ' finished orders can be compared — ' + t.noTimer +
+          ' were never timed and ' + t.noEstimate + ' have no scheduled duration.')
+      : skipped === 0 ? ('All ' + t.finished + ' finished orders had both a scheduled duration and a timer.')
+      : (skipped + ' of ' + t.finished + ' finished orders left out: ' + t.noTimer +
+         ' never timed, ' + t.noEstimate + ' with no scheduled duration. Untimed jobs are excluded, not counted as zero.');
+
+    const METHOD_LABEL = { sp:'Screen Print', em:'Embroidery', hp:'Heat Press', promo:'Promotional' };
+    const timingRows = (t.byType||[]).map(row=>{
+      const p = pctOf(row.plannedH, row.actualH);
+      return { key:row.key, label: METHOD_LABEL[row.key] || row.key, jobs:String(row.jobs),
+               planned: hrs(row.plannedH), actual: hrs(row.actualH),
+               variance: signed(p), varianceColor: varColor(p) };
+    });
+    const hasTimingRows = timingRows.length > 0;
+
+    /* ── Chart accessibility (E2.5) ──
+       The canvas is a picture as far as any screen reader is concerned, so it
+       gets a name describing what it plots, and the numbers themselves are
+       published underneath as a real table. The table is the accessible
+       version of the chart, not a summary of it -- same seven days, same two
+       series -- so nobody has to take the picture's word for it. Marked up
+       with explicit ARIA roles because these are divs: display:table styles a
+       grid, it does not announce as one, and <table> cannot be used here at
+       all (sc-for inside a table gets foster-parented out by the HTML parser
+       before the runtime ever sees it -- see CLAUDE.md). */
+    const tDates = (st.trend && st.trend.dates) || [];
+    const tNew = (st.trend && st.trend.newOrders) || [];
+    const tShip = (st.trend && st.trend.shipped) || [];
+    const dayLabel = (iso)=>{ const d = new Date(iso + 'T00:00:00');
+      return isNaN(d.getTime()) ? iso : d.toLocaleDateString([], { weekday:'short', month:'numeric', day:'numeric' }); };
+    const trendRows = tDates.map((d,i)=>({
+      day: dayLabel(d), newOrders: String(tNew[i] != null ? tNew[i] : 0), shipped: String(tShip[i] != null ? tShip[i] : 0),
+    }));
+    const trendLabel = trendRows.length
+      ? ('Bar chart, new orders and orders shipped for the last ' + trendRows.length +
+         ' working days. New orders totalled ' + tNew.reduce((a,b)=>a+(Number(b)||0),0) +
+         ', shipped totalled ' + tShip.reduce((a,b)=>a+(Number(b)||0),0) +
+         '. The same figures follow in the table below.')
+      : 'Bar chart of new orders and orders shipped over the last seven working days. No data has loaded yet.';
+
     return {
+      timingKpis, timingNote, timingRows, hasTimingRows,
+      trendRows, trendLabel,
       clock, dateStr, connColor, connLabel,
       statusColor: meta.color, statusLabel: meta.label,
       statusIcon: STATUS_ICON[st.prep.status] || 'ti-mood-neutral',
