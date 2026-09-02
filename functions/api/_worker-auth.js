@@ -1,9 +1,10 @@
 /**
  * Real per-worker PIN auth for the general boards' login screen (login.html
- * -> POST /api/worker-login). Mirrors how _station.js/station-login already
- * do real server-side PIN auth for the station tablets -- same shape, same
- * "PINs never ship to the browser" rule, just keyed by WORKER NAME instead
- * of station.
+ * -> POST /api/worker-login). Same shape as the station PIN auth that used to
+ * live in _station.js -- same "PINs never ship to the browser" rule -- but
+ * keyed by WORKER NAME rather than by station. That station system was removed
+ * in E6.6 because nothing ever called it; this one is what actually runs, and
+ * it now covers the station tablets too.
  *
  * WHY THIS EXISTS (2026-08-13): until now, login.html checked its PIN
  * entirely client-side against two SHARED, hardcoded values (worker PIN
@@ -23,11 +24,14 @@
  *                 (existing per-board "switch user" name pickers are a
  *                 separate, lower-friction path and aren't gated by this).
  *
- * NOT a session/cookie system (unlike station-login): the verified {name,
- * role} this returns gets written into localStorage by login.html exactly
- * the way the old client-only check did, so every other board's existing
- * localStorage-based identity model keeps working unchanged. Only the
- * VERIFICATION step at login became real; nothing downstream had to change.
+ * ORIGINALLY not a session system: the verified {name, role} was written into
+ * localStorage by login.html exactly the way the old client-only check did, so
+ * every board's existing identity model kept working unchanged and only the
+ * VERIFICATION step became real. That is still true of the client half -- but
+ * worker-login ALSO issues a signed HttpOnly ca_sess cookie now (see
+ * issueSession in _session.js), which is what requireCap() reads on every
+ * mutating route. Two identities, deliberately: localStorage for what the
+ * screen shows, the cookie for what the server will allow.
  *
  * THREE-TIER ROLE (2026-08-13): originally just manager/worker (manager ==
  * Gian/Anthony/Parker). Split further so per-person UI access can differ
