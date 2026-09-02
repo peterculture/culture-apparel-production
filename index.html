@@ -1375,9 +1375,29 @@ class Component extends DCLogic {
     const a=window.CAApi;
     if(a && a.reportFailedWrite) a.reportFailedWrite(what,e); else console.error(what,e);
   }
+  /* ── writes a navigation has to wait for (E1.4) ───────────────────────
+     Stopping a production timer now leaves the board for counting.html, and a
+     navigation aborts whatever fetches are still in flight. Three writes fire
+     from one Stop -- the timer seconds, the run's actual end, and the method's
+     new status -- and two of them were fire-and-forget, so leaving immediately
+     would have been a coin toss on whether the worker's time reached
+     Salesforce. Nobody can retype how long a job took.
+
+     Every write registers here; settleWrites() waits for the batch. The cap
+     exists because jsend has no timeout of its own and a hung connection must
+     not strand somebody at a press staring at a board. */
+  trackWrite(p){ (this._writes || (this._writes = [])).push(p); return p; }
+  settleWrites(ms){
+    const q = this._writes || []; this._writes = [];
+    if (!q.length) return Promise.resolve(true);
+    let done = false;
+    const all = Promise.allSettled(q).then(()=>{ done = true; });
+    return Promise.race([ all, new Promise(r=>setTimeout(r, ms || 6000)) ]).then(()=>done);
+  }
   pushMethod(cardId,statusLabel,orderId){
-    if(!this.canWriteNow('Status change')) return;
-    this._api.patchMethodStatus(cardId,statusLabel,orderId).catch(e=>this.writeFailed('The status change',e));
+    if(!this.canWriteNow('Status change')) return Promise.resolve(false);
+    return this.trackWrite(this._api.patchMethodStatus(cardId,statusLabel,orderId)
+      .then(()=>true).catch(e=>{ this.writeFailed('The status change',e); return false; }));
   }
   // Generic per-method write, reusing the same PATCH endpoint as the
   // checklist fields (production-methods/[id].js accepts any allow-listed
@@ -2214,10 +2234,10 @@ class Component extends DCLogic {
     // operator may have half-typed something else into that row, and pressing
     // Start should never commit it.
     if(this.canWriteNow(which==='actualStart'?'Run start time':'Run end time')){
-      this._api.patchProductionRun(runId, {[which]:iso}).catch(err=>{
+      this.trackWrite(this._api.patchProductionRun(runId, {[which]:iso}).catch(err=>{
         console.error('stamping '+which+' failed for run', runId, err);
         this.writeFailed(which==='actualStart'?"That run's actual start time":"That run's actual end time", err);
-      });
+      }));
     }
     return iso;
   }
@@ -2235,7 +2255,9 @@ class Component extends DCLogic {
     const t=this.state.timers[cardId]||{};
     const cur=Object.assign({elapsed:0,running:false,startedAt:0},t[which]||{});
     const el=cur.elapsed+(cur.running?Math.floor((Date.now()-cur.startedAt)/1000):0);
-    this.pushMethodFields(cardId,{[which==='setup'?'Print_Setup_Timer__c':'Production_Timer__c']:el}).then(saved=>this.noteTimerSave(cardId,which,saved));
+    let timerSaved=false;
+    this.trackWrite(this.pushMethodFields(cardId,{[which==='setup'?'Print_Setup_Timer__c':'Production_Timer__c']:el})
+      .then(saved=>{ timerSaved=!!saved; this.noteTimerSave(cardId,which,saved); return saved; }));
     this.setState(st=>{ const timers=Object.assign({},st.timers); const g=Object.assign({},timers[cardId]||{}); g[which]={elapsed:el,running:false,startedAt:0}; timers[cardId]=g; return {timers}; });
 
     const run=this.currentRunFor(cardId);
@@ -2272,6 +2294,50 @@ class Component extends DCLogic {
            and stageOfMethod maps Ready for Print back to the 'rfp' column, so
            the card visibly returns there between runs. */
         this.advanceStatus(cardId,'Ready for Print',card.orderId);
+      }
+      /* ── stop goes straight to counting (E1.4, Anthony 2026-09-02) ────────
+         The original E1.4 asked for produced quantities pre-filled with
+         planned; D1 removed the produced field on purpose, so that story was
+         dead. This is the rewrite: the press operator lands on the counting
+         screen for the run they just finished.
+
+         WHY IT IS WORTH A NAVIGATION. Nothing connected "I finished printing"
+         to "record what happened". The one Run Results link on this board is
+         gated on the method being in Post-Production -- and a method with runs
+         left goes BACK to Ready for Print after each stop, so between runs
+         there was no path to counting at all. That matters beyond tidiness:
+         gate 2 of createReworkIfNeeded needs EVERY run Submitted, so one
+         uncounted run silently blocks the reprint for the whole order,
+         indefinitely, with nothing on any screen saying why.
+
+         I put the case for a prompt instead of a jump -- on a multi-run job
+         the next thing the operator does is set up the press for run 2, and
+         this takes the board away mid-changeover. Anthony chose the jump:
+         counting is the step that gets skipped, and a button that can be
+         ignored is how it gets skipped.
+
+         THE WAIT IS NOT OPTIONAL. A navigation aborts in-flight fetches, and
+         one Stop fires three writes -- the seconds, the run's actual end, the
+         method's new status. Two were fire-and-forget until this commit. So we
+         settle them first, and if the timer write did not land we write the
+         seconds into the B2 store SYNCHRONOUSLY before leaving: localStorage
+         beats a navigation, setState does not. The worker's time is on the
+         tablet either way, with the "not saved" strip waiting when they come
+         back. Nobody can retype how long a job took. */
+      if(run){
+        const runId=run.id;
+        this.settleWrites().then(()=>{
+          if(!timerSaved){
+            const timers=Object.assign({},this.state.timers);
+            const g=Object.assign({},timers[cardId]||{});
+            g[which]={elapsed:el,running:false,startedAt:0};
+            timers[cardId]=g;
+            const errs=Object.assign({},this.state.timerSaveErr||{});
+            const ge=Object.assign({},errs[cardId]||{}); ge[which]=true; errs[cardId]=ge;
+            saveTimerStore(timers,errs);
+          }
+          window.location.href='counting.html?runId='+encodeURIComponent(runId);
+        });
       }
     } else {
       /* Set-up stop means the press is ready and printing starts now, so this
