@@ -2157,7 +2157,21 @@ class Component extends DCLogic {
         this.setState({runSubmitting:false, runForm:this.defaultRunForm(), runPressResults:[], runErr:'', runMsg:'Run created and added to the shop calendar — add another for '+(rt.methodLabel||'this method')+', or close this window when done.', proposalUsedId:null});
         this.loadProposals(cp.orderId);
       }
-    }catch(e){ this.setState({runSubmitting:false, runErr:'Create failed — check press / schedule and try again'}); }
+    }catch(e){
+      /* Same fix as index.html's submitRunCreate -- this one captured the
+         error and then ignored it, which reads as deliberate and is not. */
+      const a=window.CAApi, det=(a&&a.errText)?a.errText(e):'';
+      /* A 403 is OUR access gate, not Salesforce, and requireCap already
+         phrases it for a human -- prefixing it with "Salesforce refused"
+         would misattribute the cause, which is the whole bug being fixed
+         here. Show that one as it stands. */
+      const msg = !e.status && !(e.data)
+        ? 'No answer from the server — the run was not created. Check the connection and try again.'
+        : (e.status === 403 && det) ? det
+        : det ? ('Salesforce refused the run: ' + det)
+        : 'Could not create run, and the server gave no reason. Try again; if it repeats, check the Cloudflare logs.';
+      this.setState({runSubmitting:false, runErr:msg});
+    }
   }
   // Entry point for the DRAWER's own "Create Production Run" button (an
   // already-existing card on the board, opened via openOrder() -- NOT the
