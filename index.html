@@ -1748,7 +1748,13 @@ class Component extends DCLogic {
   // box -- the one number the manager would otherwise have to carry in their
   // head from the badge to the form, and the one most worth not mistyping.
   openRunCreate(methodId, printDate, printEndDateTime, seedQty){
-    const start=this.splitDT(printDate), end=this.splitDT(printEndDateTime);
+    /* E7.6/D6: runFormWindow, not two bare splitDT calls. It floors the end
+       at start + 2h whenever Print_End_Date_Time__c is missing, equal to or
+       before the start -- which was 15 of 20 scheduled orders in dev2, so
+       this form was opening pre-filled with a zero-length booking three
+       times in four. See ca-api.js for the formula bug behind it. */
+    const win=window.CAApi.runFormWindow(printDate, printEndDateTime);
+    const start=win.start, end=win.end;
     this.setState({ runCreateMethodId:methodId, runCreateForm:{ pressId:null, pressName:'', pressQ:'', startDate:start.date, startTime:start.time, endDate:end.date, endTime:end.time, qty: seedQty ? String(seedQty) : '' }, runCreatePressResults:[], runCreateErr:'' });
   }
   closeRunCreate(){ this.setState({runCreateMethodId:null, runCreateForm:null, runCreatePressResults:[], runCreateErr:''}); }
