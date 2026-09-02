@@ -763,6 +763,127 @@ function saveRunSel(map){
   try { localStorage.setItem(RUN_SEL_KEY, JSON.stringify(map || {})); } catch (_) {}
 }
 
+/* ── a running timer survives the tab closing (B2 step 1) ──────────────────
+   THE PROBLEM. `startedAt` lived only in page memory. load() runs every 15
+   seconds and rebuilds every timer as {elapsed: <last saved>, running:false,
+   startedAt:0}, and elapsed only reaches Salesforce on Pause or Stop. So a
+   reload, a sleep, or a closed tab discarded everything since the last Pause
+   -- on a shared tablet that is most of a shift, and the seconds are
+   unrecoverable because nobody can retype how long a job took.
+
+   It was worse than "reload loses it": the poll is only suppressed while a
+   drawer is OPEN, so simply closing the drawer on a running timer let the next
+   15s poll overwrite running:true with the server's running:false. The timer
+   stopped and nothing said so.
+
+   WHAT IS STORED, AND WHAT IS NOT. Only entries that hold something Salesforce
+   does not: a timer that is RUNNING (its startedAt exists nowhere else), and
+   one whose save is known to have FAILED (E2.2 -- its elapsed is the only copy
+   left, and losing the marker on reload would revert the tile to the stale
+   server number with no trace). Everything else is already in Salesforce and
+   is deliberately left to come back from there, so this store can never
+   resurrect a stale number over a good one.
+
+   THIS IS ONE DEVICE ONLY. Two tablets on the same method still disagree, and
+   a worker who switches tablets still loses the running clock -- that needs
+   Timer_Started_At__c / Timer_Running__c on Production_Method__c, which is
+   step 2 and blocked on E2.3. Nothing here should be read as making the
+   timer authoritative; it makes THIS tablet stop lying to the person holding
+   it.
+
+   THE CEILING IS WHAT MAKES THIS SAFE. A rehydrated timer that was left
+   running overnight would otherwise run forever and poison every efficiency
+   number built on it. E2.4's enforceTimerCeiling() runs on the 1s tick, sees
+   one continuous stretch past TIMER_MAX_HOURS, stops it at the cap and says
+   so on the tile -- which is exactly the case it was written for and is why
+   the roadmap said to ship them together. The age prune below is only
+   housekeeping so the key cannot grow without bound; correctness is the
+   ceiling's job, not the prune's. */
+const TIMER_STORE_KEY = 'caRunningTimersV1';
+const TIMER_STORE_MAX_AGE_MS = 7 * 24 * 3600 * 1000;
+const TIMER_HALVES = ['setup', 'prod'];
+/* Only real methods are stored. The demo fixtures include a card with
+   prod.running:true, and mergeServerTimers keeps entries the server did not
+   mention -- so on a LIVE board the demo timer is still sitting in state, and
+   it was being written to the store and rehydrated on the next load as a
+   timer nobody started. Same demo-id trap E2.4 hit when its ceiling tried to
+   PATCH GOA-4809. A Salesforce Id is 15-18 alphanumerics with no
+   punctuation, which every demo id ('GOA-4809') fails. Applied on read as
+   well as write, so a store already polluted by an earlier build cleans
+   itself out instead of needing somebody to know it is there. */
+const TIMER_CARD_ID = /^[a-zA-Z0-9]{15,18}$/;
+
+/* Returns { timers, errs } shaped exactly like the two pieces of state they
+   seed, so the constructor can drop them straight in and the first paint is
+   already correct -- no flash of a stopped timer before rehydration. */
+function loadTimerStore(){
+  const empty = { timers:{}, errs:{} };
+  try {
+    const data = JSON.parse(localStorage.getItem(TIMER_STORE_KEY) || '{}');
+    if (!data || typeof data !== 'object') return empty;
+    const now = Date.now(), timers = {}, errs = {};
+    Object.keys(data).forEach(cardId => {
+      const card = data[cardId];
+      if (!card || typeof card !== 'object' || !TIMER_CARD_ID.test(cardId)) return;
+      const half = {}, flagged = {};
+      TIMER_HALVES.forEach(which => {
+        const e = card[which];
+        if (!e || typeof e !== 'object') return;
+        const touched = Number(e.savedAt) || Number(e.startedAt) || 0;
+        if (touched && now - touched > TIMER_STORE_MAX_AGE_MS) return;
+        const startedAt = Number(e.startedAt) || 0;
+        // A running entry with no startedAt cannot be measured from, so it is
+        // not a running entry -- treat it as stopped rather than as "started
+        // at the epoch", which would read as 56 years and trip the ceiling.
+        const running = !!e.running && startedAt > 0;
+        half[which] = { elapsed: Math.max(0, Number(e.elapsed) || 0), running, startedAt: running ? startedAt : 0 };
+        if (e.unsaved) flagged[which] = true;
+      });
+      if (Object.keys(half).length) timers[cardId] = half;
+      if (Object.keys(flagged).length) errs[cardId] = flagged;
+    });
+    return { timers, errs };
+  } catch (_) { return empty; }
+}
+
+/* Cheap change-detector so componentDidUpdate is not writing localStorage on
+   every 1-second clock tick. Only the fields that actually get stored. */
+function timerStoreSig(timers, errs){
+  const parts = [];
+  Object.keys(timers || {}).sort().forEach(cardId => {
+    if (!TIMER_CARD_ID.test(cardId)) return;
+    TIMER_HALVES.forEach(which => {
+      const e = (timers[cardId] || {})[which];
+      if (!e) return;
+      const unsaved = !!((errs || {})[cardId] || {})[which];
+      if (!e.running && !unsaved) return;
+      parts.push(cardId + ':' + which + ':' + (e.running ? 1 : 0) + ':' + (e.startedAt || 0) + ':' + (e.elapsed || 0) + ':' + (unsaved ? 1 : 0));
+    });
+  });
+  return parts.join('|');
+}
+
+function saveTimerStore(timers, errs){
+  try {
+    const out = {};
+    Object.keys(timers || {}).forEach(cardId => {
+      if (!TIMER_CARD_ID.test(cardId)) return;
+      const card = timers[cardId] || {}, keep = {};
+      TIMER_HALVES.forEach(which => {
+        const e = card[which];
+        if (!e) return;
+        const unsaved = !!((errs || {})[cardId] || {})[which];
+        if (!e.running && !unsaved) return;   // Salesforce already has it
+        keep[which] = { elapsed: Number(e.elapsed) || 0, running: !!e.running,
+                        startedAt: Number(e.startedAt) || 0, unsaved: unsaved, savedAt: Date.now() };
+      });
+      if (Object.keys(keep).length) out[cardId] = keep;
+    });
+    if (Object.keys(out).length) localStorage.setItem(TIMER_STORE_KEY, JSON.stringify(out));
+    else localStorage.removeItem(TIMER_STORE_KEY);
+  } catch (_) {}
+}
+
 class Component extends DCLogic {
   constructor(props){
     super(props);
@@ -830,6 +951,9 @@ class Component extends DCLogic {
       // method times itself independently now. Demo cards use their own id
       // as both card id and order id (see _demoOrders above), so this still
       // reads correctly in demo mode.
+      /* Demo fixtures. Anything this tablet actually had running is merged
+         over the top below (B2), so a real timer outranks the demo one it
+         happens to share an id with. */
       timers:{ 'GOA-4809':{ setup:{elapsed:1320,running:false,startedAt:0}, prod:{elapsed:2460,running:true,startedAt:Date.now()} }, 'GOA-4814':{ setup:{elapsed:900,running:false,startedAt:0}, prod:{elapsed:1560,running:false,startedAt:0} }, 'GOA-4790':{ setup:{elapsed:1080,running:false,startedAt:0}, prod:{elapsed:3900,running:false,startedAt:0} } },
       /* EMPTY on a live board. These two maps used to be seeded here with
          packaging and shipment rows for four GOA numbers, which then sat in
@@ -942,6 +1066,10 @@ class Component extends DCLogic {
       // from now instead of each page keeping its own inline nav links.
       navOpen: false,
     };
+    /* Anything this tablet had running when it was last closed. Applied to
+       this.state directly (we are still in the constructor, before any
+       render) so the first paint already shows the timer running. (B2) */
+    this.restoreTimers();
     // ?card=<methodId>&makeup=<qty> from the counting screen's shortfall panel.
     // Held on the instance, not in state: it is a one-shot instruction, not
     // something the render reads. Consumed by applyDeepLink() once the board's
@@ -962,6 +1090,30 @@ class Component extends DCLogic {
   // dashboards". Every later refresh, save and drawer-open stays silent.
   // See the header comment in ca-api.js.
   fg(fn){ const a=window.CAApi; return (a&&a.foregroundLoad) ? a.foregroundLoad(fn) : fn(); }
+  /* Rehydrate before the first paint, not in componentDidMount, so a timer
+     that was running never renders as stopped for a frame first. Merged
+     per card+half rather than assigned, so a stored entry replaces only
+     the half it covers. (B2) */
+  restoreTimers(){
+    const stored = loadTimerStore();
+    if (!Object.keys(stored.timers).length) return;
+    const timers = Object.assign({}, this.state.timers);
+    Object.keys(stored.timers).forEach(cardId => {
+      timers[cardId] = Object.assign({}, timers[cardId] || {}, stored.timers[cardId]);
+    });
+    this.state = Object.assign({}, this.state, { timers,
+      timerSaveErr: Object.assign({}, this.state.timerSaveErr, stored.errs) });
+  }
+  /* Persist whenever the stored shape actually changed. Guarded by a
+     signature because this fires on every render, and the 1s clock tick
+     is a render -- without it this would write localStorage once a
+     second, forever, on a wall-mounted tablet nobody is touching. */
+  componentDidUpdate(){
+    const sig = timerStoreSig(this.state.timers, this.state.timerSaveErr);
+    if (sig === this._timerSig) return;
+    this._timerSig = sig;
+    saveTimerStore(this.state.timers, this.state.timerSaveErr);
+  }
   componentDidMount(){ this._t = setInterval(()=>{ this.setState({ now:new Date() }); this.enforceTimerCeiling(); }, 1000); this.fg(()=>this.load()); this.bg(()=>this.loadSfEnv()); this.bg(()=>this.loadPrep()); this.bg(()=>this.loadShipped7d()); this.bg(()=>this.loadShortfall()); this._ar = setInterval(()=>{ /* shouldPoll(): demo boards retry every 5th tick so a board that lost the API recovers on its own -- see ca-api.js */ if(!this.state.openId && !this.state.dragId && ((window.CAApi&&window.CAApi.shouldPoll)?window.CAApi.shouldPoll(this.state.connection,'index'):this.state.connection==='live')) this.bg(()=>this.load()); }, 15000); this._pr = setInterval(()=>{ this.bg(()=>this.loadPrep()); this.bg(()=>this.loadShipped7d()); }, 30000); this._sr = setInterval(()=>this.bg(()=>this.loadShortfall()), 30000); }
   componentWillUnmount(){ clearInterval(this._t); clearInterval(this._ar); clearInterval(this._pr); clearInterval(this._sr); this.clearPoll(); }
   // Independent fetch/failure path from load() -- a hiccup fetching the
@@ -1357,12 +1509,22 @@ class Component extends DCLogic {
   mergeServerTimers(st, fromServer){
     const out=Object.assign({},st.timers,fromServer);
     const errs=st.timerSaveErr||{};
-    Object.keys(errs).forEach(cardId=>{
+    const keep=(cardId,which)=>{
       const localCard=(st.timers||{})[cardId];
-      if(!localCard) return;
+      if(!localCard || !localCard[which]) return;
       const merged=Object.assign({},out[cardId]||{});
-      Object.keys(errs[cardId]||{}).forEach(k=>{ if(localCard[k]) merged[k]=localCard[k]; });
+      merged[which]=localCard[which];
       out[cardId]=merged;
+    };
+    Object.keys(errs).forEach(cardId=>{ Object.keys(errs[cardId]||{}).forEach(which=>keep(cardId,which)); });
+    /* A RUNNING timer is local truth too (B2). The server only ever reports
+       the last SAVED seconds with running:false, so without this the 15s poll
+       turns a running timer off -- and it did, every time a worker closed the
+       drawer, because the poll is only suppressed while one is open. The
+       failed-save list above never covered this: a healthy running timer has
+       nothing wrong with it to be listed for. */
+    Object.keys(st.timers||{}).forEach(cardId=>{
+      TIMER_HALVES.forEach(which=>{ if(((st.timers[cardId]||{})[which]||{}).running) keep(cardId,which); });
     });
     return out;
   }
@@ -1775,11 +1937,37 @@ class Component extends DCLogic {
     this.setState({runCreateSubmitting:true, runCreateErr:''});
     try {
       const res=await this._api.createProductionRun({ printMethodId:methodId, pressId:f.pressId, scheduledStart:start, scheduledEnd:end, quantity:qtyNum });
-      if(res && (res.error || res.ok===false)) throw new Error(res.error||'create_failed');
+      /* A 200 carrying an error body still has to reach the catch WITH its
+         detail attached -- a bare new Error(res.error) drops the Salesforce
+         message the endpoint went to the trouble of passing through. Shaped
+         like httpError()'s errors so errText() reads it the same way. */
+      if(res && (res.error || res.ok===false)){ const e=new Error(res.error||'create_failed'); e.data=res; throw e; }
       this.setState({runCreateSubmitting:false, runCreateMethodId:null, runCreateForm:null});
       this.loadRunsForCard(methodId);
-    } catch(_) {
-      this.setState({runCreateSubmitting:false, runCreateErr:'Could not create run — check press / schedule and try again'});
+    } catch(e) {
+      /* B3: this was `catch(_)` with a fixed sentence blaming the press and
+         the schedule. It fired for EVERY cause -- a restricted picklist, an
+         FLS refusal, a validation rule, a 403, a dead network -- and sent
+         Anthony looking at a press that was never the problem. The error was
+         not even inspected; httpError() had already attached Salesforce's own
+         words to it and they were discarded one line later.
+
+         Two failures, told apart, because they need different actions: no
+         answer at all means nothing was created and retrying is safe; an
+         answer means Salesforce refused and says why. Only when errText()
+         genuinely has nothing do we fall back to a generic line -- and it
+         says the reason is unknown rather than naming an innocent cause. */
+      const a=window.CAApi, det=(a&&a.errText)?a.errText(e):'';
+      /* A 403 is OUR access gate, not Salesforce, and requireCap already
+         phrases it for a human -- prefixing it with "Salesforce refused"
+         would misattribute the cause, which is the whole bug being fixed
+         here. Show that one as it stands. */
+      const msg = !e.status && !(e.data)
+        ? 'No answer from the server — the run was not created. Check the connection and try again.'
+        : (e.status === 403 && det) ? det
+        : det ? ('Salesforce refused the run: ' + det)
+        : 'Could not create run, and the server gave no reason. Try again; if it repeats, check the Cloudflare logs.';
+      this.setState({runCreateSubmitting:false, runCreateErr:msg});
     }
   }
   // ── Production Error / Reprint modal: REMOVED 2026-08-27 ──
