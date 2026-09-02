@@ -1930,7 +1930,11 @@ class Component extends DCLogic {
   // which pull these off referenceForOrder(). Either half is left blank if
   // its source field isn't set, same as before.
   defaultRunForm(printDate, printEndDateTime){
-    const start=this.splitDT(printDate), end=this.splitDT(printEndDateTime);
+    /* E7.6/D6: same floor as index.html's openRunCreate -- one helper in
+       ca-api.js so the two New Run forms cannot disagree about what a
+       missing or zero-length Print_End_Date_Time__c should prefill. */
+    const win=window.CAApi.runFormWindow(printDate, printEndDateTime);
+    const start=win.start, end=win.end;
     // printLocation defaults to '' = "not set". Optional on purpose: a run is
     // a legitimate press booking before anyone knows which location it prints.
     return { pressId:null, pressName:'', pressQ:'', startDate:start.date, startTime:start.time, endDate:end.date, endTime:end.time, qty:'', printLocation:'' };
