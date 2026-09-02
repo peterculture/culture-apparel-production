@@ -19,11 +19,11 @@
  * checklist needed for the score arrives in the primary SELECT rather than a
  * follow-up.
  *
- * The score is computed here, per request, by _priority.js -- never read from
- * Production_Method__c.Production_Priority__c. That stored copy exists for
- * reports and the station queues (see _priority-rollup.js); this endpoint
- * deliberately does not trust it, so a missed nightly refresh can never put a
- * stale number on the calendar.
+ * The score is computed here, per request, by _priority.js. There is no stored
+ * copy to read: Production_Method__c.Production_Priority__c and the rollup that
+ * was meant to maintain it were deleted 2026-09-02 (E5.8) after it turned out
+ * nothing had ever written or read them. This endpoint never trusted the stored
+ * value anyway, which is why removing it changes nothing here.
  */
 import { runQuery, jsonError, runChunkedIdQuery } from "../_sf.js";
 import { runQueryOptionalField } from "../_placements.js";
