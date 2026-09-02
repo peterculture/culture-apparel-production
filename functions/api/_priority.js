@@ -474,8 +474,27 @@ function shopDateOf(value, tz) {
  * Order.Duration__c is the hours the OrderScheduling flow writes (V31+) and is
  * the total for the ORDER. When an order has several runs we divide it rather
  * than giving each run the full span, which would triple-book a press for a
- * three-run order. Falls back to 2 hours -- the same default
- * Print_End_Date_Time__c already uses when Duration__c is blank.
+ * three-run order. Falls back to 2 hours when Duration__c is blank or zero.
+ *
+ * THAT FALLBACK NOW MATCHES Print_End_Date_Time__c, AND DID NOT UNTIL
+ * 2026-09-02. This comment used to assert the agreement as settled fact -- "the
+ * same default Print_End_Date_Time__c already uses" -- and it was false for the
+ * whole life of the field. That formula's own 2-hour branch never executed
+ * once after it was created in January 2023: it returns Date/Time, so
+ * Salesforce does not offer the "treat blank fields as blanks" option and
+ * defaults to treating a blank number as zero. Duration__c was coerced to 0
+ * before ISBLANK saw it, ISBLANK(0) is false, and every evaluation took the
+ * other branch -- Print_Date__c + 0/24, i.e. the start time. In dev2, 15 of 20
+ * scheduled orders had an end exactly equal to their start.
+ *
+ * So this function reserved 2 hours while the New Run form beside it prefilled
+ * 0, for three orders in four, and the comment saying they agreed is the
+ * reason nobody went looking. Anthony fixed the formula on 2026-09-02
+ * (IF( Duration__c > 0, ... , Print_Date__c + (2/24) )) and ca-api.js's
+ * runFormWindow() floors the form at the same 2 hours, so the three now agree
+ * -- deliberately, and for the first time. Left written down rather than
+ * quietly corrected, because an order scheduled before that date still carries
+ * a zero-hour Print_End_Date_Time__c and this is the note that explains it.
  */
 export function runDurationHours(order, runCount) {
   const total = Number(order && order.Duration__c);
