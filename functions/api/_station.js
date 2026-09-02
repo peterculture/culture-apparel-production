@@ -1,134 +1,54 @@
 /**
- * Station auth + config for the shop-worker dashboard.  Mirrors how _sf.js
- * abstracts Salesforce auth: shared plumbing that the station endpoints import.
+ * Station CONFIG for the shop-worker dashboard: what each station is, which
+ * Pre_Production_Item__c type it handles, which sub-status field it writes, and
+ * what its schedule query selects. Imported by station-items,
+ * update-item-status, update-order-receiving, pre-production-items and
+ * _ppi-checklist.
  *
- * THE MODEL
- *   A worker at a station tablet POSTs the station's PIN to /api/station-login.
- *   If the PIN matches, we hand back a SIGNED token in an HttpOnly cookie. Every
- *   station endpoint (schedule read, status write) then verifies that token
- *   server-side and resolves which station the caller is. The browser can't
- *   forge or edit the token because it's HMAC-signed with a secret only the
- *   Worker knows -- so "station=ink" can't just be typed into a cookie.
+ * THE STATION LOGIN WAS REMOVED HERE (E6.6, 2026-09-01), and it is worth
+ * knowing what used to be in this file, because it read like protection.
  *
- * SECRETS (set in the Cloudflare Pages project settings, NEVER in the repo)
- *   STATION_TOKEN_SECRET  a long random string used to sign/verify tokens
- *   STATION_PINS          JSON map of station -> PIN, e.g. {"ink":"4821"}
+ * There was a complete per-station auth system: POST a station PIN to
+ * /api/station-login, get back an HMAC-signed token in an HttpOnly cookie with
+ * a 12-hour TTL, and every station endpoint would verify it and resolve which
+ * station the caller was. Signing, verifying, constant-time compare, cookie
+ * issue and clear -- all written, all correct.
  *
- * This is APP-level auth. It is NOT a replacement for the Cloudflare Access
- * lockdown: Access still belongs in front of /api/* so the raw endpoints aren't
- * publicly reachable at all. Defense in depth, not either/or -- and the write
- * endpoint especially must not go live until Access is on.
+ * None of it was ever plugged in. verifyStationToken() had ZERO callers, no
+ * page ever called CAApi.stationLogin(), and no station endpoint checked
+ * anything. Anyone reading this file reasonably concluded the stations were
+ * locked down. They were not, and a security mechanism that is switched off is
+ * worse than one that was never written, because people trust it.
+ *
+ * WHAT PROTECTS THESE ENDPOINTS INSTEAD. Personal PINs: station.html signs in
+ * through POST /api/worker-login like every other board, and since E6.5 the
+ * station writes call requireCap() -- items.status for sub-status,
+ * orders.receive for garment count-in, inventory.edit for stock. That answers
+ * "may this person write?", which is the question that was actually worth
+ * asking. Cloudflare Access answers "may this device reach us at all?" and is
+ * E6.4's job -- as of 2026-09-01 it is NOT yet enabled on this project.
+ *
+ * The station PIN would only ever have answered a third question -- "is this
+ * the ink tablet?" -- and that guards against tapping the wrong tab, which is a
+ * mistake rather than a risk. Decision: Anthony, 2026-09-01. If a worker ever
+ * needs to be pinned to one station for a whole shift, that is a real
+ * requirement and this is the file it would come back to.
  */
 
-const TOKEN_TTL_SECONDS = 12 * 60 * 60; // ~one shift; re-PIN after that
-const COOKIE_NAME = "station_token";
-const enc = new TextEncoder();
-
-/* ---- base64url helpers ---- */
-function b64urlFromBytes(bytes) {
-  let bin = "";
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-function b64urlFromString(str) {
-  return b64urlFromBytes(enc.encode(str));
-}
-function bytesFromB64url(s) {
-  s = s.replace(/-/g, "+").replace(/_/g, "/");
-  while (s.length % 4) s += "=";
-  const bin = atob(s);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-function stringFromB64url(s) {
-  return new TextDecoder().decode(bytesFromB64url(s));
-}
-
-/* ---- HMAC-SHA256 via Web Crypto (available in the Workers runtime) ---- */
-async function hmac(secret, data) {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(data));
-  return b64urlFromBytes(new Uint8Array(sig));
-}
-
-/** Constant-time string compare (avoids leaking via early mismatch). */
+/**
+ * Constant-time string compare (avoids leaking via early mismatch).
+ *
+ * The one survivor of the removed token code, and it is not dead: admin/sf-env.js
+ * imports it to check SF_ENV_SWITCH_PIN. That PIN is a REAL gate today -- unlike
+ * requireCap, which is report-only until ACCESS_ENFORCE=1 -- so this comparison
+ * is the thing standing between a guessed PIN and switching which Salesforce org
+ * the whole shop is pointed at. Leave it constant-time.
+ */
 export function safeEqual(a, b) {
   if (a.length !== b.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
-}
-
-/* ---- token issue / verify ---- */
-export async function signStationToken(env, station) {
-  const secret = env.STATION_TOKEN_SECRET;
-  if (!secret) throw new Error("STATION_TOKEN_SECRET not set");
-  const payload = b64urlFromString(
-    JSON.stringify({
-      s: station,
-      exp: Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS,
-    }),
-  );
-  const sig = await hmac(secret, payload);
-  return `${payload}.${sig}`;
-}
-
-/** Verified station string (e.g. "ink"), or null if missing/tampered/expired. */
-export async function verifyStationToken(env, request) {
-  const secret = env.STATION_TOKEN_SECRET;
-  if (!secret) return null;
-  const token = readCookie(request, COOKIE_NAME);
-  if (!token) return null;
-
-  const dot = token.lastIndexOf(".");
-  if (dot < 0) return null;
-  const payload = token.slice(0, dot);
-  const sig = token.slice(dot + 1);
-
-  const expected = await hmac(secret, payload);
-  if (!safeEqual(sig, expected)) return null;
-
-  let data;
-  try {
-    data = JSON.parse(stringFromB64url(payload));
-  } catch {
-    return null;
-  }
-  if (!data || typeof data.s !== "string") return null;
-  if (typeof data.exp !== "number" || data.exp < Math.floor(Date.now() / 1000)) {
-    return null;
-  }
-  return data.s;
-}
-
-/* ---- cookie helpers ---- */
-export function stationCookie(token) {
-  return [
-    `${COOKIE_NAME}=${token}`,
-    "HttpOnly",
-    "Secure",
-    "SameSite=Strict",
-    "Path=/",
-    `Max-Age=${TOKEN_TTL_SECONDS}`,
-  ].join("; ");
-}
-export function clearStationCookie() {
-  return `${COOKIE_NAME}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`;
-}
-function readCookie(request, name) {
-  const header = request.headers.get("Cookie") || "";
-  for (const part of header.split(";")) {
-    const [k, ...v] = part.trim().split("=");
-    if (k === name) return v.join("=");
-  }
-  return null;
 }
 
 /* ------------------------------------------------------------------ *
@@ -331,8 +251,9 @@ export const STATION_CONFIG = {
   // It works off the standard Order directly — the board reuses /api/orders and
   // the write goes to /api/update-order-receiving (which targets the Order).
   // `source: "order"` tells the client to use that path. This config is what
-  // /api/station-login checks (so the garment PIN is accepted) and what the
-  // receiving-write endpoint validates against.
+  // the receiving-write endpoint validates against. (It also used to be what
+  // /api/station-login checked, so the garment PIN was accepted -- that
+  // endpoint is gone as of E6.6; see this file's header.)
   garment: {
     source: "order",
     field: "Receiving_Status__c",
