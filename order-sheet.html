@@ -280,18 +280,18 @@ class Component extends DCLogic {
                   'The order loaded no data from Salesforce. That usually means it is marked Complete, or it has no production method set up yet. Check it on the board before printing anything.');
         return;
       }
-      // group size rows by color, keep a shared, ordered column list
-      const byColor = {}; const colSet = {};
-      rows.forEach(r => {
-        const sz = (r.Size__c||'').toUpperCase(); if(!sz) return;
-        const c = r.Color__c || '—'; const q = Number(r.Quantity) || 0;
-        const g = (byColor[c] = byColor[c] || { garment:api.text(r.Product2&&r.Product2.Name)||'', qtys:{}, total:0 });
-        g.qtys[sz] = (g.qtys[sz]||0) + q; g.total += q; colSet[sz] = true;
-      });
-      const cols = Object.keys(colSet).sort((a,b)=>{ const ia=api.SIZE_ORDER.indexOf(a), ib=api.SIZE_ORDER.indexOf(b); return (ia<0?99:ia)-(ib<0?99:ib); });
-      const colorKeys = Object.keys(byColor);
-      const grids = colorKeys.map((c,i)=>({ colorLabel:c, dark:i%2===1, garment:byColor[c].garment, qtys:byColor[c].qtys, total:byColor[c].total }));
-      const grand = grids.reduce((a,g)=>a+g.total,0);
+      /* One row per GARMENT + COLOUR, via sizeGrid() in ca-api.js (E1.5).
+         This used to group by colour alone and label the row with whichever
+         garment arrived first, so black tees and black hoodies on the same
+         order collapsed into a single row: the hoodies vanished from the sheet
+         entirely and the press was told to run 65 of a garment only 50 of
+         which existed. On the one page whose whole job is telling the press
+         what to pull. The helper is shared with the calendar drawer so the two
+         cannot drift; it also sorts the rows, which this did not -- there is no
+         ORDER BY on /api/order-sizes, so the same order could print its rows in
+         a different arrangement on a different day. */
+      const grid = api.sizeGrid(rows);
+      const cols = grid.cols, grids = grid.groups, grand = grid.grand;
       const pdDate = api.parseSfDate(rec.Print_Date__c);
       const pd = pdDate ? pdDate.toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' }) : '—';
       // Placement: every decoration location across every Production_Method__c
