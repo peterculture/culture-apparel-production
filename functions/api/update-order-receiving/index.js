@@ -34,6 +34,7 @@
  */
 import { sfFetch, apiVersion, jsonError } from "../_sf.js";
 import { STATION_CONFIG } from "../_station.js";
+import { requireCap } from "../_session.js";
 
 const SF_ID = /^[a-zA-Z0-9]{15,18}$/;
 
@@ -53,6 +54,20 @@ export async function onRequestPost({ env, request }) {
     } catch {
       return jsonError("invalid_body", 400);
     }
+
+    /* E6.5 gate, added 2026-09-02. This route was the one mutating endpoint the
+       E6.5 sweep missed: `orders.receive` has been defined in _session.js and
+       granted to BOTH workers and managers since that story -- its comment there
+       even names this endpoint -- but nothing ever checked it, so the garment
+       count-in was ungated while every sibling write was covered.
+
+       Report-only until ACCESS_ENFORCE=1, so adding it cannot break the station
+       today. It matters on the day enforcement is switched on: an ungated route
+       does not log a `[access] would deny` line either, so this hole would not
+       have shown up in the five-day report-only soak that is meant to catch
+       exactly this. */
+    const gate = await requireCap(request, env, "orders.receive");
+    if (gate.denied) return gate.response;
 
     const station = String(body.station || "").toLowerCase();
     const cfg = STATION_CONFIG[station];
