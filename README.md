@@ -131,9 +131,17 @@ worker can't reach the Management view via a direct URL (`?view=mgr`) or the
 deep link from index.html's "Add another method" button either; both of
 those entry points are hidden for workers too, but the live re-check is what
 actually stops it if someone still has the link. This is separate from (and
-layered on top of) `confirmManager()`'s existing destructive-action PIN
-re-check, which is unchanged and still treats admin + manager as equally
-"elevated" for that one purpose.
+layered on top of) `confirmManager()`'s destructive-action PIN re-check,
+which still treats admin + manager as equally "elevated" for that one
+purpose. As of 2026-08-28 that re-check is **server-side**: there is no PIN
+in the browser any more, the typed PIN is a PERSONAL one checked against
+`WORKER_PINS` via `POST /api/worker-login`, and an already-elevated stored
+role no longer skips the prompt (it used to return early, so a tablet left
+signed in as a manager — the case the re-check exists for — was never asked
+for anything). Any manager's own PIN authorises the action regardless of who
+is signed in on that tablet. `confirmManager()` therefore returns a
+**Promise**: every call site must `await` it, because `!somePromise` is
+always false and an un-awaited guard silently confirms nothing.
 
 This is app-level auth, same caveat as `station.html`'s PIN gate: it's not a
 replacement for **Cloudflare Access** in front of the whole project and
