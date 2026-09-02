@@ -55,6 +55,12 @@
         text scale below. ───────────────────────────────────────────────── */
   --border-subtle:   #232327;
   --border-quiet:    #242428;
+  /* The card hairline every board's stat/KPI tiles use. E10.2 tokenised the
+     palette from the pages that linked tokens.css, and missed this one: it is
+     still a literal #1b1b1e in 40 places across seven pages. Added by E2.5 so
+     new cards match without adding a 41st. Converting the existing 40 is a
+     mechanical follow-up, not a redesign -- it is one value with one role. */
+  --border-card:     #1b1b1e;
   --border:          #2a2a2f;
   --border-strong:   #3a3a40;
 
