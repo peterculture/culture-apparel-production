@@ -24,9 +24,19 @@
  * whether or not anything happened. A stored number needs a nightly job to stay
  * true, and the morning that job fails the board is quietly wrong with nothing
  * on screen to say so. Computing here means the number is correct by
- * construction. The copy written to Production_Method__c.Production_Priority__c
- * (see _priority-rollup.js) exists for Salesforce reports, list views, and the
- * station queues -- never for this app's own display.
+ * construction, and it is the ONLY priority this system has.
+ *
+ * There used to be a second one. _priority-rollup.js mirrored this score onto
+ * Production_Method__c.Production_Priority__c for Salesforce reports, list
+ * views and the station queues -- and was deleted 2026-09-02 (E5.8) because it
+ * had never been called. Both its exported functions had zero importers, the
+ * field was written by nothing and read by nothing, and its header's headline
+ * justification ("all four stations sort by priority for the cost of one extra
+ * field") was simply untrue: every station query sorts by Print_Date__c and
+ * always had. Anthony's call. If a Salesforce report ever does need a stored
+ * copy, it comes back from git history along with the honest reason -- but it
+ * comes back WIRED, because a priority field nobody refreshes is worse than no
+ * field at all, and this file's own argument above says why.
  *
  * Note on the score's twin: Order.Priority_Score__c already exists in the org
  * (Uros Popovic, 6/12/2026) and drives ProductionAutoSchedulerService. It runs
