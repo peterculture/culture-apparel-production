@@ -205,11 +205,27 @@
      Any manager's own PIN works regardless of who is signed in, so a manager
      can authorise in place instead of the worker switching user first.
 
-     KNOWN SIDE EFFECT: /api/worker-login also issues the signed ca_sess cookie,
-     so a successful confirmation leaves the tablet's SERVER session as that
-     manager. That is inert today (requireCap is report-only unless
-     ACCESS_ENFORCE=1) and arguably right -- the write being authorised is the
-     manager's -- but it needs a decision before enforcement is switched on. */
+     KNOWN SIDE EFFECT, AND A DECISION HAS BEEN MADE ABOUT IT (Anthony,
+     2026-09-02): /api/worker-login also issues the signed ca_sess cookie, so a
+     successful confirmation leaves the tablet's SERVER session as that manager
+     for the full session TTL -- 12 hours by default. Under ACCESS_ENFORCE=1
+     that means the worker at that tablet inherits manager capabilities until
+     it expires.
+
+     ACCEPTED, not fixed. The manager logs out when they walk away; every board
+     carries a Log Out button and CAApi.logout() calls /api/worker-logout,
+     which clears the cookie server-side. Any later worker-login on that tablet
+     also overwrites it. Considered and rejected: suppressing the cookie here
+     would break the feature instead, because the destructive write being
+     authorised follows as a SEPARATE request carrying the worker's session,
+     and would be refused. The real alternative is a short-lived single-action
+     elevation, which is more machinery than this shop needs.
+
+     WORTH KNOWING IF THAT IS EVER REVISITED: nothing on screen says the
+     session changed. workerLogin() deliberately does not write identity, so
+     the tablet still shows the WORKER's name, and Log Out reads as though it
+     would sign the worker out mid-shift rather than end the manager's
+     session. The habit this relies on has no cue in the UI prompting it. */
   function confirmManager(actionLabel){
     var entered = window.prompt(
       (actionLabel || 'This action') + ' needs a manager PIN.\n\n' +
