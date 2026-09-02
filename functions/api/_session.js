@@ -21,6 +21,17 @@
  * because the whole point of this is being able to change someone's access
  * quickly.
  *
+ * THAT INCLUDES DELETING SOMEONE (E6.8, 2026-09-02, and it did not before).
+ * capsFor() used to fall back to role-derived defaults for any name it could
+ * not find, so REMOVING a person from WORKER_PINS -- the obvious way to revoke
+ * access, and the thing you do the morning somebody leaves or loses a tablet --
+ * changed nothing at all until their cookie expired up to twelve hours later.
+ * Worse, a removed manager kept manager capabilities the whole time, because
+ * the fallback read the hardcoded ADMIN_NAMES/MANAGER_NAMES rather than the
+ * secret. The paragraph above was simply not true for the one case anyone
+ * would ever be in a hurry about. Absence from a roster that parsed is now a
+ * revocation: no capabilities, effective on the very next request.
+ *
  * REPORT-ONLY BY DEFAULT. With ACCESS_ENFORCE unset, a denial is logged and the
  * request is ALLOWED through. Watch the logs, confirm nobody legitimate is
  * being blocked, then set ACCESS_ENFORCE=1. A wrong guess about who needs what
@@ -35,7 +46,7 @@
  * already breached Access.
  */
 
-import { ADMIN_NAMES, MANAGER_NAMES } from "./_worker-auth.js";
+import { rosterRole } from "./_worker-auth.js";
 
 const COOKIE = "ca_sess";
 const DEFAULT_TTL_HOURS = 12;
@@ -199,9 +210,11 @@ export async function readSession(request, env) {
  *   "Anthony": "7042"                              -> PIN only, caps DERIVED
  *   "Anthony": { "pin": "7042", "caps": ["*"] }    -> PIN + explicit caps
  *
- * WHEN NO CAPS ARE SPELLED OUT, THEY ARE DERIVED FROM THE EXISTING ROSTER.
- * Anthony (ADMIN_NAMES) gets everything; Gian and Parker (MANAGER_NAMES) get
- * DEFAULT_MANAGER_CAPS; everyone else gets nothing, i.e. view-only.
+ * WHEN NO CAPS ARE SPELLED OUT, THEY ARE DERIVED FROM THE PERSON'S ROLE --
+ * their entry's own "role" if it has one, else ADMIN_NAMES/MANAGER_NAMES.
+ * admin gets everything, manager gets DEFAULT_MANAGER_CAPS, worker gets
+ * DEFAULT_WORKER_CAPS. A name absent from a roster that parsed gets nothing:
+ * that is a revocation, not a default (E6.8).
  *
  * This started out returning [] for a bare string, which was a mistake worth
  * naming: it meant the correct behaviour depended on somebody hand-writing a
@@ -218,8 +231,10 @@ export function capsFor(env, name) {
   if (!name) return [];
 
   let pins = null;
+  let rosterReadable = false;
   try {
     pins = JSON.parse(env.WORKER_PINS || "");
+    rosterReadable = !!pins && typeof pins === "object";
   } catch {
     // Fall through to the derived defaults rather than returning nothing. A
     // malformed WORKER_PINS is already going to break login for everyone; it
@@ -228,17 +243,38 @@ export function capsFor(env, name) {
     console.error("WORKER_PINS is not valid JSON -- falling back to role-derived capabilities");
   }
 
-  const entry = pins && pins[name];
+  /* REMOVED FROM THE ROSTER MEANS REMOVED (E6.8).
+     Only when the secret actually PARSED -- a name missing from a roster we
+     could read is a decision somebody made; a name missing because the JSON
+     is broken is a typo, and treating those the same would turn one stray
+     comma into the whole shop locked out mid-shift. The two cases look
+     identical from here unless we keep them apart on purpose, which is what
+     rosterReadable is for. hasOwnProperty rather than a truthiness test so
+     inherited keys ("constructor", "toString") can't pass for staff. */
+  if (rosterReadable && !Object.prototype.hasOwnProperty.call(pins, name)) {
+    console.warn(
+      `[access] ${name} holds a valid session but is no longer in WORKER_PINS -- no capabilities`,
+    );
+    return [];
+  }
+
+  const entry = rosterReadable ? pins[name] : null;
   if (entry && typeof entry === "object" && Array.isArray(entry.caps)) {
     return entry.caps.map(String);
   }
 
-  if (ADMIN_NAMES.includes(name)) return ["*"];
-  if (MANAGER_NAMES.includes(name)) return DEFAULT_MANAGER_CAPS.slice();
-  /* Anyone who reached here signed in with a real personal PIN from
-     WORKER_PINS -- they are shop floor, not a stranger. This used to return []
-     and that was the enforcement trap: a signed-in worker with no capabilities
-     is indistinguishable from no session at all. (E6.5) */
+  /* Derived from the SAME role the login screen was given -- rosterRole()
+     reads the entry's own "role" first and only then the built-in
+     ADMIN_NAMES/MANAGER_NAMES. Consulting those arrays directly here (as this
+     did before E6.8) meant a role set in the secret moved the buttons and not
+     the API: promoted in the UI, refused by every endpoint behind it. */
+  const role = rosterRole(entry, name);
+  if (role === "admin") return ["*"];
+  if (role === "manager") return DEFAULT_MANAGER_CAPS.slice();
+  /* Anyone who reached here is on the roster with a real personal PIN -- they
+     are shop floor, not a stranger. This used to return [] and that was the
+     enforcement trap: a signed-in worker with no capabilities is
+     indistinguishable from no session at all. (E6.5) */
   return DEFAULT_WORKER_CAPS.slice();
 }
 
