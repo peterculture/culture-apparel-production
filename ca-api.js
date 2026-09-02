@@ -1612,6 +1612,53 @@
     };
   }
 
+  /* ── the New Run form's default window (E7.6, D6) ──
+     Scheduled Start comes from Order.Print_Date__c and Scheduled End from
+     Order.Print_End_Date_Time__c. This is the floor under the second one: if
+     the end is missing, EQUAL TO, or before the start, the form seeds
+     start + RUN_FALLBACK_HOURS instead.
+
+     WHY IT WAS NEEDED. Print_End_Date_Time__c is a formula that was supposed
+     to fall back to +2h when Duration__c is blank. It never did, once, since
+     the field was created in January 2023: the formula returns Date/Time, so
+     Salesforce does not offer the "treat blank fields as blanks" option and
+     defaults to treating a blank number as ZERO. Duration__c became 0 before
+     ISBLANK ever saw it, ISBLANK(0) is false, and every evaluation took the
+     other branch -- Print_Date__c + 0/24, which is Print_Date__c. In dev2, 15
+     of 20 scheduled orders came back with an end time exactly equal to their
+     start. The New Run form opened pre-filled with a zero-length booking for
+     three orders in four, and nothing downstream caught it:
+     production-runs/index.js rejects end < start, and equal is not less-than.
+
+     TWO HOURS because _priority.js's runDurationHours() already reserves
+     exactly that for an order with no Duration__c. Before this, the scheduler
+     suggested a 2-hour slot while the form beside it proposed a 0-hour one.
+
+     THIS IS A FLOOR, NOT A CORRECTION. Anthony fixed the formula on
+     2026-09-02, so a real +2h end now arrives on its own and this guard
+     simply stops firing -- it only ever replaces a value that is already
+     impossible. It must never ADD to an end that is genuinely after the
+     start, or a fixed formula and a compensating app would stack into four
+     hours. That is why the test is "not after the start" rather than "looks
+     like it came from the old formula".
+
+     With no usable Print_Date__c the end is passed through untouched, exactly
+     as before: there is nothing to measure two hours from, and inventing a
+     start would be guessing at the one field a manager most needs to set
+     deliberately. Both halves are independently blank-able and always were. */
+  var RUN_FALLBACK_HOURS = 2;
+  function runFormWindow(printDate, printEndDateTime){
+    var start = splitDT(printDate);
+    var end = splitDT(printEndDateTime);
+    if (!start.date || !start.time) return { start: start, end: end };
+
+    var s = new Date(printDate);
+    var e = printEndDateTime ? new Date(printEndDateTime) : null;
+    var endUsable = e && !isNaN(e.getTime()) && e.getTime() > s.getTime();
+    if (!endUsable) end = splitDT(new Date(s.getTime() + RUN_FALLBACK_HOURS * 3600 * 1000).toISOString());
+    return { start: start, end: end };
+  }
+
   /** The inverse: a date+time pair (both browser-local) -> the ISO string
    *  Salesforce expects. null when either half is missing/unparseable. */
   function buildRunDateTime(dateStr, timeStr){
@@ -2175,7 +2222,7 @@
     getStationItems: getStationItems, updateItemStatus: updateItemStatus, updateOrderReceiving: updateOrderReceiving,
     getInventory: getInventory, postInventory: postInventory,
     methodGuess: methodGuess,
-    SIZE_ORDER: SIZE_ORDER, text: text, initials: initials, colorForName: colorForName, methodOf: methodOf, dueInfo: dueInfo, parseSfDate: parseSfDate, pivotItems: pivotItems, sizeGrid: sizeGrid, runQtyHint: runQtyHint,
+    SIZE_ORDER: SIZE_ORDER, text: text, initials: initials, colorForName: colorForName, methodOf: methodOf, dueInfo: dueInfo, parseSfDate: parseSfDate, pivotItems: pivotItems, sizeGrid: sizeGrid, runFormWindow: runFormWindow, runQtyHint: runQtyHint,
     backgroundLoad: backgroundLoad, foregroundLoad: foregroundLoad,
     toast: toast, errText: errText, canWrite: canWrite, reportBlockedWrite: reportBlockedWrite, reportFailedWrite: reportFailedWrite,
     listState: listState, listNotice: listNotice,
