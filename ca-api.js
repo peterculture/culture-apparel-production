@@ -1537,7 +1537,6 @@
   }
   function getInventory(type){ return jget('/api/inventory?type=' + encodeURIComponent(type)).then(function (d) { return d.items || []; }); }
   function postInventory(type, items){ return jsend('/api/inventory', 'POST', { type: type, items: items }); }
-  function stationLogin(station, pin){ return jsend('/api/station-login', 'POST', { station: station, pin: pin }); }
 
   /* ── production run rows (E10.1, 2026-08-31) ──────────────────────────
      The Production Runs row is rendered by index.html AND pre-production.html,
@@ -2094,7 +2093,7 @@
     splitShipment: splitShipment, combineShipment: combineShipment,
     getSfEnv: getSfEnv, setSfEnv: setSfEnv,
     getStationItems: getStationItems, updateItemStatus: updateItemStatus, updateOrderReceiving: updateOrderReceiving,
-    getInventory: getInventory, postInventory: postInventory, stationLogin: stationLogin,
+    getInventory: getInventory, postInventory: postInventory,
     methodGuess: methodGuess,
     SIZE_ORDER: SIZE_ORDER, text: text, initials: initials, colorForName: colorForName, methodOf: methodOf, dueInfo: dueInfo, parseSfDate: parseSfDate, pivotItems: pivotItems, runQtyHint: runQtyHint,
     backgroundLoad: backgroundLoad, foregroundLoad: foregroundLoad,
