@@ -937,13 +937,55 @@
     delete _toasts[msg];
   }
 
-  /* The most useful human string we can get out of a failed write. Reads the
-     `detail` httpError() attaches (see jget/jsend/jdel above) before falling
-     back to the bare message. */
+  /* Salesforce's own words for why it refused a write.
+     A REST error body is an ARRAY of { message, errorCode, fields } -- e.g.
+       [{"message":"Status: bad value for restricted picklist",
+         "errorCode":"INVALID_OR_NULL_FOR_RESTRICTED_PICKLIST","fields":["Status__c"]}]
+     Endpoints pass it through untouched as `detail` (see production-runs
+     create_failed), so this is usually the only place the real cause exists.
+     Returns '' for anything that isn't that shape, so callers can fall
+     through rather than printing a guess. */
+  function sfErrText(d){
+    var list = Array.isArray(d) ? d : (d && typeof d === 'object' ? [d] : []);
+    var out = [];
+    for (var i = 0; i < list.length; i++) {
+      var it = list[i];
+      if (!it || typeof it !== 'object') continue;
+      var msg = it.message ? String(it.message) : '';
+      // The errorCode is what makes a message searchable, and several of them
+      // (FIELD_CUSTOM_VALIDATION_EXCEPTION) carry no useful message at all.
+      var code = it.errorCode ? String(it.errorCode) : '';
+      if (msg && code && msg.indexOf(code) === -1) out.push(msg + ' (' + code + ')');
+      else if (msg) out.push(msg);
+      else if (code) out.push(code);
+    }
+    return out.join('; ');
+  }
+
+  /* The most useful human string we can get out of a failed write.
+     Order matters, most specific first:
+       1. a sentence the SERVER wrote for a human -- requireCap's 403 carries
+          "Gian is not allowed to runs.schedule. Ask Anthony to grant it.",
+          which is the actionable one and used to be thrown away entirely
+          because httpError() only looks at data.detail/data.error.
+       2. Salesforce's own message. This is the fix that matters: `detail` on a
+          create_failed is an ARRAY, and the old String(e.detail) rendered it
+          as "[object Object]" -- so the one path carrying the real reason a
+          run was refused printed nothing usable.
+       3. a plain-string detail, then the error slug, then the status.
+     Never returns a cause it does not have; '' means "no idea", and the
+     caller is expected to say so rather than invent one. */
   function errText(e){
     if (!e) return '';
-    if (e.detail) return String(e.detail);
-    if (e.data && (e.data.detail || e.data.error)) return String(e.data.detail || e.data.error);
+    var d = e.data;
+    if (d && typeof d.message === 'string' && d.message) return d.message;
+
+    var sf = sfErrText(d && d.detail) || sfErrText(e.detail);
+    if (sf) return sf;
+
+    if (typeof e.detail === 'string' && e.detail) return e.detail;
+    if (d && typeof d.detail === 'string' && d.detail) return d.detail;
+    if (d && typeof d.error === 'string' && d.error) return d.error;
     if (e.status) return 'server returned ' + e.status;
     return e.message ? String(e.message) : '';
   }
@@ -2224,7 +2266,7 @@
     methodGuess: methodGuess,
     SIZE_ORDER: SIZE_ORDER, text: text, initials: initials, colorForName: colorForName, methodOf: methodOf, dueInfo: dueInfo, parseSfDate: parseSfDate, pivotItems: pivotItems, sizeGrid: sizeGrid, runFormWindow: runFormWindow, runQtyHint: runQtyHint,
     backgroundLoad: backgroundLoad, foregroundLoad: foregroundLoad,
-    toast: toast, errText: errText, canWrite: canWrite, reportBlockedWrite: reportBlockedWrite, reportFailedWrite: reportFailedWrite,
+    toast: toast, errText: errText, sfErrText: sfErrText, canWrite: canWrite, reportBlockedWrite: reportBlockedWrite, reportFailedWrite: reportFailedWrite,
     listState: listState, listNotice: listNotice,
     trackRequest: trackRequest, hideLoader: hideLoader, showLoaderNow: showLoaderNow,
     STATUS_HELP: STATUS_HELP, statusHelp: statusHelp,
