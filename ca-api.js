@@ -1074,7 +1074,18 @@
   /* ── orders ── */
   function getOrders(){ return jget('/api/orders').then(function (d) { return d.records || []; }); }
   function getProductionOrders(){ return jget('/api/production-orders').then(function (d) { return d.records || []; }); }
-  function getInbox(){ return jget('/api/inbox').then(function (d) { return d.records || []; }); }
+  /* Returns { records, reprintsUnavailable } rather than a bare array. The
+     endpoint merges two queries -- orders needing a method, and reprints that
+     already have one but no run yet -- and the second FAILS OPEN. The flag is
+     how the screen can say "reprints could not be checked" instead of silently
+     showing a short list as though it were the whole story. One caller
+     (pre-production.html's loadInbox), so this is a contract change rather than
+     a flag smuggled onto an array. */
+  function getInbox(){
+    return jget('/api/inbox').then(function (d) {
+      return { records: (d && d.records) || [], reprintsUnavailable: !!(d && d.reprintsUnavailable) };
+    });
+  }
   function getPreProductionItems(orderId){ return jget('/api/pre-production-items?orderId=' + encodeURIComponent(orderId)).then(function (d) { return d.records || []; }); }
   function patchItem(itemId, fields){ var b = Object.assign({}, fields); var by = workerName(); if (by) b.Last_Updated_By__c = by; return jsend('/api/pre-production-items/' + encodeURIComponent(itemId), 'PATCH', b); }
   function deleteItem(itemId){ return jdel('/api/pre-production-items/' + encodeURIComponent(itemId)); }
