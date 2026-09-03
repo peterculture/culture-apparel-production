@@ -490,6 +490,24 @@ class Component extends DCLogic {
     }),{misprint:0,damaged:0,incomplete:0});
   }
 
+  /* The make-up deep link, in ONE place (B5). The after-submit panel and the
+     automatic navigation must not be able to disagree about where the make-up
+     run gets booked, and two copies of a URL format is how they would.
+
+     index.html?card=<methodId>&makeup=<qty> opens THAT method's drawer with the
+     New Run form up and the shortfall already filled in -- see applyDeepLink()
+     there. Deliberately NOT calendar.html: that was this destination until
+     2026-08-27 and was replaced for cause, because it dropped the manager on a
+     cold week grid with nothing selected, so they had to remember the order,
+     hunt for it and retype the number. Carrying the METHOD id is also what
+     makes this safe on a multi-method order, which calendar.html's commitDrop
+     is not -- it reads ProductionMethods[0] (B5's second open question). */
+  makeupHrefFor(res){
+    return (res && res.methodId)
+      ? ('index.html?card='+encodeURIComponent(res.methodId)+'&makeup='+(Number(res.incompleteTotal)||0))
+      : 'index.html';
+  }
+
   async submit(){
     if(this.state.submitting) return;
     if(this.state.connection!=='live'){ this.setState({err:'Not connected to Salesforce (demo mode) — counts would not be saved.'}); return; }
@@ -524,10 +542,53 @@ class Component extends DCLogic {
       const res = await api.submitRunResults(this.state.runId, payload);
       if(!res || res.ok===false) throw new Error((res&&res.error)||'submit_failed');
       this._overAck=false;
+      /* setState BEFORE the navigation, deliberately. If the browser refuses to
+         leave, or the operator comes back, the panel is already rendered with
+         its "Schedule The Make-Up Run" button -- the automatic jump is a
+         shortcut past that button, never a replacement for it. */
       this.setState({submitting:false, result:res});
+
+      /* ── straight to booking the make-up run (B5, D10's argument one step
+         later) ──────────────────────────────────────────────────────────────
+         Incomplete garments are the one thing leaving this screen with no
+         owner. Misprints and damage are picked up automatically --
+         createReworkIfNeeded builds the reprint from gate 4 -- but incomplete
+         has no automation behind it at all, by design, because those garments
+         are intact on a shelf and need press time on the SAME method, not new
+         blanks. A make-up run nobody books is simply lost stock and a late job.
+
+         ONLY incomplete. A run with misprints and nothing incomplete stays
+         put: the reprint is already in hand and there is nothing to schedule.
+
+         An all-empty submit stays put too, and that one matters. D1 keeps
+         Submit enabled on an untouched form precisely so "I checked and it was
+         fine" is recordable -- if doing that suddenly teleported somebody to a
+         run-creation form, the invariant would start reading as a trap.
+
+         WE ARE PAST THE WRITE. `res` came back and was checked, so the counts
+         are in Salesforce; the catch below never reaches here, which is what
+         keeps a failed submit on screen with the typed numbers intact. The only
+         thing abandoned is the background list refresh, which is a read.
+
+         The trade this makes: the panel's reprint note flashes past unread when
+         a run has both. Accepted -- the reprint is automatic and shows up on
+         the board and the order sheet either way, and the make-up run is the
+         half that disappears if nobody acts. */
+      if((Number(res.incompleteTotal)||0) > 0 && res.methodId){
+        window.location.href = this.makeupHrefFor(res);
+        return;
+      }
       this.bg(()=>this.load());
     }catch(e){
-      const detail=(e&&e.data&&e.data.detail)?(' — '+e.data.detail):'';
+      /* errText(), not e.data.detail directly. A Salesforce REST error body is
+         an ARRAY of {message, errorCode}, so concatenating it produced
+         "Could not save these counts — [object Object]" -- seen while testing
+         B5's failure path. This is the one message a counter reads when their
+         numbers did not save, so it has to say what actually went wrong.
+         Same helper and same defect as the run-create path. */
+      const a=window.CAApi;
+      const det=(a&&a.errText)?a.errText(e):'';
+      const detail=det?(' — '+det):'';
       this.setState({submitting:false, err:'Could not save these counts'+detail+'. Nothing was submitted; the numbers are still here, try again.'});
     }
   }
@@ -856,9 +917,7 @@ class Component extends DCLogic {
       // used to be a bare link to calendar.html, which landed the manager on a
       // cold week grid with nothing selected -- they had to remember the order,
       // hunt for it, and retype the number. See applyDeepLink() in index.html.
-      makeupHref: res.methodId
-        ? ('index.html?card='+encodeURIComponent(res.methodId)+'&makeup='+(Number(res.incompleteTotal)||0))
-        : 'index.html',
+      makeupHref: this.makeupHrefFor(res),
     } : {
       title:'', summary:'', hasReprint:false, reprintMsg:'', hasReworkNote:false, reworkNote:'',
       needsReschedule:false, rescheduleTitle:'', rescheduleMsg:'', makeupHref:'index.html',
