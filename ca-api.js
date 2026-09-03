@@ -2194,6 +2194,48 @@
     return { icon:'ti-photo-off', color:'var(--text-tertiary)', title:'' };
   }
 
+  /* ── a new run sends its method back to Ready for Print ───────────────
+     The server does the actual work (see rewindMethodForNewRun in
+     production-runs/index.js): a run added to a method already In Production,
+     Post-Production or Completed means there is printing left to do, so the
+     method goes back to Ready for Print and Order_Substatus__c follows it via
+     the least-advanced-sibling roll-up.
+
+     This is the part the person who pressed the button needs to see. Four call
+     sites across three boards create runs, and four copies of the wording is
+     how they drift -- so it lives here and returns whether the caller should
+     reload, because on a rewind the card has to visibly move columns.
+
+     THE ONE CASE THE SERVER CANNOT FIX. An order marked Complete with the
+     Complete button is pinned to the Done column by index.html, which reads
+     Order.Status ahead of the method's own status. Rewinding the method is
+     real -- Salesforce now says Ready for Print -- but the card will not move
+     until somebody un-completes the order, so say that plainly rather than
+     leaving them looking at a card that ignored them. Anthony's call
+     (2026-09-03): warn, do not write Order.Status from here. That field has its
+     own single-purpose endpoint, puts the order back on the shipping board and
+     moves the "completed last 7 days" figure on Stats. */
+  function noteRunRewind(res){
+    var rw = res && res.rewind;
+    if (!rw) return false;
+    if (rw.orderIsComplete) {
+      toast('warn', 'Run created. This order is marked Complete, so its card stays in Completed — '
+        + 'un-complete the order before anyone can work the new run.');
+      return false;
+    }
+    if (rw.failed) {
+      toast('warn', 'Run created, but the method could not be sent back to Ready for Print — it still reads '
+        + (rw.from || 'finished') + '. Change it by hand, or the new run has nothing telling anyone to print it.');
+      return false;
+    }
+    if (rw.rewound) {
+      toast('info', 'Run added, so this method is back in Ready for Print (was ' + (rw.from || 'further along')
+        + '). It moves to Post-Production again once the new run is finished.');
+      return true;
+    }
+    return false;
+  }
+
   /* ── the size grid, one garment+colour per row (E1.5) ──
      Turns /api/order-sizes rows (one OrderItem = ONE size of one garment)
      into the grid the printed order sheet and the calendar drawer both show:
@@ -2290,7 +2332,7 @@
     getStationItems: getStationItems, updateItemStatus: updateItemStatus, updateOrderReceiving: updateOrderReceiving,
     getInventory: getInventory, postInventory: postInventory,
     methodGuess: methodGuess,
-    SIZE_ORDER: SIZE_ORDER, text: text, initials: initials, colorForName: colorForName, methodOf: methodOf, dueInfo: dueInfo, parseSfDate: parseSfDate, pivotItems: pivotItems, sizeGrid: sizeGrid, thumbState: thumbState, runFormWindow: runFormWindow, runQtyHint: runQtyHint,
+    SIZE_ORDER: SIZE_ORDER, text: text, initials: initials, colorForName: colorForName, methodOf: methodOf, dueInfo: dueInfo, parseSfDate: parseSfDate, pivotItems: pivotItems, sizeGrid: sizeGrid, noteRunRewind: noteRunRewind, thumbState: thumbState, runFormWindow: runFormWindow, runQtyHint: runQtyHint,
     backgroundLoad: backgroundLoad, foregroundLoad: foregroundLoad,
     toast: toast, errText: errText, sfErrText: sfErrText, canWrite: canWrite, reportBlockedWrite: reportBlockedWrite, reportFailedWrite: reportFailedWrite,
     listState: listState, listNotice: listNotice,
