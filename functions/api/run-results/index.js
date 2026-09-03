@@ -37,6 +37,7 @@ import { runQuery, sfFetch, apiVersion, jsonError, soqlQuote, soqlQuoteList } fr
 import { requireCap } from "../_session.js";
 import { orderIdForMethod } from "../_print-date-rollup.js";
 import { createReworkIfNeeded } from "../_rework.js";
+import { runQueryOptionalField } from "../_placements.js";
 
 const RUN_OBJECT = "Production_Run__c";
 const LINE_OBJECT = "Production_Run_Line_Items__c";
@@ -73,6 +74,11 @@ const LIST_LIMIT = 200;
    stripped apostrophes and let backslashes through -- a trailing "\\"
    escaped the closing quote and killed the query. Local aliases so every
    call site below reads unchanged. */
+/* Single-select on Production_Run__c; the placement this run prints. Kept
+   out of RUN_RESULT_FIELDS deliberately -- see the query in
+   getCountableRuns() for why. */
+const PR_LOCATION_FIELD = "Print_Location__c";
+
 const q = soqlQuote;
 const quoteList = soqlQuoteList;
 
@@ -183,13 +189,24 @@ export async function onRequestGet({ request, env }) {
  * them nowhere to go. The client splits the list into tabs.
  */
 async function getCountableRuns(env, url) {
-  const soql =
-    `SELECT ${RUN_BASE_FIELDS.concat(RUN_RESULT_FIELDS).join(", ")} FROM ${RUN_OBJECT} ` +
+  /* Print_Location__c rides along through runQueryOptionalField, NOT in
+     RUN_RESULT_FIELDS. That group is all-or-nothing on purpose (see its
+     comment above): without Result_Status__c there is nothing to submit, so a
+     missing field there should take the whole endpoint to available:false
+     rather than half-work. Placement is the opposite kind of field -- a label
+     on a panel. It is created by hand per org (see _placements.js) and trap 1
+     applies with full force: naming it in a plain SELECT where the integration
+     user cannot see it does not blank one column, it makes the entire query a
+     parse error and empties the counting screen. So the helper tries it, and
+     retries without it only when the failure actually names that field. An org
+     without it shows "Placement not recorded" and keeps every number. */
+  const buildSoql = (include) =>
+    `SELECT ${RUN_BASE_FIELDS.concat(RUN_RESULT_FIELDS, include ? [PR_LOCATION_FIELD] : []).join(", ")} FROM ${RUN_OBJECT} ` +
     `WHERE PrintMethod__c IN (` +
     `SELECT Id FROM Production_Method__c WHERE Status__c IN (${quoteList(COUNTABLE_METHOD_STATUSES)})` +
     `) ORDER BY Scheduled_Start__c DESC NULLS LAST LIMIT ${LIST_LIMIT}`;
 
-  const runs = await runQuery(env, soql);
+  const runs = await runQueryOptionalField(env, buildSoql, PR_LOCATION_FIELD);
   if (!runs.ok) return notAvailable(describeQueryFailure(runs));
   if (!runs.records.length) {
     return Response.json({ available: true, records: [] }, { headers: { "Cache-Control": "no-store" } });
@@ -246,6 +263,11 @@ async function getCountableRuns(env, url) {
       customer: o && o.Account ? o.Account.Name : null,
       dueDate: o ? o.Customer_Facing_Delivery_Date__c : null,
       pressName: r.Press__r ? r.Press__r.Name : null,
+      /* B4. Null covers both "this org has no Print_Location__c" and "this run
+         has no placement set" -- the screen says "Placement not recorded" for
+         both, because from a counter's side they are the same fact: nobody
+         wrote down which pass this was. */
+      placement: r[PR_LOCATION_FIELD] || null,
       scheduledStart: r.Scheduled_Start__c,
       actualEnd: r.Actual_End__c,
       scheduledQty: r[RUN_QTY_FIELD],
