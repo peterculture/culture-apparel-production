@@ -214,6 +214,24 @@ window.__resources = Object.assign({}, window.__resources, {
           </div>
         </sc-if>
 
+        <!-- Other placements on THIS method (B4). Separate panel from the
+             one above: that is about other methods on the order, this is
+             about the other passes of this same method. Read-only. -->
+        <sc-if value="{{hasPlacementSibs}}" hint-placeholder-val="{{ true }}">
+          <div style="background:var(--surface-raised);border:1px solid var(--border-subtle);border-radius:13px;padding:14px 16px;margin-bottom:12px">
+            <div style="font:600 9px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px">Other passes on this method</div>
+            <sc-for list="{{placementRows}}" as="p" hint-placeholder-count="2">
+              <div style="display:flex;align-items:baseline;gap:10px;padding:6px 0;border-top:1px solid var(--border-card)">
+                <span style="font:600 11px/1.3 'Oswald';letter-spacing:.03em;color:var(--text-primary);min-width:104px">{{p.label}}</span>
+                <span style="font:400 11px/1.4 'Archivo';color:{{p.detailColor}}">{{p.detail}}</span>
+              </div>
+            </sc-for>
+            <div style="margin-top:10px;padding-top:9px;border-top:1px solid var(--border-card);font:400 11px/1.5 'Archivo';color:var(--text-tertiary)">
+              This order so far: <span style="color:var(--text-secondary)">{{orderLossLabel}}</span>. Shown for reference — a garment ruined on another pass is already counted against this order, so do not re-enter it here.
+            </div>
+          </div>
+        </sc-if>
+
         <div style="display:flex;gap:11px;align-items:flex-start;background:#12100B;border:1px solid #3A2E12;border-radius:13px;padding:14px 16px;margin-bottom:14px">
           <i class="ti ti-info-circle" style="color:#C9923A;font-size:17px;flex-shrink:0;margin-top:1px"></i>
           <div style="font:400 12px/1.6 'Archivo';color:#C7BCA4">Record <strong style="color:#ECEAE4">only what went wrong</strong>. Leave a row blank if it came off the press fine — that's normal and expected. <strong style="color:#ECEAE4">Incomplete</strong> means garments that never made it onto the press; those get rescheduled, not reordered.</div>
@@ -685,6 +703,66 @@ class Component extends DCLogic {
       .map(m=>incByMethod[m]+' '+m.toLowerCase()+' garment'+(incByMethod[m]===1?'':'s'))
       .join(' · ');
     const sibMethodLabel = [...new Set(sibs.map(x=>txt(x.methodType)).filter(Boolean))].join(' · ');
+
+    /* ── …AND WHAT THE OTHER PLACEMENTS ON *THIS* METHOD FOUND (B4) ────────
+       Extends the block above; every rule in it still applies, D5 first among
+       them -- nothing below reaches this.totals() or the submit payload.
+
+       WHY IT IS A SECOND SET AND NOT A WIDER FILTER. `sibs` deliberately
+       excludes the open run's own method, because the make-up banner and the
+       "Also on this order" label are statements about a DIFFERENT method and
+       both would start lying if same-method runs leaked into them. So this is a
+       separate list rather than a relaxed one.
+
+       WHY IT IS NEEDED NOW. The skeleton Flow became placement-aware in dev2 on
+       2026-09-03 (B4 / D11), so a Front+Back method is one run per placement,
+       each with its own full set of line items and its own misprint and damaged
+       counts. Before that the second placement's run had no rows at all and
+       there was nothing to show. Now there is, and counting the Back pass told
+       you nothing about what the Front pass already found.
+
+       INCOMPLETE IS DELIBERATELY ABSENT HERE. It stays in the make-up banner
+       above, which is about press time owed on this method, and folding
+       placements into that count would change what the banner's wording means.
+       Misprint and damaged are the two that matter across placements: they are
+       spent garments, and the same physical shirt ruined on the Front pass is
+       not available for the Back pass.
+
+       Grouped by placement rather than listed per run, so a make-up run on a
+       placement folds into that placement's line instead of appearing as a
+       mystery second "Front". */
+    const methodSibs = (openRun && openRun.methodId)
+      ? (st.runs||[]).filter(x=>x.methodId===openRun.methodId && x.id!==openRun.id)
+      : [];
+    const placeMap = {}; const placeOrder = [];
+    methodSibs.forEach(x=>{
+      const label = txt(x.placement) || 'Placement not recorded';
+      let g = placeMap[label];
+      if(!g){ g = placeMap[label] = { label, misprint:0, damaged:0, counted:true }; placeOrder.push(label); }
+      g.misprint += Number(x.totalMisprint)||0;
+      g.damaged  += Number(x.totalDamaged)||0;
+      // "counted and clean" and "nobody has counted it" are different facts and
+      // must not read the same -- Result_Status__c is the only evidence a human
+      // counted anything (D1), so it is what decides the wording.
+      if(x.resultStatus!=='Submitted') g.counted = false;
+    });
+    const placementRows = placeOrder.map(k=>{
+      const g = placeMap[k];
+      const loss = [g.misprint?g.misprint+' misprinted':null, g.damaged?g.damaged+' damaged':null].filter(Boolean).join(' · ');
+      return { label:g.label, hasLoss:!!loss,
+               detail: loss || (g.counted ? 'counted, nothing recorded' : 'not counted yet'),
+               detailColor: loss ? 'var(--danger-text)' : 'var(--text-muted)' };
+    });
+    /* The order's running total, across every run on it -- all methods, all
+       placements, including this one's own saved figures. Safe to add up
+       because these are per-RUN roll-ups; Order.TotalQtyMisprints__c is an
+       order-level roll-up repeated onto every sibling and would multiply. */
+    const orderRuns = (openRun && openRun.orderId)
+      ? (st.runs||[]).filter(x=>x.orderId===openRun.orderId) : [];
+    const orderMisprint = orderRuns.reduce((a,x)=>a+(Number(x.totalMisprint)||0),0);
+    const orderDamaged  = orderRuns.reduce((a,x)=>a+(Number(x.totalDamaged)||0),0);
+    const orderLossLabel = [orderMisprint?orderMisprint+' misprinted':null, orderDamaged?orderDamaged+' damaged':null]
+      .filter(Boolean).join(' · ') || 'nothing recorded yet';
     const t=this.totals();
     /* ── sizes this run is not printing ──────────────────────────────────
        A row whose Planned_Qty__c is exactly 0 is a manager's recorded
@@ -829,6 +907,12 @@ class Component extends DCLogic {
          because they answer different questions -- what was already ruined on
          this order (reference), and what is still owed on another method (an
          action for somebody). Either can be true without the other. */
+      /* B4. Separate from hasSiblings on purpose: one is about other METHODS
+         on the order, this is about other PLACEMENTS on this method. A job can
+         have either, both or neither. */
+      hasPlacementSibs: placementRows.length>0,
+      placementRows,
+      orderLossLabel,
       hasSiblings: sibs.length>0,
       siblingMethodLabel: sibMethodLabel,
       hasSiblingLoss: (sibMisprint+sibDamaged)>0,
