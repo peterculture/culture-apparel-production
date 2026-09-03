@@ -126,7 +126,7 @@ window.__resources = Object.assign({}, window.__resources, {
           <div onClick="{{ o.onOpen }}" style="display:flex;background:{{o.cardBg}};border:1px solid {{o.cardBorder}};border-radius:11px;overflow:hidden;cursor:pointer;transition:border-color .12s,transform .12s" style-hover="border-color:#3a3a40;transform:translateY(-1px)">
             <div style="width:6px;background:{{o.urgColor}};flex-shrink:0"></div>
             <sc-if value="{{o.hasThumb}}" hint-placeholder-val="{{ false }}">{{o.thumbNode}}</sc-if>
-            <sc-if value="{{o.noThumb}}" hint-placeholder-val="{{ true }}"><div style="width:64px;flex-shrink:0;align-self:stretch;background:#1c1c20;border-right:1px solid #2a2a2f;display:flex;align-items:center;justify-content:center"><i class="ti ti-photo-off" style="color:var(--text-tertiary);font-size:24px"></i></div></sc-if>
+            <sc-if value="{{o.noThumb}}" hint-placeholder-val="{{ true }}"><div title="{{o.thumbTitle}}" style="width:64px;flex-shrink:0;align-self:stretch;background:#1c1c20;border-right:1px solid #2a2a2f;display:flex;align-items:center;justify-content:center"><i class="ti {{o.thumbIcon}}" style="color:{{o.thumbColor}};font-size:24px"></i></div></sc-if>
             <div style="padding:13px 14px;flex:1;min-width:0;display:flex;flex-direction:column;gap:10px">
               <div style="display:flex;align-items:flex-start;gap:8px">
                 <div style="min-width:0">
@@ -564,7 +564,7 @@ window.__resources = Object.assign({}, window.__resources, {
             <div style="display:flex;background:{{o.cardBg}};border:1px solid {{o.cardBorder}};border-radius:12px;overflow:hidden">
               <div style="width:5px;background:{{o.urgColor}};flex-shrink:0"></div>
               <sc-if value="{{o.hasThumb}}" hint-placeholder-val="{{ false }}">{{o.thumbNode}}</sc-if>
-              <sc-if value="{{o.noThumb}}" hint-placeholder-val="{{ true }}"><div style="width:64px;flex-shrink:0;align-self:stretch;background:#1c1c20;border-right:1px solid #2a2a2f;display:flex;align-items:center;justify-content:center"><i class="ti ti-photo-off" style="color:var(--text-tertiary);font-size:24px"></i></div></sc-if>
+              <sc-if value="{{o.noThumb}}" hint-placeholder-val="{{ true }}"><div title="{{o.thumbTitle}}" style="width:64px;flex-shrink:0;align-self:stretch;background:#1c1c20;border-right:1px solid #2a2a2f;display:flex;align-items:center;justify-content:center"><i class="ti {{o.thumbIcon}}" style="color:{{o.thumbColor}};font-size:24px"></i></div></sc-if>
               <div style="padding:15px 16px;flex:1;min-width:0;display:flex;flex-direction:column;gap:11px">
                 <div><div style="font:600 16px/1.1 'Oswald';color:#ECEAE4">{{o.customer}}</div><div style="font:400 10px/1 'Archivo';color:var(--text-muted);margin-top:5px">{{o.num}} · {{o.account}}</div></div>
                 <div style="display:flex;align-items:center;gap:8px"><span style="font:600 12px/1 'Oswald';color:#ECEAE4;background:#1e1e22;border-radius:5px;padding:4px 8px">{{o.qty}} pcs</span><span style="display:inline-flex;align-items:center;gap:5px;font:600 10px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:{{o.urgColor}}"><i class="ti {{o.urgIcon}}"></i>{{o.dueLabel}}</span></div>
@@ -581,7 +581,7 @@ window.__resources = Object.assign({}, window.__resources, {
         <button onClick="{{ onBackToInbox }}" style="display:inline-flex;align-items:center;gap:6px;font:600 10px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:var(--text-tertiary);background:transparent;border:1px solid #242428;border-radius:8px;padding:8px 12px;cursor:pointer;margin-bottom:16px"><i class="ti ti-chevron-left"></i>All incoming</button>
         <div style="display:flex;align-items:center;gap:16px;background:#0D0D0F;border:1px solid #1f1f23;border-left:4px solid #C6372B;border-radius:12px;padding:16px 18px;margin-bottom:22px">
           <sc-if value="{{mgrOrder.hasThumb}}" hint-placeholder-val="{{ false }}">{{mgrOrder.thumbNode}}</sc-if>
-          <sc-if value="{{mgrOrder.noThumb}}" hint-placeholder-val="{{ true }}"><div style="width:96px;height:96px;flex-shrink:0;border-radius:11px;background:#1c1c20;border:1px solid #2a2a2f;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px"><i class="ti ti-photo-off" style="color:var(--text-tertiary);font-size:26px"></i><span style="font:600 8px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted)">No Mockup</span></div></sc-if>
+          <sc-if value="{{mgrOrder.noThumb}}" hint-placeholder-val="{{ true }}"><div title="{{mgrOrder.thumbTitle}}" style="width:96px;height:96px;flex-shrink:0;border-radius:11px;background:#1c1c20;border:1px solid #2a2a2f;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px"><i class="ti {{mgrOrder.thumbIcon}}" style="color:{{mgrOrder.thumbColor}};font-size:26px"></i><span style="font:600 8px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted)">No Mockup</span></div></sc-if>
           <div style="min-width:0">
             <div style="font:600 19px/1.1 'Oswald';color:#ECEAE4">{{mgrOrder.customer}}</div>
             <div style="font:400 12px/1 'Archivo';color:var(--text-muted);margin-top:6px">{{mgrOrder.num}} · {{mgrOrder.account}} · {{mgrOrder.qty}} pcs</div>
@@ -2216,6 +2216,13 @@ class Component extends DCLogic {
       const mockupUrl=r.DesignMockupUrl||null;
       return { id, num:t(r.GOA_Order_Number__c)||r.OrderNumber||id, customer:t(r.Customer_Order_Name__c)||t(r.Account&&r.Account.Name)||'—', account:t(r.Account&&r.Account.Name)||'', qty:piv.qty, dueLabel:due.label, urgColor:UC[due.urg]||UC.ok, urgIcon:(window.CAApi.URG_ICON && window.CAApi.URG_ICON[due.urg])||'ti-clock-hour-4', cardBg:ucs.bg, cardBorder:ucs.border,
         mockupUrl, hasThumb: !!mockupUrl && !st.thumbErr[id], noThumb: !mockupUrl || !!st.thumbErr[id],
+        /* B1: 'no mockup' and 'mockup we could not fetch' used to render the
+           same grey ti-photo-off. thumbState() in ca-api.js splits them --
+           calm for absent, a warning for a link that exists and failed. */
+        ...(function(){ var t=(window.CAApi&&window.CAApi.thumbState)
+            ? window.CAApi.thumbState(mockupUrl, !!st.thumbErr[id])
+            : {icon:'ti-photo-off', color:'var(--text-tertiary)', title:''};
+          return { thumbIcon:t.icon, thumbColor:t.color, thumbTitle:t.title }; })(),
         // try/catch mirrors the board's copy -- a throwing fallback handler
         // must never leave a card stuck showing a dead <img> forever.
         onThumbErr: ()=>{ try{ this.setState(s2=>({thumbErr:Object.assign({},s2.thumbErr,{[id]:true})})); }catch(err){ console.error('onThumbErr failed for inbox order', id, err); } },
@@ -2270,6 +2277,13 @@ class Component extends DCLogic {
         const mu=ord.mockupUrl||null;
         mgrOrder={num:ord.num,customer:ord.customer,account:ord.account,qty:ord.qty,
           mockupUrl:mu, hasThumb: !!mu && !st.thumbErr[st.mgrId], noThumb: !mu || !!st.thumbErr[st.mgrId],
+          /* B1: 'no mockup' and 'mockup we could not fetch' used to render the
+             same grey ti-photo-off. thumbState() in ca-api.js splits them --
+             calm for absent, a warning for a link that exists and failed. */
+          ...(function(){ var t=(window.CAApi&&window.CAApi.thumbState)
+              ? window.CAApi.thumbState(mu, !!st.thumbErr[st.mgrId])
+              : {icon:'ti-photo-off', color:'var(--text-tertiary)', title:''};
+            return { thumbIcon:t.icon, thumbColor:t.color, thumbTitle:t.title }; })(),
           onThumbErr: ()=>{ try{ const oid=st.mgrId; this.setState(s2=>({thumbErr:Object.assign({},s2.thumbErr,{[oid]:true})})); }catch(err){ console.error('onThumbErr failed for set-up header', st.mgrId, err); } },
           thumbNode: (!!mu && !st.thumbErr[st.mgrId] && window.CAApi && window.CAApi.mockupThumb) ? window.CAApi.mockupThumb(mu, window.CAApi.THUMB_PANEL, ()=>{ try{ const oid=st.mgrId; this.setState(s2=>({thumbErr:Object.assign({},s2.thumbErr,{[oid]:true})})); }catch(_){} }, (window.CAApi.mockupClick)?window.CAApi.mockupClick(mu,(ord.customer||'')+' - '+(ord.num||'')):null, 'Mockup') : null,
           onMockupOpen: (window.CAApi&&window.CAApi.mockupClick)?window.CAApi.mockupClick(mu,(ord.customer||'')+' - '+(ord.num||'')):null };
@@ -2587,6 +2601,13 @@ class Component extends DCLogic {
         // Public) fails silently as a blank box otherwise, since there's no
         // alt text to fall back to.
         hasThumb: !!o.mockupUrl && !st.thumbErr[o.id], noThumb: !o.mockupUrl || !!st.thumbErr[o.id],
+        /* B1: 'no mockup' and 'mockup we could not fetch' used to render the
+           same grey ti-photo-off. thumbState() in ca-api.js splits them --
+           calm for absent, a warning for a link that exists and failed. */
+        ...(function(){ var t=(window.CAApi&&window.CAApi.thumbState)
+            ? window.CAApi.thumbState(o.mockupUrl, !!st.thumbErr[o.id])
+            : {icon:'ti-photo-off', color:'var(--text-tertiary)', title:''};
+          return { thumbIcon:t.icon, thumbColor:t.color, thumbTitle:t.title }; })(),
         // try/catch added 2026-08-11 -- see index.html's copy of this same
         // fix for why: a broken fallback handler must never leave a card
         // stuck showing a dead <img> forever.
