@@ -363,6 +363,27 @@ window.__resources = Object.assign({}, window.__resources, {
           </div>
         </div>
 
+        <!-- The collapse ENDS here now (B6b). Production Runs used to sit
+             inside it, which was right while Post-Production meant "the
+             printing is finished, permanently". B5 and B6 changed that: a
+             method in Post-Production can legitimately need another run --
+             a make-up run for garments that never reached the press -- and
+             stopTimer() puts a method HERE the moment its last run ends. So
+             the one status a make-up run is most likely to be booked from
+             was the one status with no button to book it, and B5's deep link
+             (index.html?card=&makeup=) opened a drawer with no form in it.
+
+             Only the runs section comes back. Specifications, the checklist,
+             misprints and the rest stay collapsed -- the packing bench still
+             does not need press-time detail, and that half of the decision
+             was never wrong. The shortfall banner comes with it deliberately:
+             "N garments never made it to the press" is most useful exactly
+             here, on the card that just finished. -->
+        </sc-if>
+
+        <!-- Production Runs: OUTSIDE the Post-Production collapse above.
+             Visible at every stage this board covers, so a make-up run can be
+             booked from the status a method actually lands in. See B6b. -->
         <div>
           <sc-if value="{{open.hasShortfall}}" hint-placeholder-val="{{ false }}">
             <div style="background:#241C0A;border:1px solid #5E4A14;border-radius:11px;padding:14px 15px;margin-bottom:13px">
@@ -550,7 +571,6 @@ window.__resources = Object.assign({}, window.__resources, {
             <sc-if value="{{open.runsEmpty}}" hint-placeholder-val="{{ true }}"><div style="font:400 11px/1.4 'Archivo';color:var(--text-faint);padding:2px">No production runs created for this method yet.</div></sc-if>
           </div>
         </div>
-        </sc-if>
 
         <div>
           <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:11px">Shipping &amp; Delivery</div>
