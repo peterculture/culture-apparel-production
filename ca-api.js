@@ -2168,6 +2168,32 @@
     };
   }
 
+  /* ── "no mockup" is not "mockup we could not fetch" (B1) ──────────────
+     Both boards rendered one placeholder for both: the same ti-photo-off in
+     the same muted grey whether the order had never had a mockup or had one
+     that failed to load. 3 of the 5 most recent staging orders have no
+     Mockup_URL__c at all -- that is normal, and a fault icon on all of them
+     would cry wolf until nobody looked. A mockup that EXISTS and did not load
+     is a defect somebody can act on, and it looked identical.
+
+     Same distinction E4.5 drew for board lists (loading vs empty vs error),
+     applied to the thumbnail. Shared here because six render sites across two
+     pages need the same answer, and a seventh copy is how they drift.
+
+     @param {string|null} mockupUrl - the order's DesignMockupUrl, or null.
+     @param {boolean} failed - the <img> onError already fired for this card. */
+  function thumbState(mockupUrl, failed){
+    if (!mockupUrl) {
+      return { icon:'ti-photo-off', color:'var(--text-tertiary)',
+               title:'No mockup on this order yet' };
+    }
+    if (failed) {
+      return { icon:'ti-alert-triangle', color:'var(--warn)',
+               title:'This order has a mockup, but it could not be loaded. The link on the Design record may be dead.' };
+    }
+    return { icon:'ti-photo-off', color:'var(--text-tertiary)', title:'' };
+  }
+
   /* ── the size grid, one garment+colour per row (E1.5) ──
      Turns /api/order-sizes rows (one OrderItem = ONE size of one garment)
      into the grid the printed order sheet and the calendar drawer both show:
@@ -2264,7 +2290,7 @@
     getStationItems: getStationItems, updateItemStatus: updateItemStatus, updateOrderReceiving: updateOrderReceiving,
     getInventory: getInventory, postInventory: postInventory,
     methodGuess: methodGuess,
-    SIZE_ORDER: SIZE_ORDER, text: text, initials: initials, colorForName: colorForName, methodOf: methodOf, dueInfo: dueInfo, parseSfDate: parseSfDate, pivotItems: pivotItems, sizeGrid: sizeGrid, runFormWindow: runFormWindow, runQtyHint: runQtyHint,
+    SIZE_ORDER: SIZE_ORDER, text: text, initials: initials, colorForName: colorForName, methodOf: methodOf, dueInfo: dueInfo, parseSfDate: parseSfDate, pivotItems: pivotItems, sizeGrid: sizeGrid, thumbState: thumbState, runFormWindow: runFormWindow, runQtyHint: runQtyHint,
     backgroundLoad: backgroundLoad, foregroundLoad: foregroundLoad,
     toast: toast, errText: errText, sfErrText: sfErrText, canWrite: canWrite, reportBlockedWrite: reportBlockedWrite, reportFailedWrite: reportFailedWrite,
     listState: listState, listNotice: listNotice,
