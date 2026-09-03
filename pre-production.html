@@ -553,12 +553,13 @@ window.__resources = Object.assign({}, window.__resources, {
     <div style="max-width:920px;margin:0 auto;padding:24px 26px 70px">
       <sc-if value="{{mgrShowInbox}}" hint-placeholder-val="{{ true }}">
         <div style="font:600 12px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:6px">Incoming orders</div>
-        <div style="font:400 12px/1.4 'Archivo';color:var(--text-muted);margin-bottom:18px">Orders in pre-production with no production method yet. Set one up to create its production plan.</div>
+        <div style="font:400 12px/1.4 'Archivo';color:var(--text-muted);margin-bottom:18px">Orders in pre-production with no production method yet — plus reprints, which arrive with their method already mirrored and only need press time booked.</div>
         <div style="position:relative;max-width:380px;margin-bottom:18px">
           <i class="ti ti-search" style="position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--text-faint);font-size:15px"></i>
           <input value="{{mgrQ}}" onInput="{{ onMgrSearch }}" placeholder="Search order #, customer, account…" style="width:100%;background:#121215;border:1px solid #242428;border-radius:9px;padding:11px 13px 11px 36px;font-size:13px;color:#ECEAE4;outline:none">
         </div>
         <sc-if value="{{mgrHasMsg}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:7px;font:600 11px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:#BBD382;background:#18230D;border:1px solid #3D5418;border-radius:9px;padding:10px 13px;margin-bottom:16px"><i class="ti ti-check"></i>{{mgrMsg}}</div></sc-if>
+        <sc-if value="{{inboxReprintsUnavailable}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:flex-start;gap:9px;border:1px solid #5E4214;background:#241C0A;border-radius:10px;padding:11px 13px;margin-bottom:12px;font:400 11px/1.5 'Archivo';color:#C7BCA4"><i class="ti ti-alert-triangle" style="color:var(--warn);font-size:15px;flex-shrink:0;margin-top:1px"></i><div>Orders needing a method are listed below, but <strong style="color:var(--text-primary)">reprints could not be checked</strong> — if one is waiting for press time it will not appear here until this clears.</div></div></sc-if>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
           <sc-for list="{{inbox}}" as="o" hint-placeholder-count="3">
             <div style="display:flex;background:{{o.cardBg}};border:1px solid {{o.cardBorder}};border-radius:12px;overflow:hidden">
@@ -568,11 +569,18 @@ window.__resources = Object.assign({}, window.__resources, {
               <div style="padding:15px 16px;flex:1;min-width:0;display:flex;flex-direction:column;gap:11px">
                 <div><div style="font:600 16px/1.1 'Oswald';color:#ECEAE4">{{o.customer}}</div><div style="font:400 10px/1 'Archivo';color:var(--text-muted);margin-top:5px">{{o.num}} · {{o.account}}</div></div>
                 <div style="display:flex;align-items:center;gap:8px"><span style="font:600 12px/1 'Oswald';color:#ECEAE4;background:#1e1e22;border-radius:5px;padding:4px 8px">{{o.qty}} pcs</span><span style="display:inline-flex;align-items:center;gap:5px;font:600 10px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:{{o.urgColor}}"><i class="ti {{o.urgIcon}}"></i>{{o.dueLabel}}</span></div>
-                <button onClick="{{ o.onPick }}" style="margin-top:2px;width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;font:700 11px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#fff;background:#C6372B;border:none;border-radius:9px;padding:12px;cursor:pointer" style-hover="filter:brightness(1.1)"><i class="ti ti-tools"></i>Begin Set-up</button>
+                                <sc-if value="{{o.isReprint}}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;align-items:flex-start;gap:7px;background:#241C0A;border:1px solid #5E4214;border-radius:9px;padding:8px 10px">
+                    <i class="ti ti-refresh" style="color:var(--warn);font-size:14px;flex-shrink:0;margin-top:1px"></i>
+                    <div style="font:400 10px/1.45 'Archivo';color:#C7BCA4">Reprint — its method is already set up (<span style="color:var(--text-primary)">{{o.reprintMethodLabel}}</span>). It needs press time booked, not a new method.</div>
+                  </div>
+                </sc-if>
+<button onClick="{{ o.onPick }}" style="margin-top:2px;width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;font:700 11px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#fff;background:#C6372B;border:none;border-radius:9px;padding:12px;cursor:pointer" style-hover="filter:brightness(1.1)"><i class="ti {{o.pickIcon}}" style="font-size:14px"></i>{{o.pickLabel}}</button>
               </div>
             </div>
           </sc-for>
         </div>
+        <sc-if value="{{inboxFailed}}" hint-placeholder-val="{{ false }}"><div style="border:1px dashed var(--danger-border);border-radius:12px;padding:40px 20px;text-align:center;font:400 13px/1.5 'Archivo';color:var(--danger-text)">Could not load the inbox. This is not "nothing to route" — the list could not be fetched at all. Check the connection and refresh.</div></sc-if>
         <sc-if value="{{inboxEmpty}}" hint-placeholder-val="{{ false }}"><div style="border:1px dashed #2a2a2f;border-radius:12px;padding:40px 20px;text-align:center;font:400 13px/1.5 'Archivo';color:var(--text-faint)">No orders waiting for a production method. (Empty in demo mode — live once deployed against Salesforce.)</div></sc-if>
         <sc-if value="{{inboxNoMatches}}" hint-placeholder-val="{{ false }}"><div style="border:1px dashed #2a2a2f;border-radius:12px;padding:40px 20px;text-align:center;font:400 13px/1.5 'Archivo';color:var(--text-faint)">No incoming orders match "{{mgrQ}}".</div></sc-if>
       </sc-if>
@@ -934,7 +942,7 @@ class Component extends DCLogic {
       // requires that person's real PIN via POST /api/worker-login first.
       gatePin:'', gateErr:'', gateSubmitting:false, gateShake:false,
       orders:[], connection:'loading', q:'', openId:null, ppItemsById:{}, weekMode:'all', pickDate:'',
-      view:'board', inbox:[], inboxLoaded:false, mgrId:null, mgrSource:null, mgrMultiMethod:false, form:null, planResults:[], submitting:false, mgrErr:'', mgrMsg:'',
+      view:'board', inbox:[], inboxLoaded:false, inboxFailed:false, inboxReprintsUnavailable:false, mgrId:null, mgrSource:null, mgrMultiMethod:false, form:null, planResults:[], submitting:false, mgrErr:'', mgrMsg:'',
       // Order name / order number search for the Management inbox list
       // (separate from the board's own `q` above -- different view, own
       // box). See openMgr()/mgrVals() below.
@@ -1291,7 +1299,22 @@ class Component extends DCLogic {
   // Drops ?view=mgr (and the one-shot addMethodForOrder deep-link param, so
   // a refresh after backing out doesn't re-open the form for that order).
   closeMgr(){ this.setState({view:'board', mgrId:null, mgrMultiMethod:false, createdPanel:null, runTarget:null, runModalOpen:false}); const a=window.CAApi; if(a&&a.writeParams) a.writeParams({view:null, addMethodForOrder:null}); }
-  async loadInbox(){ if(!this._api) this._api=window.CAApi; if(!this._api || this.state.connection!=='live'){ this.setState({inbox:[], inboxLoaded:true}); return; } try{ const recs=await this._api.getInbox(); this.setState({inbox:recs, inboxLoaded:true}); }catch(_){ this.setState({inbox:[], inboxLoaded:true}); } }
+  /* E4.5: a failed fetch used to setState({inbox:[], inboxLoaded:true}) which
+     renders as inboxEmpty -- "nothing waiting to be routed" -- when what
+     actually happened is that we could not ask. inboxFailed tells those apart.
+     Loading was already safe: inboxEmpty requires inboxLoaded, so a fetch in
+     flight shows nothing rather than an empty-state message. */
+  async loadInbox(){
+    if(!this._api) this._api=window.CAApi;
+    if(!this._api || this.state.connection!=='live'){ this.setState({inbox:[], inboxLoaded:true, inboxFailed:false}); return; }
+    try{
+      const res=await this._api.getInbox();
+      this.setState({ inbox:res.records, inboxReprintsUnavailable:!!res.reprintsUnavailable,
+                      inboxLoaded:true, inboxFailed:false });
+    }catch(_){
+      this.setState({inbox:[], inboxLoaded:true, inboxFailed:true, inboxReprintsUnavailable:false});
+    }
+  }
   pickInbox(id){
     const rec=(this.state.inbox||[]).find(r=>r.Id===id)||{};
     const api=this._api||window.CAApi; const t=(v)=>(api&&api.text?api.text(v):(v||''));
@@ -2220,6 +2243,10 @@ class Component extends DCLogic {
       // order that fails to load here stays failed if it later shows up on the
       // board without a reload.
       const mockupUrl=r.DesignMockupUrl||null;
+      /* First non-cancelled mirrored method. A reprint of a two-method order
+         gets one per affected method; scheduling starts with the first and the
+         card returns for the rest until every one has a run. */
+      const reprintMethod=(r.ProductionMethods||[]).filter(m=>m && m.Status__c!=='Cancelled')[0]||null;
       return { id, num:t(r.GOA_Order_Number__c)||r.OrderNumber||id, customer:t(r.Customer_Order_Name__c)||t(r.Account&&r.Account.Name)||'—', account:t(r.Account&&r.Account.Name)||'', qty:piv.qty, dueLabel:due.label, urgColor:UC[due.urg]||UC.ok, urgIcon:(window.CAApi.URG_ICON && window.CAApi.URG_ICON[due.urg])||'ti-clock-hour-4', cardBg:ucs.bg, cardBorder:ucs.border,
         mockupUrl, hasThumb: !!mockupUrl && !st.thumbErr[id], noThumb: !mockupUrl || !!st.thumbErr[id],
         /* B1: 'no mockup' and 'mockup we could not fetch' used to render the
@@ -2235,7 +2262,25 @@ class Component extends DCLogic {
         /* Node, not <img src="{{...}}"> -- see mockupThumb() in ca-api.js. */
         thumbNode: (!!mockupUrl && !st.thumbErr[id] && window.CAApi && window.CAApi.mockupThumb) ? window.CAApi.mockupThumb(mockupUrl, window.CAApi.THUMB_CARD, ()=>{ try{ this.setState(s2=>({thumbErr:Object.assign({},s2.thumbErr,{[id]:true})})); }catch(_){} }, (window.CAApi.mockupClick)?window.CAApi.mockupClick(mockupUrl,(t(r.Customer_Order_Name__c)||'')+' - '+(t(r.GOA_Order_Number__c)||r.OrderNumber||'')):null) : null,
         onMockupOpen: (window.CAApi&&window.CAApi.mockupClick)?window.CAApi.mockupClick(mockupUrl,(t(r.Customer_Order_Name__c)||'')+' - '+(t(r.GOA_Order_Number__c)||r.OrderNumber||'')):null,
-        onPick:()=>this.pickInbox(id) };
+        /* A reprint already HAS its method -- _rework.js mirrored it from the
+           one that was misprinted -- so it must not be offered "create the
+           first method". Straight to the run panel against that method
+           instead, via the same openRunModalForCard() the board drawer uses;
+           its comment says it works regardless of entry point, and the modal
+           only ever reads pmId/orderId/methodLabel off createdPanel. An
+           ordinary inbox order is untouched and still goes to pickInbox. */
+        isReprint: !!r.IsReprint,
+        pickLabel: r.IsReprint ? 'Schedule Production Run' : 'Route This Order',
+        pickIcon: r.IsReprint ? 'ti-calendar-plus' : 'ti-arrow-right',
+        reprintMethodLabel: reprintMethod
+          ? (reprintMethod.Type__c || 'Method') + (reprintMethod.Placements && reprintMethod.Placements.length
+              ? ' – ' + reprintMethod.Placements.join(' + ') : '')
+          : '',
+        onPick: (r.IsReprint && reprintMethod)
+          ? (()=>this.openRunModalForCard(reprintMethod.Id, id, (reprintMethod.Type__c||'Method')
+              + ((reprintMethod.Placements&&reprintMethod.Placements.length)?(' – '+reprintMethod.Placements.join(' + ')):''),
+              (reprintMethod.Placements||[]).slice()))
+          : (()=>this.pickInbox(id)) };
     });
     // Order name / order number search, scoped to this Management inbox
     // list -- mirrors the board's own search (renderVals() below) but keyed
@@ -2420,7 +2465,15 @@ class Component extends DCLogic {
       // which is no longer always the method the panel is headlined by.
       runTargetLabel: (st.runTarget && st.runTarget.methodLabel) || (cpRaw && cpRaw.methodLabel) || '',
       mgrView, mgrShowInbox: mgrView && !hasOrder && !cpRaw, mgrShowForm: mgrView && hasOrder && !cpRaw, mgrShowCreated: mgrView && !!cpRaw,
-      inbox, inboxEmpty:(st.inbox||[]).length===0 && st.inboxLoaded,
+      inbox,
+      /* E4.5, three states not two. inboxFailed must suppress inboxEmpty or a
+         failed fetch renders as "nothing waiting" -- which is the whole thing
+         that story exists to stop. Loading is already covered: inboxEmpty needs
+         inboxLoaded, so a request in flight shows neither. */
+      inboxEmpty:(st.inbox||[]).length===0 && st.inboxLoaded && !st.inboxFailed,
+      inboxFailed: !!st.inboxFailed,
+      // The reprint half of the inbox failed but the ordinary half rendered.
+      inboxReprintsUnavailable: !!st.inboxReprintsUnavailable && !st.inboxFailed,
       // Distinct from inboxEmpty (genuinely nothing waiting) -- this is "there
       // ARE incoming orders, just none matching what was typed".
       inboxNoMatches: inboxAll.length>0 && inbox.length===0,
