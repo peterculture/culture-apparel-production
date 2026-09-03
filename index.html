@@ -1962,8 +1962,14 @@ class Component extends DCLogic {
          message the endpoint went to the trouble of passing through. Shaped
          like httpError()'s errors so errText() reads it the same way. */
       if(res && (res.error || res.ok===false)){ const e=new Error(res.error||'create_failed'); e.data=res; throw e; }
+      /* B6: the server sends the method back to Ready for Print when a run is
+         added to one that had moved past it. Tell the person who pressed the
+         button, and reload so the card actually changes column. */
+      const a6=window.CAApi;
+      const moved6=(a6&&a6.noteRunRewind)?a6.noteRunRewind(res):false;
       this.setState({runCreateSubmitting:false, runCreateMethodId:null, runCreateForm:null});
       this.loadRunsForCard(methodId);
+      if(moved6) this.load();
     } catch(e) {
       /* B3: this was `catch(_)` with a fixed sentence blaming the press and
          the schedule. It fired for EVERY cause -- a restricted picklist, an
