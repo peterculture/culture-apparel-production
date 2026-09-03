@@ -2109,6 +2109,12 @@ class Component extends DCLogic {
       if(f.printLocation) runBody.printLocation=f.printLocation;
       const res=await this._api.createProductionRun(runBody);
       if(res && (res.error || res.ok===false)) throw new Error(res.error||'create_failed');
+      /* B6: the server sends the method back to Ready for Print when a run is
+         added to one that had moved past it. Tell the person who pressed the
+         button, and reload so the card actually changes column. */
+      const a6=window.CAApi;
+      const moved6=(a6&&a6.noteRunRewind)?a6.noteRunRewind(res):false;
+      if(moved6) this.load();
 
       // Close the loop on the AM's suggestion: mark it Accepted and point it at
       // the run that came out of it. Without the link, "Accepted" is just an
