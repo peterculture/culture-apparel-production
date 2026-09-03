@@ -66,6 +66,7 @@
  * caller-supplied host), and still scoped to GET/no credentials forwarded.
  */
 import { sfFetch, apiVersion, jsonError } from "../_sf.js";
+import { adoptMockup } from "../_mockup-adopt.js";
 
 /* Salesforce record Ids are 15 (case-sensitive) or 18 (case-insensitive,
    checksum-suffixed) alphanumeric characters. Matches the LAST such run in
@@ -80,22 +81,50 @@ import { sfFetch, apiVersion, jsonError } from "../_sf.js";
    only a ContentVersion Id belongs in it. */
 const ID_RE = /(068[a-zA-Z0-9]{12,15})(?:[/?#].*)?$/;
 
-/* Hosts branch B may fetch from. Exact host or any subdomain of these.
-   gstatic/googleusercontent are the observed real case (see FALLBACK above --
-   a staff member pasted a Google Images thumbnail into Mockup_URL__c); the
-   Salesforce domains cover a public Vault/file link that carries no
-   ContentVersion Id. If a legitimate mockup 400s as blocked_host, the fix is
-   to add its host here after looking at it -- not to widen the match. */
-const ALLOWED_MOCKUP_HOSTS = [
-  "gstatic.com",
-  "googleusercontent.com",
-  "force.com",
-  "salesforce.com",
-  "documentforce.com",
-  "cloudforce.com",
-];
+/* ALLOWED_MOCKUP_HOSTS IS GONE (B1 / D8, 2026-09-02). It held six hosts and
+   blocked 38 of 54 mockups in dev2 -- pinimg, freepngimg, flaticon,
+   hometownapparel, emojiterra, artsdupage. The list was not too short; the
+   assumption under it was wrong. It was written expecting Mockup_URL__c to
+   hold Vault links with pasted ones as the exception, and measured across both
+   sandboxes, NOT ONE order has ever used the Vault flow. Every mockup in the
+   shop is a pasted link.
+
+   Widening it per host would have been a treadmill: a new customer host is a
+   new deploy, forever, each one re-opening a little more of the surface E6.2
+   closed. Instead branch B now fetches once and ADOPTS the image into
+   Salesforce (see _mockup-adopt.js), after which the record holds a 068 Id and
+   every later request takes branch A -- authenticated, no outbound request at
+   all. The list is not widened; it stops being the mechanism.
+
+   WHAT STILL GUARDS BRANCH B, because caching relocates the SSRF risk rather
+   than removing it: http(s) only; literal IPs and loopback/private/link-local/
+   CGNAT ranges and .local/.internal/localhost refused; redirects followed
+   manually with every hop re-validated; GET only, no credentials or caller
+   headers forwarded; and now a byte cap and a timeout, neither of which
+   existed while the allow-list was making them feel less urgent.
+
+   ⚠️ SAY THE COST OUT LOUD: for PUBLIC hosts this is now an open image proxy.
+   Anyone who can reach /api/mockup-proxy can have this server fetch any public
+   http(s) URL and hand back up to MAX_MOCKUP_BYTES of it. Nothing internal is
+   reachable -- that is what isBlockedAddress() is for, and it is tested -- and
+   a URL matching no Design record is fetched but never adopted, so it cannot
+   write anything. What is gone is the ability to say "this server only ever
+   talks to six hosts."
+
+   That trade was made deliberately (D8): the alternative was a per-customer
+   allow-list treadmill, and 70% of the shop's mockups were broken meanwhile.
+   The thing that keeps strangers off this endpoint is the perimeter --
+   Cloudflare Access, E6.4 -- which is NOT enabled yet. If E6.4 is never
+   switched on, this endpoint is the reason to revisit, not the allow-list. */
 
 const MAX_REDIRECTS = 3;
+
+/* A mockup is a few hundred KB. This is not a tuned figure -- it is "refuse
+   the absurd" -- and it exists because the bytes are now buffered in the
+   Worker and base64'd into a Salesforce request rather than streamed straight
+   through. */
+const MAX_MOCKUP_BYTES = 10 * 1024 * 1024;
+const FETCH_TIMEOUT_MS = 8000;
 
 /* Refuse anything that could point back inside the network. The allow-list
    above already excludes bare IPs (an IP literal matches no domain suffix), so
@@ -124,16 +153,11 @@ function isBlockedAddress(hostname) {
   return false;
 }
 
-function isAllowedMockupHost(hostname) {
-  const h = String(hostname || "").toLowerCase();
-  return ALLOWED_MOCKUP_HOSTS.some((d) => h === d || h.endsWith("." + d));
-}
-
 /** Both gates, in one place, so every hop of a redirect chain gets the same check. */
 function hopAllowed(u) {
   if (u.protocol !== "http:" && u.protocol !== "https:") return false;
   if (isBlockedAddress(u.hostname)) return false;
-  return isAllowedMockupHost(u.hostname);
+  return true;
 }
 
 function streamResponse(resp) {
@@ -149,7 +173,7 @@ function streamResponse(resp) {
   });
 }
 
-export async function onRequestGet({ request, env }) {
+export async function onRequestGet({ request, env, waitUntil }) {
   try {
     const reqUrl = new URL(request.url);
     const raw = reqUrl.searchParams.get("url");
@@ -225,7 +249,46 @@ export async function onRequestGet({ request, env }) {
         console.error("mockup-proxy: external mockup fetch failed", current.toString(), resp && resp.status);
         return jsonError("fetch_failed", (resp && resp.status) || 502);
       }
-      return streamResponse(resp);
+
+      /* Buffered, not streamed, because the same bytes are about to be written
+         into Salesforce -- a stream can only be read once. The declared length
+         is checked first so an absurd file is refused before it is pulled into
+         memory, and the real length after, because Content-Length is a claim
+         and not every host sends one. */
+      const declared = Number(resp.headers.get("content-length") || 0);
+      if (declared > MAX_MOCKUP_BYTES) {
+        console.error("mockup-proxy: mockup too large (declared)", current.toString(), declared);
+        return jsonError("mockup_too_large", 502);
+      }
+      const bytes = await resp.arrayBuffer();
+      if (bytes.byteLength > MAX_MOCKUP_BYTES) {
+        console.error("mockup-proxy: mockup too large", current.toString(), bytes.byteLength);
+        return jsonError("mockup_too_large", 502);
+      }
+      const contentType = resp.headers.get("content-type") || "application/octet-stream";
+
+      /* Adopt in the BACKGROUND. The person waiting on this request wants the
+         picture, not a round trip to Salesforce -- so the bytes go back now and
+         the upload runs after the response, via waitUntil where the platform
+         offers it. Best-effort in every sense: adoptMockup never throws, and a
+         failure here must never turn a working image into a broken one. It is
+         the same contract the rollups follow (CLAUDE.md) -- await it, ignore
+         the result. */
+      const adopting = adoptMockup(env, current.toString(), bytes, contentType)
+        .catch((e) => { console.error("mockup-proxy: adopt threw", e); });
+      if (typeof waitUntil === "function") waitUntil(adopting);
+
+      return new Response(bytes, {
+        headers: {
+          "Content-Type": contentType,
+          /* Deliberately shorter than branch A's 600s. This copy is about to
+             stop being the one served: once adoption lands, the record holds a
+             068 Id and the next request takes branch A. A long cache here would
+             keep the browser on the pre-adoption answer well past the point the
+             data changed underneath it. */
+          "Cache-Control": "private, max-age=60",
+        },
+      });
     } catch (err) {
       console.error("mockup-proxy: external mockup fetch error", parsed.toString(), err);
       return jsonError("fetch_failed", 502);
