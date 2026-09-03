@@ -138,7 +138,7 @@ window.__resources = Object.assign({}, window.__resources, {
           <div draggable="true" onDragStart="{{ o.onDragStart }}" onDragEnd="{{ o.onDragEnd }}" onClick="{{ o.onOpen }}" style="display:flex;background:{{o.cardBg}};border:1px solid {{o.cardBorder}};border-radius:11px;overflow:hidden;cursor:pointer;opacity:{{o.cardOpacity}};transition:border-color .12s,transform .12s" style-hover="border-color:#3a3a40;transform:translateY(-1px)">
             <div style="width:6px;background:{{o.urgColor}};flex-shrink:0"></div>
             <sc-if value="{{o.hasThumb}}" hint-placeholder-val="{{ false }}">{{o.thumbNode}}</sc-if>
-            <sc-if value="{{o.noThumb}}" hint-placeholder-val="{{ true }}"><div style="width:64px;flex-shrink:0;align-self:stretch;background:#1c1c20;border-right:1px solid #2a2a2f;display:flex;align-items:center;justify-content:center"><i class="ti ti-photo-off" style="color:var(--text-tertiary);font-size:24px"></i></div></sc-if>
+            <sc-if value="{{o.noThumb}}" hint-placeholder-val="{{ true }}"><div title="{{o.thumbTitle}}" style="width:64px;flex-shrink:0;align-self:stretch;background:#1c1c20;border-right:1px solid #2a2a2f;display:flex;align-items:center;justify-content:center"><i class="ti {{o.thumbIcon}}" style="color:{{o.thumbColor}};font-size:24px"></i></div></sc-if>
             <div style="padding:13px 14px;flex:1;min-width:0;display:flex;flex-direction:column;gap:10px">
               <div style="display:flex;align-items:flex-start;gap:8px">
                 <div style="min-width:0">
@@ -2617,6 +2617,13 @@ class Component extends DCLogic {
         // isn't genuinely public (Vault file not marked Public) fails silently
         // as a blank box otherwise, since there's no alt text to fall back to.
         hasThumb: !!o.mockupUrl && !st.thumbErr[o.id], noThumb: !o.mockupUrl || !!st.thumbErr[o.id],
+        /* B1: 'no mockup' and 'mockup we could not fetch' used to render the
+           same grey ti-photo-off. thumbState() in ca-api.js splits them --
+           calm for absent, a warning for a link that exists and failed. */
+        ...(function(){ var t=(window.CAApi&&window.CAApi.thumbState)
+            ? window.CAApi.thumbState(o.mockupUrl, !!st.thumbErr[o.id])
+            : {icon:'ti-photo-off', color:'var(--text-tertiary)', title:''};
+          return { thumbIcon:t.icon, thumbColor:t.color, thumbTitle:t.title }; })(),
         // try/catch added 2026-08-11: a console exception was observed firing
         // from inside this handler on a card whose mockup URL genuinely
         // failed to load (pre-dating the mockup-proxy fix) -- whatever the
