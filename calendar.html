@@ -1119,11 +1119,13 @@ class Component extends DCLogic {
         // existing one worked, so the bug only bit on the queue-drag path.
         const qty = this.qtyOf(order);
         if(!qty){ alert('This order has no piece count yet, so a run can\'t be created. Add order items in Salesforce first.'); return; }
-        await api.createProductionRun({
+        const dropRes = await api.createProductionRun({
           printMethodId:method.Id, pressId,
           scheduledStart:startDate.toISOString(), scheduledEnd:end.toISOString(),
           quantity:qty,
         });
+        /* B6. This path already reloads below, so only the notice is needed. */
+        if(api.noteRunRewind) api.noteRunRewind(dropRes);
       }else{
         alert('This order has no production method to attach a run to.');
         return;
@@ -1432,6 +1434,8 @@ class Component extends DCLogic {
           scheduledStart:start, scheduledEnd:end, quantity:qty};
         if(locationOn && f.printLocation) createBody.printLocation=f.printLocation;
         const res=await api.createProductionRun(createBody);
+        /* B6: same notice as the other boards -- see noteRunRewind in ca-api.js. */
+        if(api.noteRunRewind) api.noteRunRewind(res);
 
         /* Close the loop on the AM's suggestion: mark it Accepted and point it
            at the run that came out of it. Without the link "Accepted" is just
