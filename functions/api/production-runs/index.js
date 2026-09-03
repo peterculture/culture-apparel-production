@@ -73,6 +73,7 @@
  */
 import { sfFetch, apiVersion, jsonError, runQuery } from "../_sf.js";
 import { rollupPrintDateToOrder, orderIdForMethod } from "../_print-date-rollup.js";
+import { rollupOrderSubstatus } from "../_pm-rollup.js";
 import { RUN_PLANNED, RUN_CONFIRMED } from "../_run-schedule-status.js";
 import { requireCap } from "../_session.js";
 import { parsePlacement, runQueryOptionalField } from "../_placements.js";
@@ -162,6 +163,83 @@ export async function onRequestGet({ env, request }) {
  * response over a failed follow-up write would be a worse outcome than an
  * unpublished run the UI can warn about.
  */
+/* ── a new run on a method that had moved on sends it back to print ──────
+   Adding a run to a method already In Production, Post-Production or Completed
+   means there is printing left to do, and the board was still saying there
+   was not. A make-up run booked against a finished method left the card
+   sitting in Post-Production with unprinted garments behind it.
+
+   ONLY THESE THREE STATUSES. A method's FIRST run is created while it is
+   Pre-Production or Ready for Print, and neither should be touched -- rewinding
+   Ready for Print is a no-op and dragging Pre-Production forward would claim
+   prep was done. So gating on "the method had already moved past Ready for
+   Print" is also what distinguishes an ADDED run from a first one, without
+   needing the caller to say which it is. Cancelled and On Hold are left alone.
+
+   THE ORDER FOLLOWS BY ITSELF, which is the whole reason this only writes the
+   method. rollupOrderSubstatus() recomputes Order_Substatus__c from the LEAST
+   advanced non-cancelled sibling, so one method dropping to Ready for Print
+   takes the order back with it -- and a sibling method that really is finished
+   keeps its own status instead of being dragged backwards with it.
+
+   THE WAY BACK OUT ALREADY EXISTS. index.html's stopTimer() advances the method
+   to Post-Production once no run is left without an actual end, and the same
+   roll-up carries the order forward again. This only had to close the loop at
+   the other end.
+
+   Reported, never thrown -- same contract as publishRun() below. The run
+   exists; refusing the request because a status write failed would tell the
+   caller nothing was created, which is false. */
+/* This file otherwise only ever touches Production_Run__c; the rewind is the
+   one place it writes the parent method. */
+const PM_OBJECT = "Production_Method__c";
+const REWIND_FROM = new Set(["In Production", "Post-Production", "Completed"]);
+const REWIND_TO = "Ready for Print";
+
+async function rewindMethodForNewRun(env, methodId) {
+  try {
+    /* Order__r is a real relationship on Production_Method__c -- production-orders
+       already selects Order__r.Status through it, so this is not a guessed __r
+       name (trap 2). Status is the STANDARD Order field: 'Complete', no "d",
+       and not the same thing as Status__c on the method. */
+    const { ok, records } = await runQuery(
+      env,
+      `SELECT Id, Status__c, Order__c, Order__r.Status FROM ${PM_OBJECT} WHERE Id = '${methodId}'`,
+    );
+    if (!ok || !records.length) return null;
+    const m = records[0];
+    const orderId = m.Order__c || null;
+    const orderIsComplete = !!(m.Order__r && m.Order__r.Status === "Complete");
+
+    if (!REWIND_FROM.has(m.Status__c)) {
+      return { rewound: false, from: m.Status__c || null, orderId, orderIsComplete };
+    }
+
+    const resp = await sfFetch(env, `/services/data/${apiVersion(env)}/sobjects/${PM_OBJECT}/${methodId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      // Allow-listed by construction: one field, its name a literal here.
+      // 'Ready for Print' is a real Production_Method__c.Status__c value (see
+      // ALLOWED_STATUSES in production-methods/[id].js) -- the picklist is
+      // restricted, so a drifted string would 400 after the run already existed.
+      body: JSON.stringify({ Status__c: REWIND_TO }),
+    });
+    if (resp.status !== 204) {
+      let detail = "";
+      try { detail = JSON.stringify(await resp.json()); } catch { /* empty */ }
+      console.error("run create: method rewind failed", methodId, resp.status, detail);
+      return { rewound: false, from: m.Status__c, orderId, orderIsComplete, failed: true };
+    }
+
+    // Best-effort, and awaited so the response can report what the order became.
+    const substatus = orderId ? await rollupOrderSubstatus(env, orderId).catch(() => null) : null;
+    return { rewound: true, from: m.Status__c, to: REWIND_TO, orderId, orderSubstatus: substatus, orderIsComplete };
+  } catch (err) {
+    console.error("run create: method rewind error", methodId, err);
+    return null;
+  }
+}
+
 async function publishRun(env, runId) {
   try {
     const path = `/services/data/${apiVersion(env)}/sobjects/${PR_OBJECT}/${encodeURIComponent(runId)}`;
@@ -289,10 +367,14 @@ export async function onRequestPost({ env, request }) {
     // just a different value in the insert.
     const published = await publishRun(env, data.id);
 
+    /* Sends the method back to Ready for Print when this run was ADDED to one
+       that had already moved past it. See rewindMethodForNewRun() above. */
+    const rewind = await rewindMethodForNewRun(env, printMethodId);
+
     // A brand new run almost always IS the order's print date -- creating one
     // is how an unscheduled order gets scheduled at all. Resolved from the
     // method because that is what the caller gave us. See _print-date-rollup.js.
-    const orderId = await orderIdForMethod(env, printMethodId);
+    const orderId = (rewind && rewind.orderId) || (await orderIdForMethod(env, printMethodId));
     if (orderId) await rollupPrintDateToOrder(env, orderId);
 
     // `published` is reported, never thrown. The run EXISTS -- refusing the
@@ -301,7 +383,7 @@ export async function onRequestPost({ env, request }) {
     // and there is no Confirm button left anywhere to rescue it with. The
     // dashboards surface this as a warning on the run instead.
     return Response.json(
-      { ok: true, id: data.id, published },
+      { ok: true, id: data.id, published, rewind },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (err) {
