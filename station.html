@@ -336,7 +336,15 @@ class Component extends DCLogic {
       ink:      { label:'Ink Station',    accent:'#2E9CCA', icon:'ti-droplet',   stages:['Needs Label','Needs Mixing','Mixed'], subField:'Ink_Sub_Status__c', identField:'Pantone_Color__c', inventory:'ink', empty:'All inks mixed — nothing waiting.', errorLabel:'Ink Error — reset', cta:'Mix' },
       screen:   { label:'The Blue Lagoon', accent:'#1FB2A6', icon:'ti-grid-4x4',  stages:['Needs Emulsion','Ready for Exposure','Needs Tape','Ready for Print'], subField:'Screen_Sub_Status__c', identField:'Mesh_Count__c', identSuffix:' mesh', inventory:'screen', empty:'All screens ready — board clear.', errorLabel:'Screen Error — reclaim', cta:'Prep' },
       transfer: { label:'Transfer Station', accent:'#E0B23C', icon:'ti-flame',    stages:['Not Received','Transfers Received','Transfers Cut/Ready'], subField:'Transfers_Sub_Status__c', identField:'Transfer_Type__c', inventory:null, empty:'All transfers cut and ready.', errorLabel:'Transfer Error — reset', cta:'Cut' },
-      garment:  { label:'Garment Station', accent:'#7FA644', icon:'ti-shirt',     source:'order', stages:['Not Received','Partial','Counted In','Staged'], inventory:null, empty:'All garments counted in and staged.', errorLabel:'Recount', cta:'Count', missingAtStage:'Partial' },
+      /* 'Received' added 2026-09-04 -- the blanks are physically here, nobody
+         has counted them yet. It sits second because that is the order a
+         delivery moves through: 'Partial' and 'Counted In' BOTH assert a count,
+         so before this existed, taking a delivery meant claiming one had
+         happened. `optionalStages` marks the values that are not guaranteed to
+         exist in the active org -- see stagesFor() below, and _picklist.js on
+         the server for why a RESTRICTED picklist makes this mandatory rather
+         than tidy. */
+      garment:  { label:'Garment Station', accent:'#7FA644', icon:'ti-shirt',     source:'order', stages:['Not Received','Received','Partial','Counted In','Staged'], optionalStages:['Received'], inventory:null, empty:'All garments counted in and staged.', errorLabel:'Recount', cta:'Count', missingAtStage:'Partial' },
     };
     this._demoItems = {
       ink:[
@@ -381,10 +389,21 @@ class Component extends DCLogic {
     const _apiP = (window.CAApi&&window.CAApi.readParam) ? window.CAApi : null;
     const _stn = _apiP ? _apiP.readParam('station', Object.keys(this.STATIONS), 'ink') : 'ink';
     const _cfg = this.STATIONS[_stn];
-    const _validTabs = ['master'].concat(_cfg.stages.slice(0,-1)).concat(_cfg.inventory?['inventory']:[]);
+    /* Optional stages are excluded here on purpose: at construction we have not
+       asked the org what it supports yet, so a ?tab=Received deep link falls
+       back to 'master' rather than opening a tab that may not exist. It becomes
+       reachable normally once loadRecvKeys() answers. */
+    const _optS = _cfg.optionalStages||[];
+    const _validTabs = ['master'].concat(_cfg.stages.filter(x=>_optS.indexOf(x)<0).slice(0,-1)).concat(_cfg.inventory?['inventory']:[]);
     this.state = {
       now:new Date(), connection:'loading',
       station: _stn,
+      /* Garment statuses the ACTIVE org actually has, as Salesforce values.
+         null = not asked yet / could not tell -> stagesFor() falls back to the
+         list minus anything optional. Never assume an optional value exists:
+         Receiving_Status__c is RESTRICTED, so offering one the org lacks makes
+         the tap fail outright rather than degrade. */
+      recvStages: null,
       tab: _apiP ? _apiP.readParam('tab', _validTabs, 'master') : 'master',
       modalId:null,
       /* Missing-items editor on the garment modal. Scalars, not maps: exactly
@@ -429,7 +448,29 @@ class Component extends DCLogic {
   // dashboards". Every later refresh, save and drawer-open stays silent.
   // See the header comment in ca-api.js.
   fg(fn){ const a=window.CAApi; return (a&&a.foregroundLoad) ? a.foregroundLoad(fn) : fn(); }
-  componentDidMount(){ this._t=setInterval(()=>this.setState({now:new Date()}),1000); this.fg(()=>this.loadStation(this.state.station)); this.bg(()=>this.loadSfEnv()); this._ar=setInterval(()=>{ /* shouldPoll(): retries a demo board every 5th tick -- see ca-api.js */ if(!this.state.modalId && ((window.CAApi&&window.CAApi.shouldPoll)?window.CAApi.shouldPoll(this.state.connection,'station'):this.state.connection==='live')) this.bg(()=>this.loadStation(this.state.station)); },15000); }
+  /* The stages this station should actually render.
+     Only the garment station is affected: its values live on a RESTRICTED
+     Salesforce picklist that differs between orgs, and one deployment serves
+     all three. Until the org answers we withhold anything optional, so the
+     failure mode is "a chip shows up a beat late" rather than "a chip that
+     rejects the whole write when tapped". Non-garment stations are unchanged
+     -- their sub-status values ship with the code, not with the org. */
+  stagesFor(cfg){
+    if(!cfg || cfg.source!=='order') return cfg.stages;
+    const opt=cfg.optionalStages||[];
+    const sup=this.state.recvStages;
+    if(!Array.isArray(sup)) return cfg.stages.filter(x=>opt.indexOf(x)<0);
+    return cfg.stages.filter(x=>opt.indexOf(x)<0 || sup.indexOf(x)>=0);
+  }
+  loadRecvStages(){
+    const api=window.CAApi;
+    if(!api||!api.loadRecvKeys) return Promise.resolve();
+    return api.loadRecvKeys().then(keys=>{
+      const vals=(keys||[]).map(k=>api.RECV_TO_SF[k]).filter(Boolean);
+      this.setState({recvStages: vals.length?vals:null});
+    }).catch(()=>{ /* stays null -> conservative list, board still usable */ });
+  }
+  componentDidMount(){ this._t=setInterval(()=>this.setState({now:new Date()}),1000); this.fg(()=>this.loadStation(this.state.station)); this.bg(()=>this.loadSfEnv()); this.bg(()=>this.loadRecvStages()); this._ar=setInterval(()=>{ /* shouldPoll(): retries a demo board every 5th tick -- see ca-api.js */ if(!this.state.modalId && ((window.CAApi&&window.CAApi.shouldPoll)?window.CAApi.shouldPoll(this.state.connection,'station'):this.state.connection==='live')) this.bg(()=>this.loadStation(this.state.station)); },15000); }
   componentWillUnmount(){ clearInterval(this._t); clearInterval(this._ar); }
   async loadStation(station){
     try {
@@ -632,7 +673,8 @@ class Component extends DCLogic {
 
     const stationPills=Object.keys(this.STATIONS).map(k=>{ const c=this.STATIONS[k], on=k===st.station; return { key:k, label:c.label.replace('The ',''), icon:c.icon, onPick:()=>this.pickStation(k), bg:on?c.accent:'#141417', border:on?c.accent:'#242428', textColor:on?'#08080A':'var(--text-tertiary)' }; });
 
-    const nonDone=cfg.stages.filter(s=>s!==doneStage);
+    const _stages=this.stagesFor(cfg);   // org-supported subset; see stagesFor()
+    const nonDone=_stages.filter(s=>s!==doneStage);
     const tabDefs=[{key:'master',label:'All'}].concat(nonDone.map(s=>({key:s,label:s})));
     if(cfg.inventory) tabDefs.push({key:'inventory',label:'Inventory'});
     const tabs=tabDefs.map(t=>{ const on=st.tab===t.key; let count=''; if(t.key==='master') count=String(items.filter(o=>o.stage!==doneStage).length); else if(t.key==='inventory') count=String((st.inv[cfg.inventory]||[]).length); else count=String(items.filter(o=>o.stage===t.key).length); return { key:t.key, label:t.label, count, onPick:()=>{ this.setState({tab:t.key}); this.syncUrl(null,t.key); }, bg:on?'#1a1a1e':'#121215', border:on?accent:'#232327', textColor:on?'#ECEAE4':'var(--text-tertiary)', countColor:on?'#08080A':'var(--text-secondary)', countBg:on?accent:'#242428' }; });
@@ -682,14 +724,14 @@ class Component extends DCLogic {
     let modal=null; const src=items.find(o=>o.id===st.modalId);
     if(src){
       const isGarment=cfg.source==='order';
-      const curIdx=cfg.stages.indexOf(src.stage);
-      const stages=cfg.stages.map((label,i)=>{ const done=i<curIdx, cur=i===curIdx; return { label, icon:done?'ti-check':(cur?'ti-point-filled':''), dotBg:done?accent:(cur?accent:'transparent'), dotBorder:done||cur?accent:'#3a3a40', lineColor:i<curIdx?accent:'#242428', textColor:done?'var(--text-tertiary)':(cur?'#ECEAE4':'#5a554c') }; });
+      const curIdx=_stages.indexOf(src.stage);
+      const stages=_stages.map((label,i)=>{ const done=i<curIdx, cur=i===curIdx; return { label, icon:done?'ti-check':(cur?'ti-point-filled':''), dotBg:done?accent:(cur?accent:'transparent'), dotBorder:done||cur?accent:'#3a3a40', lineColor:i<curIdx?accent:'#242428', textColor:done?'var(--text-tertiary)':(cur?'#ECEAE4':'#5a554c') }; });
       // Every station now gets the same free-pick status grid garment used to
       // be the only one to have -- any status, any time, no forced order.
       // The pipeline dots above still show progress at a glance; these
       // buttons are how a worker actually changes the status now (see
       // setStage() -- advance()/canAdvance's forward-only flow is gone).
-      const statusOptions = cfg.stages.map(label=>{ const active=label===src.stage; return { label, bg:active?accent:'#141417', color:active?'#08080A':'#ECEAE4', border:active?accent:'#2a2a2f', onPick:()=>this.setStage(src.id,label) }; });   // two args on purpose: a status tap is not a note edit
+      const statusOptions = _stages.map(label=>{ const active=label===src.stage; return { label, bg:active?accent:'#141417', color:active?'#08080A':'#ECEAE4', border:active?accent:'#2a2a2f', onPick:()=>this.setStage(src.id,label) }; });   // two args on purpose: a status tap is not a note edit
       modal=Object.assign({},mk(src),{ isGarment, isStepStation:!isGarment, stages, statusOptions, errorLabel:cfg.errorLabel, onError:()=>this.resetStage(src.id), hasMockup:!!src.mockupUrl, noMockup:!src.mockupUrl, mockupNode: src.mockupUrl?React.createElement('img',{src:src.mockupUrl,alt:'Mockup',onClick:(window.CAApi&&window.CAApi.mockupClick)?window.CAApi.mockupClick(src.mockupUrl,(src.customer||'')+' - '+(src.num||'')):null, title:'Click to inspect', style:{cursor:'zoom-in',width:'100%',height:280,borderRadius:16,border:'1px solid #232327',objectFit:'cover',display:'block'}}):null, hasNotes:!!src.notes, notes:src.notes||'',
         /* Shown at Partial -- and ALSO whenever the order already carries a
            note, whatever its stage. Nothing clears the note automatically any
