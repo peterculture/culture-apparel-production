@@ -382,9 +382,47 @@
     'File digitized':'Digitize_File__c', 'Thread & materials':'Thread_Color_Materials__c',
     'Transfers received':'Transfers_Received__c', 'Transfers ready':'Transfers_Ready__c'
   };
-  /* Receiving_Status__c picklist <-> board key */
-  var RECV_FROM_SF = { 'Not Received':'none', 'Partial':'partial', 'Counted In':'countedin', 'Staged':'staged' };
-  var RECV_TO_SF = { none:'Not Received', partial:'Partial', countedin:'Counted In', staged:'Staged' };
+  /* Receiving_Status__c picklist <-> board key.
+     'received' added 2026-09-04: the blanks are physically here, nobody has
+     counted them yet. It sits between 'none' and 'partial' because that is the
+     order a delivery actually moves through -- both 'partial' and 'countedin'
+     assert a count, so before this existed, taking a delivery meant claiming
+     one had happened. RECV_ORDER below is the single definition of that
+     sequence; the boards render from it rather than each keeping their own. */
+  var RECV_FROM_SF = { 'Not Received':'none', 'Received':'received', 'Partial':'partial', 'Counted In':'countedin', 'Staged':'staged' };
+  var RECV_TO_SF = { none:'Not Received', received:'Received', partial:'Partial', countedin:'Counted In', staged:'Staged' };
+  var RECV_ORDER = ['none','received','partial','countedin','staged'];
+  /* Board keys whose Salesforce value is NOT guaranteed to exist in the active
+     org. Mirrors STATION_CONFIG.garment.optionalStatuses on the server. */
+  var RECV_OPTIONAL = ['received'];
+
+  /* Which receiving statuses may this deployment offer against the org it is
+     currently pointed at?
+
+     ⚠️ THE POINT OF THIS IS THAT Receiving_Status__c IS A *RESTRICTED*
+     PICKLIST. One deployment serves dev2, staging and production, and a value
+     the active org lacks does not degrade -- it rejects the entire PATCH with
+     INVALID_OR_NULL_FOR_RESTRICTED_PICKLIST, which on a shop tablet reads as
+     "this thing is broken". 'Received' is exactly that case today: live in
+     dev2 and staging, absent from production until E7.4.
+
+     Starts PESSIMISTIC. Until /api/receiving-statuses answers, the optional
+     keys are withheld, so the worst case is a chip appearing a moment late
+     rather than a chip that fails when tapped. A failed lookup keeps the
+     conservative list -- offering a value we could not confirm is the one
+     outcome this function exists to prevent, and the four long-standing
+     statuses are never withheld, so the board is fully usable either way. */
+  function recvKeysBaseline(){ return RECV_ORDER.filter(function(k){ return RECV_OPTIONAL.indexOf(k) < 0; }); }
+  function loadRecvKeys(){
+    return jget('/api/receiving-statuses').then(function(d){
+      var sup = d && d.supported;
+      if (!sup || !sup.length) return recvKeysBaseline();
+      var keys = sup.map(function(v){ return RECV_FROM_SF[v]; }).filter(Boolean);
+      /* Keep OUR order, not the response's -- the server sends the canonical
+         pipeline, but an org could return them in Setup's storage order. */
+      return RECV_ORDER.filter(function(k){ return keys.indexOf(k) >= 0; });
+    }).catch(function(){ return recvKeysBaseline(); });
+  }
 
   // Time-of-day options for the Production Run schedule/actual pickers
   // (Scheduled Start/End, Actual Start/End) -- 15-minute increments only
@@ -2329,7 +2367,7 @@
     runAllocRows: runAllocRows, runAllocTotal: runAllocTotal, runAllocUpdates: runAllocUpdates, runAllocBlockers: runAllocBlockers,
     NAV_BOARDS: NAV_BOARDS, buildNavBoards: buildNavBoards,
     getShippingOrders: getShippingOrders, completeOrder: completeOrder, getStatsTrend: getStatsTrend,
-    CHECK_FIELD: CHECK_FIELD, RECV_FROM_SF: RECV_FROM_SF, RECV_TO_SF: RECV_TO_SF, TIME_OPTIONS: TIME_OPTIONS,
+    CHECK_FIELD: CHECK_FIELD, RECV_FROM_SF: RECV_FROM_SF, RECV_TO_SF: RECV_TO_SF, RECV_ORDER: RECV_ORDER, RECV_OPTIONAL: RECV_OPTIONAL, recvKeysBaseline: recvKeysBaseline, loadRecvKeys: loadRecvKeys, TIME_OPTIONS: TIME_OPTIONS,
     PLACEMENTS: PLACEMENTS, methodsList: methodsList, METHOD_META: METHOD_META,
     getOrders: getOrders, getProductionOrders: getProductionOrders, getInbox: getInbox, getPreProductionItems: getPreProductionItems, patchItem: patchItem, deleteItem: deleteItem, createItem: createItem, searchPlans: searchPlans, searchPresses: searchPresses, createMethod: createMethod, createProductionRun: createProductionRun, getProductionRuns: getProductionRuns, patchProductionRun: patchProductionRun, deleteProductionRun: deleteProductionRun, getProposedRuns: getProposedRuns, patchProposedRun: patchProposedRun, patchMethodStatus: patchMethodStatus, patchMethodChecklist: patchMethodChecklist, getMethodsForOrder: getMethodsForOrder, patchMethodFields: patchMethodFields, deleteMethod: deleteMethod, patchOrder: patchOrder, getOrderSizes: getOrderSizes,
     getCountableRuns: getCountableRuns, getRunResults: getRunResults, submitRunResults: submitRunResults,
