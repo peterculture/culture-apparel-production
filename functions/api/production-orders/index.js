@@ -33,7 +33,7 @@
  * entered, well before production work is actually done. Confirmed on
  * Order 00013456, 2026-07-14.
  */
-import { runQuery, jsonError } from "../_sf.js";
+import { runQuery, jsonError, runChunkedIdQuery } from "../_sf.js";
 import { fetchMockupsByOpportunity } from "../_mockup.js";
 
 // Production_Method__c.Status__c values shown on this board -- kept in
@@ -239,6 +239,85 @@ export async function onRequestGet({ env }) {
         }
       } catch (e) {
         console.error("Order item fetch error", e);
+      }
+    }
+
+    /* ── runs left to print, per method ───────────────────────────────────
+       So a manager can see it on the card without opening the drawer. The
+       board had no run data at all: runs arrive per-method through
+       loadRunsForCard() -> getProductionRuns(methodId), which only fires when
+       a drawer opens, so state.runsByMethod holds opened cards only.
+
+       WHY THIS IS A FOLLOW-UP QUERY AND NOT PART OF THE SELECT ABOVE. That
+       SELECT is what the whole board depends on, and trap 1 is that one
+       FLS-hidden field fails the ENTIRE statement rather than dropping a
+       column -- the board empties. A run count is not worth that risk. This is
+       the same shape, and the same fail-open contract, as the OrderItem
+       follow-up directly above: a transient error costs the badge and nothing
+       else.
+
+       WHY NOT A NESTED SUBQUERY. E3.4 removed the last one in the API on
+       purpose -- child rows page at 200 independently of the top-level
+       locator, so runQuery follows only the outer one and row 201 vanishes
+       with no error. A flat IN list has top-level pagination only, which
+       runQuery already handles, and runChunkedIdQuery keeps the IN list under
+       the URL length ceiling.
+
+       WHY NOT A ROLLUP FIELD ON THE METHOD. D9 is the precedent: a stored
+       derived number that nothing refreshes is worse than no number, and it
+       would have to travel to three orgs under E7.4.
+
+       PrintMethod__c, not a __r walk -- trap 2. PrintMethod__r has never
+       existed in any org; the relationship is Production_Runs, and a wrong
+       guess is a parse error that reads as zero rows, i.e. "nothing left to
+       print" on every card.
+
+       ⚠️ UNKNOWN IS NOT ZERO. On failure the counts are left absent entirely
+       rather than defaulted to 0. A card that renders "0 left" because a fetch
+       failed is telling a manager there is no printing to do, which is the
+       same class of lie as a demo board. The client shows nothing until it
+       actually knows. */
+    const methodIds = [];
+    orders.forEach((o) => (o.ProductionMethods || []).forEach((pm) => { if (pm.Id) methodIds.push(pm.Id); }));
+    if (methodIds.length) {
+      try {
+        const runs = await runChunkedIdQuery(methodIds, (quoted) =>
+          runQuery(
+            env,
+            `SELECT Id, PrintMethod__c, Actual_End__c FROM Production_Run__c ` +
+              `WHERE PrintMethod__c IN (${quoted})`,
+          ),
+        );
+        if (runs.ok) {
+          /* "Left to print" is EXACTLY index.html's own rule: a run with no
+             Actual End is still to be printed. That is the same test that
+             advances a method to Post-Production when the last run is stamped
+             (stopTimer -> remaining). Two definitions here would show "2 left"
+             on a method the board had already moved on, and it would look like
+             a data problem rather than a definition one.
+
+             Every run counts regardless of Print_Location__c: since B4 made
+             allocation placement-aware a Front+Back method legitimately has a
+             run per placement, and both still go through the press. */
+          const byMethod = new Map();
+          runs.records.forEach((r) => {
+            const mid = r.PrintMethod__c;
+            if (!mid) return;
+            const acc = byMethod.get(mid) || { total: 0, remaining: 0 };
+            acc.total += 1;
+            if (!r.Actual_End__c) acc.remaining += 1;
+            byMethod.set(mid, acc);
+          });
+          orders.forEach((o) => (o.ProductionMethods || []).forEach((pm) => {
+            const acc = byMethod.get(pm.Id) || { total: 0, remaining: 0 };
+            pm.RunsTotal = acc.total;
+            pm.RunsRemaining = acc.remaining;
+          }));
+        } else {
+          console.error("Run count fetch failed", runs.status);
+        }
+      } catch (e) {
+        console.error("Run count fetch error", e);
       }
     }
 
