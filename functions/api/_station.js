@@ -259,9 +259,28 @@ export const STATION_CONFIG = {
     field: "Receiving_Status__c",
     // Allowed picklist values (same set the main dashboard uses). Garment is
     // NOT a strict pipeline -- unlike ink/screen/transfer, the client lets a
-    // worker jump directly to any of these four (e.g. undo "Staged" back to
+    // worker jump directly to any of these five (e.g. undo "Staged" back to
     // "Partial" without stepping through every stage in between).
-    statuses: ["Not Received", "Partial", "Counted In", "Staged"],
+    //
+    // ORDER IS THE DELIVERY SEQUENCE, not Salesforce's storage order. Setup
+    // lists these in a different order in each sandbox; the boards render this
+    // one, so keep it as the physical progression a delivery makes.
+    //
+    // "Received" added 2026-09-04: the blanks are physically here, nobody has
+    // counted them yet. Before it existed the only moves off "Not Received"
+    // were "Partial" and "Counted In", which BOTH assert a count that has not
+    // happened -- so taking a delivery meant lying about it in one direction
+    // or the other.
+    statuses: ["Not Received", "Received", "Partial", "Counted In", "Staged"],
+    /* Values that are NOT guaranteed to exist in every org, checked against
+       the active org's describe before they are offered or written. See
+       _picklist.js for why this matters: Receiving_Status__c is a RESTRICTED
+       picklist, so a value the org lacks rejects the entire PATCH rather than
+       degrading. "Received" is live in dev2 and staging as of 2026-09-04;
+       PRODUCTION DOES NOT HAVE IT and picks it up with E7.4. Delete it from
+       this array once all three orgs match -- an empty optional list is the
+       goal state, not a permanent fixture. */
+    optionalStatuses: ["Received"],
     doneStatus: "Staged", // board hides orders at this value
     /* Free-text "missing count-in" note -- what was short in the delivery.
        missingAtStage is a UI hint ONLY as of 2026-08-28: it tells station.html
