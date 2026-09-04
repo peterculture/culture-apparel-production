@@ -1439,9 +1439,12 @@ the Flow's output; deleting is tidier on screen. **Anthony's call, and nobody is
 - **A Claude project with Salesforce browser access** — the live org work: E7.1's staging half,
   E7.3, E7.6, and running the E8 checklists against a real org.
 
-**Staging is currently unreachable from browser automation.** The Chrome extension needs permission
-on `cultureapparel--staging.sandbox.lightning.force.com`, `...my.salesforce-setup.com` and
-`...my.salesforce.com`. Grant those three before the staging pass. Staging also still has
+⚠️ ~~**Staging is currently unreachable from browser automation.**~~ **No longer true — corrected
+2026-09-04**, by driving staging Setup and Flow Builder end to end (the proposed-runs relabel, §9).
+No permission grant was needed. The one real obstacle is a "Sorry to interrupt · CSS Error" modal
+that Flow Builder throws when a screen editor is opened on a freshly loaded page; reloading and
+retrying clears it. **This unblocks running E8.1 / E8.2 against staging** — which was the reason
+that note mattered. Staging also still has
 `Quantity_Completed__c` and `Reprint_Quantity__c`, which should be deleted.
 
 ---
@@ -2219,9 +2222,8 @@ Listed so nothing is picked up twice.
 - **Anthony + shop floor:** E9.1, E9.2, E9.3, E9.6, E9.7, E9.8 — tablets, connectivity, soak,
   guides, pilot.
 
-Staging is currently unreachable from browser automation. The Chrome extension needs permission on
-`cultureapparel--staging.sandbox.lightning.force.com`, `...my.salesforce-setup.com` and
-`...my.salesforce.com` before the staging pass can run.
+~~Staging is currently unreachable from browser automation.~~ **Corrected 2026-09-04 — staging is
+reachable, no permission grant needed. See §6 and §9.** The staging pass is not blocked.
 
 
 ---
@@ -2945,6 +2947,129 @@ everywhere, which is not drift, and it is what blocks B2 step 2 and B7 stage 2.
 
 **Production has none of this metadata at all** and picks it all up with **E7.4**.
 
+**Screen labels, 2026-09-04.** The Schedule Runs repeater on `Order and Order Items Subflow Design`
+— the "Close and Create Order" subflow that writes `Proposed_Run__c` rows — labelled its placement
+picklist **"Machine"**. It now reads **"Method"** in both orgs, which is what the field actually
+holds: `Machine_Group__c` groups presses by print method (Screen Print / Heat Press / Embroidery).
+
+📌 **Label only.** The component's API name is still `RunMachineGroup` and its choice set is still
+`[Machine_Group__c values from Proposed_Run__c]`. Nothing in the app is affected —
+`functions/api/proposed-runs/index.js` selects `Machine_Group__c` and maps it to `machineGroup`, and
+a screen component's display label is not reachable from SOQL. **Do not "finish the job" by renaming
+the field or the component API name**: the component name is referenced by the repeater's row
+variables, and the field name is in `FIELDS` in that endpoint.
+
+| Org | Was | Now | Rollback |
+|---|---|---|---|
+| dev2 | V42 active | **V43 active** | V42, intact |
+| staging | V43 active | **V44 active** | V43, intact |
+
+Verified by loading each version fresh from the server: the superseded version now offers
+**Activate** and the new one offers **Deactivate**. ⛔ **Not re-read after a cold reload** — Flow
+Builder threw a "Sorry to interrupt · CSS Error" modal on every attempt to reopen the screen editor
+from a fresh page load, in both orgs. The label was confirmed as "Method" in the editor and in the
+canvas preview at the time of the edit, and the save produced a new version number, but the
+belt-and-braces re-read is outstanding. **Cheapest confirmation is the real one: run Close and
+Create Order and look at the Schedule Runs screen.**
+
+### Receiving status — the value set, and three traps in it
+
+**Measured 2026-09-04.** `Order.Receiving_Status__c` is a **restricted** picklist with no
+dependencies and no validation rules. Active values, after this change:
+
+| Org | Active values | Inactive |
+|---|---|---|
+| dev2 | Not Received · **Received** · Partial · Counted In · Staged | Complete |
+| staging | Not Received · **Received** · Partial · Counted In · Staged | Complete |
+| production | **unknown — not checked, and it does not have `Received`** | — |
+
+📌 **Setup's display order is not the pipeline order and never was.** dev2 lists them
+Not Received / Partial / Staged / Counted In. The delivery sequence the boards render —
+`Not Received → Received → Partial → Counted In → Staged` — is defined once in
+`_station.js` (`garment.statuses`) and mirrored in `ca-api.js` (`RECV_ORDER`). Do not
+"fix" Setup to match; nothing reads Setup's order.
+
+**Why `Received` exists.** The blanks are physically here and nobody has counted them.
+Before it, the only moves off `Not Received` were `Partial` and `Counted In`, and **both
+assert a count that has not happened** — so taking a delivery meant overstating it or
+understating it. Anthony's call, 2026-09-04.
+
+##### 🚩 Trap A — there are TWO fields labelled "Receiving Status"
+
+`Receiving_Status__c` (the picklist the app reads and writes) and **`ReceivingStatus__c`**
+(a Text formula, no underscore before Status). Identical label in the Object Manager list.
+The formula is an emoji indicator over the picklist:
+
+```
+CASE( TEXT(Receiving_Status__c),
+  "Not Received", "🚫",  "Received", "📦",
+  "Counted In", "📥",    "Partial", "🌓",
+  "Staged", "✅",        "N/A" )
+```
+
+**A new picklist value that is not added here renders as "N/A" in Salesforce** — no error,
+just a wrong indicator. The app never reads this field, so nothing in the dashboard would
+have caught it.
+
+⚠️ **Staging's copy was a whole generation behind.** It still mapped the pre-2026-05-28 set
+(`Received` → 📥, `Complete` → ✅) and had **no branch for `Counted In` or `Staged`** — so
+since May, staging has been showing "N/A" for the two most common statuses in the shop.
+Both orgs now carry the formula above, verified from the saved field detail page
+(compiled size 364 in each). 📌 `Complete` is an inactive value that old records may still
+hold; neither org has a branch for it, so those render "N/A". Left as-is deliberately.
+
+##### 🚩 Trap B — reactivating a picklist value does NOT restore its record types
+
+Staging already had `Received`, **deactivated 2026-05-28** two minutes before `Counted In`
+and `Staged` were added. Reactivating it put it back in the value set and **nowhere else**:
+on every record type it sat in *Available*, not *Selected*, so no one could pick it on an
+order. It had to be moved across by hand on all six (Ecommerce, EMB Production, Heat Press
+Production, Print Shop Production, ShipStation, Vendor Order).
+
+📌 **dev2 did not have this problem** because the value was created fresh there, and the
+Add-Picklist-Values screen offers record-type checkboxes at creation time. **Same value,
+same day, two different procedures.** Check *Selected*, not the value set, after either.
+
+##### 🚩 Trap C — restricted means the write fails, not that the field degrades
+
+This is trap 5 one level up. A value the active org lacks is not ignored — it rejects the
+**entire PATCH** with `INVALID_OR_NULL_FOR_RESTRICTED_PICKLIST`. With one deployment
+serving three orgs, that is a live hazard the moment the orgs disagree, which they do right
+now: **production has no `Received`.**
+
+What the code does about it:
+
+| Piece | Job |
+|---|---|
+| `functions/api/_picklist.js` | Cached describe of the active org's **active** values. Returns `null` for *could not tell* — **never an empty list**, or a transient describe failure would take the garment station down. Same rule E5.6 settled for shipment counts. |
+| `_station.js` → `garment.optionalStatuses` | Names what may be absent. **Delete `Received` from it once all three orgs match** — empty is the goal state, not a fixture. |
+| `update-order-receiving` | Refuses an optional value the org lacks with a named `status_not_in_org`. An *unknown* answer still writes, so genuine errors surface through E4.2's paths. |
+| `GET /api/receiving-statuses` | What the boards may offer right now. Separate endpoint on purpose — rule #1 is the board never goes blank, and a describe failure must not take the order list with it. |
+| `station.html`, `pre-production.html` | Render the supported subset, starting **pessimistic**: optional chips are withheld until the org confirms, so the worst case is a chip arriving a beat late rather than one that fails when tapped. The four long-standing statuses are never withheld. |
+
+⛔ **Not verified.** There is no `.dev.vars` on this machine, so `/api/receiving-statuses`
+has **not** been exercised against a live org and neither board has been rendered against
+dev2. The org half was verified directly (value set and record-type *Selected* lists read
+back in both orgs); the app half rests on unit checks of `supportedFrom()` and a contrast
+measurement of the new chip (9.70:1 on its own background). **Run the garment station
+against dev2 and check the network tab before trusting it.**
+
+📌 **E7.4 gains an item:** `Received` must be added to production's `Receiving_Status__c`
+*and* to its record types, and production's `ReceivingStatus__c` formula must carry the
+branch. Until then the guard is what keeps the chip off that org.
+
+🚩 **Production does not have this flow's change either** — it travels with **E7.4**, and per the
+trap directly below, a flow in a change set arrives **inactive**.
+
+⚠️ **The flow's Description field is a shared running changelog, and it is easy to corrupt.** The
+"Save As New Version" dialog pre-fills it with the whole existing history and the cursor does not
+land at the end — so a note typed there gets spliced into the middle of an earlier entry. dev2's
+copy already carried two such splices before 2026-09-04 (the 8/24 run-hours note splits "screen"
+into "scr" / "een"; the MockupLink note is appended mid-line to the 10/30 entry), and this session
+added a third. It is cosmetic — no behaviour depends on it — but tidying it costs a further flow
+version, so it has deliberately been left alone. **If you write a note there, click to the very end
+of the field first.**
+
 ### Moving metadata between orgs — what change sets do not do
 
 📌 **Learned the hard way, 2026-09-04, deploying B4 to staging.** Add each of these to the
@@ -3247,6 +3372,10 @@ Newest first. One line per change; link to the story that carries the detail.
 
 | Date | What | Where |
 |---|---|---|
+| 2026-09-04 | **`Received` added to `Order.Receiving_Status__c`** — dev2 + staging, all 6 record types. New chip on the pre-production board and the garment station, guarded so an org without the value never offers it. Branch `feat/received-status`, commit `0f98aca`, unpushed. **Production does not have the value** (E7.4) | §9 |
+| 2026-09-04 | 🚩 **`Order.ReceivingStatus__c` is a SECOND field with the SAME label** — an emoji formula over the picklist. Staging's copy was a generation stale and rendered `Counted In` and `Staged` as "N/A". Both orgs now match | §9 |
+| 2026-09-04 | **Proposed-runs screen relabelled** — `RunMachineGroup` picklist on the Schedule Runs screen of `Order and Order Items Subflow Design` now reads **Method**, not "Machine". Label only; API name and the `Machine_Group__c` choice set untouched. dev2 V43, staging V44, both activated | §9 |
+| 2026-09-04 | **Staging IS reachable from browser automation** — the standing note in §1 and §6 was stale | §9 |
 | 2026-09-04 | All project docs combined into this file | §12 |
 | 2026-09-04 | **B4 shipped to staging and verified** — field + flow. ⚠️ Flow arrived as a Draft with V1 still active; needed activating by hand | §4 B4, §9 |
 | 2026-09-04 | Change set **"Placement-Aware Line Item Skeleton (B4)"** created in dev2 | §9 |
