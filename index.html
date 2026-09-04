@@ -154,6 +154,19 @@ window.__resources = Object.assign({}, window.__resources, {
                   <div style="height:6px;background:#232327;border-radius:4px;overflow:hidden"><div style="height:100%;width:{{o.progressWidth}};background:{{o.methColor}}"></div></div>
                 </div>
               </sc-if>
+              <!-- B7 stage 1: the method's SAVED clock. The pause icon and the
+                   word "saved" are what stop it reading as live -- the server
+                   knows the seconds, not whether anyone is running them. Stage 2
+                   (blocked on E2.3) makes this same display tick; it is a second
+                   hand on this chip, not a redesign, so leave the shape alone. -->
+              <sc-if value="{{o.hasStoredTimer}}" hint-placeholder-val="{{ true }}">
+                <span title="{{o.storedTimerHint}}" style="align-self:flex-start;display:inline-flex;align-items:center;gap:6px;background:var(--surface-card);border:1px solid var(--border-subtle);border-radius:100px;padding:5px 10px">
+                  <i class="ti ti-player-pause" style="font-size:11px;color:var(--text-faint)"></i>
+                  <span style="font:600 9px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:var(--text-muted)">{{o.storedTimerLabel}}</span>
+                  <span style="font:600 11px/1 'Oswald';color:var(--text-secondary);font-variant-numeric:tabular-nums">{{o.storedTimerValue}}</span>
+                  <span style="font:400 9px/1 'Archivo';color:var(--text-faint)">saved</span>
+                </span>
+              </sc-if>
               <sc-if value="{{o.hasMisprints}}" hint-placeholder-val="{{ true }}">
                 <span style="align-self:flex-start;display:inline-flex;align-items:center;gap:5px;font:700 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:6px;padding:5px 9px"><i class="ti ti-alert-triangle"></i>{{o.mis}} misprint</span>
               </sc-if>
@@ -2618,6 +2631,44 @@ class Component extends DCLogic {
         methLabel:m.label, methShort: (o.placements&&o.placements.length) ? (m.short+' · '+o.placements.join(' + ')) : m.short, methColor:m.color,
         hasWorker:!!wname, noWorker:!wname, workerName:wname||'Unassigned', workerInit:o.workerInit||o.worker||(wname?wname.trim().slice(0,2).toUpperCase():'—'), workerColor:o.workerColor||(w&&w.color)||'#3a3a40',
         urgColor:U[o.urg]||U.ok, hasProgress:typeof o.pct==='number', progressWidth:(o.pct||0)+'%', hasMisprints:(o.mis||0)>0,
+        /* ── the method's stored clock (B7 stage 1) ─────────────────────
+           Ready for Print shows set-up, In Production shows production. One
+           figure, chosen by status. The clocks are per METHOD, not per run --
+           index.html's own note above runsInOrder() says switching runs "does
+           not switch clocks", it re-points which run the next Start/Stop
+           stamps -- so selectedRunId() is not involved and the card needs no
+           selection logic at all.
+
+           ⚠️ THIS IS A SAVED FIGURE AND IT MUST NOT LOOK LIVE. The server holds
+           elapsed seconds as of the last Pause or Stop and nothing about
+           whether a clock is running right now; startedAt lives on the tablet
+           (B2 step 1). A card reading 42:15 that has not moved in an hour is
+           the same defect as a board full of demo data -- plausible, wrong,
+           and acted on by someone deciding whether to walk to the press. Hence
+           the pause icon and the word "saved", both non-negotiable until
+           stage 2 (E2.3) can tell us whether it is ticking.
+
+           BLANK IS NOT ZERO. A method nobody has timed shows nothing at all
+           rather than 00:00 -- in this codebase blank means "nobody touched
+           this" and a number means someone decided. Note the two are already
+           indistinguishable by the time they reach here: orders/index.js and
+           production-orders/index.js both coerce the field to 0 server-side,
+           so 0 is treated as "not recorded". A genuinely zero-second timer
+           would need a start and stop inside the same second, and showing it
+           blank is the harmless way to be wrong about that. */
+        ...(function(){
+          const secs = o.stage==='rfp' ? Number(o._setup)||0
+                     : o.stage==='ip'  ? Number(o._prod)||0
+                     : 0;
+          if (!secs) return { hasStoredTimer:false, storedTimerLabel:'', storedTimerValue:'', storedTimerHint:'' };
+          const which = o.stage==='rfp' ? 'Set-up' : 'Production';
+          return {
+            hasStoredTimer: true,
+            storedTimerLabel: which,
+            storedTimerValue: this.fmtDur(secs),
+            storedTimerHint: which + ' time last saved to Salesforce. This does not tick -- it updates when someone pauses or stops the timer on the tablet running it.',
+          };
+        }).call(this),
         // Shortfall: counted, but never made it onto the press. Deliberately a
         // SEPARATE badge from misprints and in a different colour, because they
         // call for opposite actions -- a misprint means buy and print a
