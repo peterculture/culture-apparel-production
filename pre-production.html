@@ -936,6 +936,10 @@ class Component extends DCLogic {
     let storedName=''; try{ storedName=(window.CAApi&&window.CAApi.anyWorkerName)?window.CAApi.anyWorkerName():(localStorage.getItem('caShopWorkerName')||''); }catch(_){}
     this.state = {
       now:new Date(), nameOk: VALID_NAMES.includes(storedName),
+      /* Receiving chips the ACTIVE org supports, as board keys. null = not
+         asked yet -> the conservative baseline is used. See RECV_OK in
+         render() and _picklist.js on the server. */
+      recvKeys: null,
       // Switch-account PIN pad (2026-08-13) -- see index.html's matching
       // comment. Tapping a name in "Who's this?" used to claim that identity
       // (and, for Gian/Anthony/Parker, manager rights) instantly; it now
@@ -1019,6 +1023,11 @@ class Component extends DCLogic {
   }
   componentDidMount(){
     this._t=setInterval(()=>this.setState({now:new Date()}),1000);
+    /* Which receiving statuses this org actually has. Background + failure-
+       tolerant: if it never answers, the four long-standing chips still work. */
+    if(window.CAApi&&window.CAApi.loadRecvKeys){
+      window.CAApi.loadRecvKeys().then(keys=>{ if(keys&&keys.length) this.setState({recvKeys:keys}); }).catch(()=>{});
+    }
     // Deep link from index.html's "Add another method" button (that board has
     // no plan/items search UI of its own -- it hands off to this
     // page's already-built Management form instead of duplicating it). Wait
@@ -2621,8 +2630,21 @@ class Component extends DCLogic {
     const M={ sp:{label:'Screen Print',color:'#C6372B',icon:'ti-stack-2',prereq:['Screens completed','Inks mixed']}, em:{label:'Embroidery',color:'#5E9B9A',icon:'ti-needle',prereq:['File digitized','Thread & materials']}, hp:{label:'Heat Press',color:'#C9923A',icon:'ti-flame',prereq:['Transfers received','Transfers ready']}, promo:{label:'Promotional Items',color:'#8E6FB0',icon:'ti-gift',prereq:[]} };
     const W={ MA:{name:'Marcus A.',color:'#C6372B'}, DK:{name:'Dana K.',color:'#5E9B9A'}, PR:{name:'Priya R.',color:'#C9923A'}, JT:{name:'Jules T.',color:'#7FA644'} };
     const U={ over:'#E24A3A', today:'#E24A3A', soon:'#C9923A', ok:'var(--text-muted)' };
-    const RECV={ none:{label:'Not Received',icon:'ti-inbox',textColor:'#E8A89F',bg:'#2A100D',border:'#7A241C'}, partial:{label:'Partial',icon:'ti-progress',textColor:'#E0B870',bg:'#241a09',border:'#5E4214'}, countedin:{label:'Counted In',icon:'ti-checks',textColor:'#8FCBE0',bg:'#0D1F2A',border:'#2E6A8B'}, staged:{label:'Staged',icon:'ti-check',textColor:'#BBD382',bg:'#18230D',border:'#3D5418'} };
-    const RECV_STEPS=[['none','Not In','ti-inbox'],['partial','Partial','ti-progress'],['countedin','Counted','ti-checks'],['staged','Staged','ti-checkbox']];
+    /* 'received' added 2026-09-04: blanks are physically here, uncounted. It
+       sits between 'none' and 'partial' because that is the delivery sequence --
+       'partial' and 'countedin' both assert a count that has not happened yet.
+       Colour is the neutral slate of an arrival, deliberately NOT on the
+       red->amber->blue->green progression the other four ride: it is a
+       "landed, awaiting a human" state, not a degree of doneness. Contrast
+       checked against --surface-card #121215 (E9.4's floor is 4.5:1). */
+    const RECV={ none:{label:'Not Received',icon:'ti-inbox',textColor:'#E8A89F',bg:'#2A100D',border:'#7A241C'}, received:{label:'Received',icon:'ti-package',textColor:'#B9C2CC',bg:'#161A1F',border:'#3E4854'}, partial:{label:'Partial',icon:'ti-progress',textColor:'#E0B870',bg:'#241a09',border:'#5E4214'}, countedin:{label:'Counted In',icon:'ti-checks',textColor:'#8FCBE0',bg:'#0D1F2A',border:'#2E6A8B'}, staged:{label:'Staged',icon:'ti-check',textColor:'#BBD382',bg:'#18230D',border:'#3D5418'} };
+    const RECV_STEPS=[['none','Not In','ti-inbox'],['received','Received','ti-package'],['partial','Partial','ti-progress'],['countedin','Counted','ti-checks'],['staged','Staged','ti-checkbox']];
+    /* Only offer what the ACTIVE org has. Receiving_Status__c is a RESTRICTED
+       picklist and one deployment serves three orgs, so a chip the org lacks
+       does not degrade -- the whole PATCH is rejected. st.recvKeys is null
+       until /api/receiving-statuses answers; the baseline withholds anything
+       optional, so a chip can arrive late but never fails when tapped. */
+    const RECV_OK=(window.CAApi&&Array.isArray(st.recvKeys))?st.recvKeys:((window.CAApi&&window.CAApi.recvKeysBaseline)?window.CAApi.recvKeysBaseline():['none','partial','countedin','staged']);
 
     const q=st.q.trim().toLowerCase();
     const mondayOf=(iso)=>{ if(!iso) return null; const d=new Date(String(iso).slice(0,10)+'T12:00:00'); if(isNaN(d.getTime())) return null; const dow=(d.getDay()+6)%7; d.setDate(d.getDate()-dow); d.setHours(0,0,0,0); return d.getTime(); };
@@ -2724,7 +2746,7 @@ class Component extends DCLogic {
     if(src && !st.sent[src.id]){
       const d=mk(src), m=M[src.meth]||M.sp;
       const checklist=m.prereq.map(label=>{ const done=!!src[CF[label]]; return { label, onToggle:()=>this.toggleCheck(src.id,label), icon:done?'ti-check':'', boxBg:done?m.color:'transparent', boxBorder:done?m.color:'#3a3a40', border:done?'#2f2a24':'#232327', textColor:done?'#ECEAE4':'var(--text-secondary)' }; });
-      const recvSteps=RECV_STEPS.map(([key,label,icon])=>{ const on=src.recv===key; const c=RECV[key]; return { key,label,icon, onPick:()=>this.setRecv(src.orderId,key), bg:on?c.bg:'#121215', border:on?c.border:'#232327', textColor:on?c.textColor:'var(--text-tertiary)' }; });
+      const recvSteps=RECV_STEPS.filter(([key])=>RECV_OK.indexOf(key)>=0).map(([key,label,icon])=>{ const on=src.recv===key; const c=RECV[key]; return { key,label,icon, onPick:()=>this.setRecv(src.orderId,key), bg:on?c.bg:'#121215', border:on?c.border:'#232327', textColor:on?c.textColor:'var(--text-tertiary)' }; });
       const assignees=['MA','DK','PR','JT'].map(k=>{ const on=src.worker===k; return { key:k, init:k, name:W[k].name, color:W[k].color, onPick:()=>this.assign(src.id,k), bg:on?'#1a1a1e':'transparent', border:on?W[k].color:'#242428', textColor:on?'#ECEAE4':'var(--text-tertiary)' }; });
       const sizeCells=src.sizes.split('·').map(t=>t.trim()).filter(Boolean).map(tok=>{ const mm=tok.match(/^([A-Za-z0-9]+?)(\d+)$/); return mm?{label:mm[1],qty:mm[2]}:{label:tok,qty:''}; });
       const ready=isReady(src);
