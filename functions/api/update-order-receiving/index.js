@@ -34,6 +34,7 @@
  */
 import { sfFetch, apiVersion, jsonError } from "../_sf.js";
 import { STATION_CONFIG } from "../_station.js";
+import { activePicklistValues } from "../_picklist.js";
 import { requireCap } from "../_session.js";
 
 const SF_ID = /^[a-zA-Z0-9]{15,18}$/;
@@ -84,6 +85,33 @@ export async function onRequestPost({ env, request }) {
 
     if (!SF_ID.test(orderId)) return jsonError("invalid_order_id", 400);
     if (!cfg.statuses.includes(status)) return jsonError("invalid_status", 400);
+
+    /* ORG-CAPABILITY GATE, added 2026-09-04 with the "Received" status.
+       `Receiving_Status__c` is a RESTRICTED picklist and one deployment serves
+       three orgs, so a value that is valid in dev2 can be absent in the org
+       the KV switch currently points at -- and a restricted picklist answers
+       that with INVALID_OR_NULL_FOR_RESTRICTED_PICKLIST on the WHOLE PATCH,
+       not by ignoring the field. Refusing here turns "the tablet is broken"
+       into a named reason the board can show.
+
+       Only `optionalStatuses` are checked. The long-standing four are never
+       gated: if describe ever answered strangely about those, failing the
+       write would be a much worse bug than the one this prevents.
+
+       ⚠️ UNKNOWN IS NOT NO. activePicklistValues returns null when describe
+       could not be read, and this deliberately lets the write through in that
+       case so Salesforce's own error surfaces through the normal path rather
+       than the station going dead on a transient hiccup. */
+    const optional = cfg.optionalStatuses || [];
+    if (optional.includes(status)) {
+      const orgValues = await activePicklistValues(env, "Order", cfg.field);
+      if (Array.isArray(orgValues) && !orgValues.includes(status)) {
+        console.error(
+          `[receiving] "${status}" is not an active value on Order.${cfg.field} in the active org`
+        );
+        return jsonError("status_not_in_org", 400);
+      }
+    }
 
     const payload = { [cfg.field]: status };
 
