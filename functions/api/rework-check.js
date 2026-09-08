@@ -31,6 +31,7 @@
  * A `false` next to one query name here is the whole diagnosis.
  */
 import { runQuery, jsonError, soqlQuote, soqlQuoteList } from "./_sf.js";
+import { runQueryOptionalField } from "./_placements.js";
 
 const SF_ID = /^[a-zA-Z0-9]{15,18}$/;
 /* Escaping lives in _sf.js now. These were five diverging copies that
@@ -39,6 +40,12 @@ const SF_ID = /^[a-zA-Z0-9]{15,18}$/;
    call site below reads unchanged. */
 const q = soqlQuote;
 const quoteList = soqlQuoteList;
+
+/* Mirrors OUTCOME_DECLINED in _rework.js. Local on purpose, same reason as
+   PM_RANK below: this must still report the truth while that file is mid-edit.
+   All three are decisions to settle without a reprint -- Credit/Refund (2023)
+   was superseded by separate Credit and Refund (2024) and never deactivated. */
+const DECLINED = new Set(["Credit", "Refund", "Credit/Refund"]);
 
 // Same ranks as _pm-rollup.js -- kept local on purpose so this diagnostic
 // still reports the truth even if that file is mid-edit.
@@ -72,6 +79,65 @@ async function probe(env, report, name, soql) {
     report.queries[name].error = res.data;
   }
   return res;
+}
+
+/* ── B9: what the account manager decided, if this org asks at all ────────
+   Its OWN query, never folded into the order lookup above. This endpoint is
+   what you run when nothing is working, so it must not be the thing that
+   breaks: the audit trio exists only where B9 has been built, and trap 1 says
+   naming a missing field fails the whole SELECT. A separate optional-field
+   query costs this one block and leaves the rest of the diagnostic readable.
+
+   `available:false` is itself the answer to "why did a reprint appear without
+   anyone approving it" -- this org has no opt-in machinery and builds
+   automatically, exactly as it did before B9. */
+async function probeB9(env, report, orderId) {
+  /* Selects Misprint_Outcome_By__c, the raw lookup -- NOT Misprint_Outcome_By__r.Name.
+     runQueryOptionalField only retries when the failure text names the field it
+     was given, and a missing lookup makes Salesforce say "No such column
+     'Misprint_Outcome_By__r'" -- __r, not __c. Matching on __c against an error
+     naming __r never fires, so the fallback would silently never happen and an
+     org without B9 would report a hard query failure instead of "not built
+     here". The owner's NAME is resolved separately below, where failing is
+     cosmetic. */
+  const soql = (include) =>
+    `SELECT Id${include ? ", Misprint_Outcome__c, Misprint_Outcome_By__c, Misprint_Outcome_At__c, Misprint_Outcome_Notes__c" : ""} ` +
+    `FROM Order WHERE Id = ${q(orderId)} LIMIT 1`;
+  let res;
+  try {
+    res = await runQueryOptionalField(env, soql, "Misprint_Outcome_By__c");
+  } catch (e) {
+    report.queries.misprintOutcome = { ok: false, error: String(e), soql: soql(true) };
+    return { available: false, probeFailed: true };
+  }
+  report.queries.misprintOutcome = {
+    ok: res.ok, status: res.status, count: res.records.length,
+    hadField: res.hadField, soql: soql(!!res.hadField),
+  };
+  if (!res.ok) {
+    report.queries.misprintOutcome.error = res.data;
+    return { available: false, probeFailed: true };
+  }
+  if (!res.hadField || !res.records.length) return { available: false, probeFailed: false };
+  const r = res.records[0];
+  /* Cosmetic: the verdict reads better as "declined by Dana" than by an 18-char
+     Id. A failure here must not turn a working diagnostic into a broken one, so
+     it degrades to the Id. */
+  let byName = r.Misprint_Outcome_By__c || null;
+  if (r.Misprint_Outcome_By__c) {
+    try {
+      const who = await runQuery(env, `SELECT Name FROM User WHERE Id = ${q(r.Misprint_Outcome_By__c)} LIMIT 1`);
+      if (who.ok && who.records.length) byName = who.records[0].Name;
+    } catch { /* keep the Id */ }
+  }
+  return {
+    available: true,
+    probeFailed: false,
+    outcome: r.Misprint_Outcome__c || null,
+    by: byName,
+    at: r.Misprint_Outcome_At__c || null,
+    notes: r.Misprint_Outcome_Notes__c || null,
+  };
 }
 
 export async function onRequestGet({ request, env }) {
@@ -266,6 +332,8 @@ export async function onRequestGet({ request, env }) {
     // ---------------------------------------------------------------------
     // 5. Verdict, in the same order _rework.js checks them.
     // ---------------------------------------------------------------------
+    report.b9 = await probeB9(env, report, orderId);
+
     const Q = report.queries;
     const failedQuery = Object.keys(Q).find((k) => !Q[k].ok);
 
@@ -295,6 +363,42 @@ export async function onRequestGet({ request, env }) {
           ? `nothing_to_rework -- ${report.linesWithDamageButNoOrderProduct} line(s) carry damage ` +
             `but have no Order_Product__c, so there is no product to reorder.`
           : `nothing_to_rework -- every line item's Misprint_Qty__c + Damaged_Qty__c is 0 or blank.`;
+    } else if (report.b9 && report.b9.available && report.b9.outcome && DECLINED.has(report.b9.outcome)) {
+      /* B9. Sits HERE, after the damage gate and before the hook gate, because
+         that is exactly where _rework.js asks it -- a diagnostic that reports
+         the gates in a different order than the code checks them is worse than
+         no diagnostic. */
+      report.verdict =
+        `declined_by_am -- Misprint_Outcome__c is '${report.b9.outcome}'` +
+        (report.b9.by ? ` (${report.b9.by}` + (report.b9.at ? ` on ${report.b9.at}` : "") + `)` : "") +
+        `. The customer settled without a reprint, so no reprint will ever be built for this ` +
+        `order. This is a real outcome, not a failure -- do not "fix" it by clearing the field ` +
+        `unless the customer actually changed their mind.`;
+    } else if (report.b9 && report.b9.available && report.b9.outcome === "Awaiting AM") {
+      report.verdict =
+        `awaiting_am -- every gate passes and ${report.totalReworkQty} garment(s) are waiting, ` +
+        `but Misprint_Outcome__c reads 'Awaiting AM'` +
+        (report.b9.at ? ` since ${report.b9.at}` : "") +
+        `. Nothing is broken: the account manager has not answered yet. Nothing will be built ` +
+        `until they set it to 'Reprint'.`;
+    } else if (report.b9 && report.b9.available && !report.b9.outcome) {
+      report.verdict =
+        `gates pass, decision not yet requested -- Misprint_Outcome__c is blank, which is the ` +
+        `resting state. The next time the rework runs for this order it will set 'Awaiting AM' ` +
+        `and the Flow will email the account manager. If that has already happened and the ` +
+        `field is still blank, the Awaiting AM write is failing -- check the Worker log.`;
+    } else if (report.b9 && report.b9.available && report.b9.outcome === "Reprint") {
+      report.verdict =
+        `approved, not yet built -- the account manager chose 'Reprint'` +
+        (report.b9.by ? ` (${report.b9.by})` : "") +
+        ` and every gate passes, but no reprint child exists yet. The Management inbox sweep ` +
+        `builds it on its next load (functions/api/inbox/index.js). If it never appears, the ` +
+        `failure is inside the composite create, not the gates.`;
+    } else if (report.b9 && report.b9.available && report.b9.outcome) {
+      report.verdict =
+        `unknown_outcome -- Misprint_Outcome__c reads '${report.b9.outcome}', which _rework.js ` +
+        `does not recognise, so it will not build. A picklist value was added without teaching ` +
+        `OUTCOME_DECLINED / OUTCOME_REPRINT in _rework.js about it.`;
     } else if (!report.hookGate.wouldFireOnNextMethodPatch) {
       report.verdict =
         `GATES PASS but the hook never runs: the least-advanced method gives ` +
