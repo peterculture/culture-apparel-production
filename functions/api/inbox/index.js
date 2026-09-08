@@ -14,6 +14,7 @@
 import { runQuery, jsonError, runChunkedIdQuery } from "../_sf.js";
 import { runQueryOptionalField, splitPlacements } from "../_placements.js";
 import { fetchMockupsByOpportunity } from "../_mockup.js";
+import { createReworkIfNeeded } from "../_rework.js";
 const FIELDS = [
   "Id",
   "OrderNumber",
@@ -211,7 +212,61 @@ async function fetchReprintsAwaitingRuns(env) {
 }
 
 const MULTI_METHOD_FIELD = "Multiple_Production_Methods__c";
-export async function onRequestGet({ env }) {
+/* ── B9: build the reprints the account manager has approved ──────────────
+   The AM makes the decision inside Salesforce, on the Order record. Nothing
+   pushes that back to this Worker: there is no inbound-auth pattern anywhere in
+   functions/, no webhook, no shared secret and no cron, and Cloudflare Access
+   fronts /api/* -- so a Flow callout would need a hole in the perimeter E6.4
+   just finished proving, for one link.
+
+   So nothing is pushed. This sweep runs when the Management inbox loads, which
+   is where a manager goes to schedule the reprint's runs -- B6 already puts a
+   methods-but-no-runs reprint in this list. The order that has been approved
+   materialises in the same place, at the moment somebody looks for it.
+
+   BOUNDED ON PURPOSE. A reprint build is several composite calls; a sweep that
+   found twenty would turn one board load into a minute of Salesforce traffic.
+   It takes the oldest few per load and the rest arrive on the next one -- this
+   board polls, so "the next one" is seconds away, not a day.
+
+   createReworkIfNeeded re-checks every gate itself, so this query only has to
+   produce candidates. It is deliberately not clever: an order the AM approved
+   that fails a gate is left for rework-check to explain, not silently skipped
+   here with a second opinion. */
+const SWEEP_LIMIT = 3;
+
+async function buildApprovedReprints(env) {
+  /* Selecting Misprint_Outcome__c is trap 1 territory -- it exists in all three
+     orgs (confirmed 2026-09-08) but existing is not the same as being readable
+     by the integration user. This is its own query inside its own try, so an
+     FLS surprise costs the sweep and never the inbox itself. */
+  const candidates = await runQuery(
+    env,
+    `SELECT Id FROM Order WHERE Misprint_Outcome__c = 'Reprint' ` +
+      `AND Order_Substatus__c = 'Completed' ` +
+      // Self-semi-join on the reprint link: an order that already has a child
+      // is done. Gate 1 inside createReworkIfNeeded would catch it anyway; this
+      // just keeps the candidate list honest.
+      `AND Id NOT IN (SELECT Original_Production_Order__c FROM Order WHERE Original_Production_Order__c != null) ` +
+      `ORDER BY Misprint_Outcome_At__c ASC NULLS FIRST LIMIT ${SWEEP_LIMIT}`,
+  );
+  if (!candidates.ok) {
+    console.error("B9 sweep: candidate query failed", candidates.status);
+    return;
+  }
+  for (const o of candidates.records) {
+    // Sequential, not Promise.all -- each build is a chain of composites and
+    // firing three at once at one org is how you find the API limit.
+    const res = await createReworkIfNeeded(env, o.Id, "B9 sweep").catch((e) => {
+      console.error("B9 sweep: build threw", o.Id, e);
+      return null;
+    });
+    if (res && res.created) console.log("B9 sweep: built reprint for", o.Id, "->", res.orderId);
+    else if (res && !res.created) console.log("B9 sweep: no build for", o.Id, "--", res.reason);
+  }
+}
+
+export async function onRequestGet({ env, waitUntil }) {
   try {
     const buildSoql = (withMulti) =>
       `SELECT ${FIELDS.concat(withMulti ? [MULTI_METHOD_FIELD] : []).join(", ")} FROM Order ` +
@@ -260,6 +315,14 @@ export async function onRequestGet({ env }) {
     records.forEach((r) => {
       r.DesignMockupUrl = mockups.get(r.OpportunityId) || null;
     });
+
+    /* After the response, not before it. The manager is waiting on a board, not
+       on Salesforce -- and an approved reprint appearing on the next poll a few
+       seconds later is a far better trade than every inbox load paying for a
+       composite build. Fail-open in every sense: nothing here can affect what
+       is returned above. */
+    const sweeping = buildApprovedReprints(env).catch((e) => { console.error("B9 sweep failed", e); });
+    if (typeof waitUntil === "function") waitUntil(sweeping);
 
     return Response.json(
       { totalSize: records.length, done: true, records, reprintsUnavailable },
