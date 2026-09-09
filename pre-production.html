@@ -265,12 +265,24 @@ window.__resources = Object.assign({}, window.__resources, {
 
         <div>
           <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:11px">Production Methods</div>
+          <!-- B21: how many methods this ORDER has. Hidden entirely on a
+               single-method order (methodSiblings returns shown:false), so the
+               common case gains nothing to read. -->
+          <sc-if value="{{open.siblings.shown}}" hint-placeholder-val="{{ false }}">
+            <div style="margin:-4px 0 11px">
+              <div style="font:600 10px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:var(--text-secondary)">{{open.siblings.countLabel}}</div>
+              <sc-if value="{{open.siblings.hasNote}}" hint-placeholder-val="{{ false }}">
+                <div style="font:400 10px/1.4 'Archivo';color:var(--text-faint);margin-top:4px">{{open.siblings.note}}</div>
+              </sc-if>
+            </div>
+          </sc-if>
           <div style="display:flex;flex-direction:column;gap:7px">
             <sc-for list="{{open.methodsView}}" as="pm" hint-placeholder-count="1">
               <div style="display:flex;flex-direction:column;background:#121215;border:1px solid #232327;border-left:3px solid {{pm.color}};border-radius:8px;overflow:hidden">
                 <div style="display:flex;align-items:center;gap:10px;padding:11px 13px">
                   <span style="width:8px;height:8px;border-radius:50%;background:{{pm.color}};flex-shrink:0"></span>
                   <span style="font:500 12px/1 'Archivo';color:#ECEAE4">{{pm.label}}</span>
+                  <sc-if value="{{pm.isCurrent}}" hint-placeholder-val="{{ false }}"><span style="font:700 8px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#08080A;background:{{pm.color}};border-radius:6px;padding:4px 7px;flex-shrink:0">This card</span></sc-if>
                   <span style="font:600 8px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:var(--text-secondary);background:#1a1a1e;border-radius:6px;padding:4px 7px">{{pm.status}}</span>
                   <button onClick="{{ pm.onEdit }}" title="Edit method" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:transparent;border:1px solid #2a2a2f;color:var(--text-tertiary);cursor:pointer;flex-shrink:0"><i class="ti ti-pencil" style="font-size:12px"></i></button>
                   <button onClick="{{ pm.onRemove }}" title="Remove method" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:transparent;border:1px solid #2a2a2f;color:var(--text-tertiary);cursor:pointer;flex-shrink:0"><i class="ti ti-trash" style="font-size:12px"></i></button>
@@ -1520,13 +1532,18 @@ class Component extends DCLogic {
   }
   // Builds one Production Methods row for the drawer, including its inline
   // edit form (pm.mf) when that row is the one currently being edited.
-  methodRowView(r, orderId){
+  methodRowView(r, orderId, currentMethodId){
     const api=this._api||window.CAApi;
     const meta=(api && api.METHOD_META && api.METHOD_META[r.Type__c]) || { color:'var(--text-tertiary)' };
     const placements=(r.Placements__c||'').split(';').map(s=>s.trim()).filter(Boolean);
     const editing = this.state.methodEditId===r.Id;
+    /* B21. The manager opened ONE method and is reading a list that contains
+       it; without this the row is a riddle. Matched on Id, never on Type__c --
+       under D11/B4 an order can carry two Screen Print methods on different
+       placements, and a type match would badge both of them. */
+    const isCurrent = !!(api && api.sameMethodId && api.sameMethodId(r.Id, currentMethodId));
     const view = {
-      id:r.Id, type:r.Type__c, placements, status:r.Status__c,
+      id:r.Id, type:r.Type__c, placements, status:r.Status__c, isCurrent,
       label: r.Type__c + (placements.length ? (' – '+placements.join(' + ')) : ''),
       color: meta.color,
       editing, onEdit:()=> editing ? this.closeMethodEdit() : this.openMethodEdit(r),
@@ -2758,7 +2775,22 @@ class Component extends DCLogic {
       // manager form used for brand-new orders, pre-targeted at this
       // ORDER (not this card) since it's adding a new method alongside it.
       const methodRecords = st.methodsByOrder[src.orderId] || [];
-      const methodsView = methodRecords.map(r=>this.methodRowView(r, src.orderId));
+      /* B21. Same helper and same source as index.html's drawer -- the
+         per-order fetch, which returns every Production_Method__c on the
+         order. `onBoard` differs because the BOARDS differ: this one shows
+         exactly the methods still in Pre-Production (see the load() filter),
+         so a sibling that is already In Production has no card HERE while
+         being perfectly visible on the production floor board. Passing
+         stageOfMethod() instead -- the default -- would have made every card
+         on this board report itself as off-board. */
+      const siblings = (api && api.methodSiblings)
+        ? api.methodSiblings(methodRecords, src.id, { onBoard: (s)=> s==='Pre-Production' })
+        : { shown:false, countLabel:'', hasNote:false, note:'' };
+      /* Self-marking only matters when there is something to tell apart, so
+         it is gated on the summary being shown. A single-method order gets
+         literally nothing new in this drawer -- no count, no note, and no
+         "This card" badge on the one row it was never ambiguous about. */
+      const methodsView = methodRecords.map(r=>this.methodRowView(r, src.orderId, siblings.shown ? src.id : null));
       // Production Runs section: this card's own Production_Method__c is the
       // scope key (runsByMethod/runEdits are keyed by that same Id), so a
       // sibling method's runs never bleed into this card. Falls back to
@@ -2866,7 +2898,7 @@ class Component extends DCLogic {
         onReject:()=>this.rejectProposal(p, src.orderId),
       }));
 
-      open=Object.assign({},d,{ checklist, recvSteps, assignees, sizeCells, hasSizes:sizeCells.length>0, methodsView, methodsEmpty:methodsView.length===0,
+      open=Object.assign({},d,{ checklist, recvSteps, assignees, sizeCells, hasSizes:sizeCells.length>0, methodsView, methodsEmpty:methodsView.length===0, siblings,
         drawerProposals, hasDrawerProposals:drawerProposals.length>0, onAddMethod:()=>this.openMgrForOrder(src.orderId), canManage:!!(window.CAApi&&window.CAApi.canAccessManagement&&window.CAApi.canAccessManagement()), runsView, runsEmpty:runsView.length===0, runsLoading: st.runsLoadingFor===src.id,
         // "Create Production Run" button in the drawer footer -- reuses
         // d.methLabel (already computed by mk() above) so this doesn't need
