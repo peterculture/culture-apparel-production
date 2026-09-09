@@ -507,8 +507,24 @@ export async function onRequestGet({ env, request }) {
     const orderIds = orders.map((o) => o.Id).filter(Boolean);
     if (orderIds.length) {
       try {
+        /* B20: `AND Size__c != null` -- GARMENTS, not order lines. An
+           OrderItem with a blank Size__c is deliberately not a garment: see
+           order-sizes/index.js, "any row with a blank Size__c is treated as a
+           non-garment line on the front end". A setup fee or a rush charge is
+           an OrderItem too, and counting it made this endpoint's TotalQuantity
+           disagree with pivotItems() in ca-api.js -- which skips exactly those
+           rows -- so index.html and the calendar could show two different
+           garment counts for the same job. B20's whole point is one number.
+           Size__c is safe to name here (trap 1): production-orders, orders,
+           inbox, run-results and order-sizes all already SELECT it against
+           OrderItem, so it is visible to the integration user in every org --
+           and this follow-up still fails open regardless, leaving
+           TotalQuantity null rather than a wrong number. */
         const itemsResult = await runChunkedIdQuery(orderIds, (quotedIds) =>
-          runQuery(env, `SELECT OrderId, Quantity FROM OrderItem WHERE OrderId IN (${quotedIds})`),
+          runQuery(
+            env,
+            `SELECT OrderId, Quantity FROM OrderItem WHERE OrderId IN (${quotedIds}) AND Size__c != null`,
+          ),
         );
         if (itemsResult.ok) {
           const qtyByOrder = new Map();
