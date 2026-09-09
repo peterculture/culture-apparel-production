@@ -1565,12 +1565,24 @@ class Component extends DCLogic {
     };
     const GROUP_ICON = {all:'ti-layout-grid', press1:'ti-printer', press2:'ti-printer',
                         embroidery:'ti-needle-thread', heat:'ti-flame'};
+    /* Method identity on the calendar TABS, and deliberately nowhere else on
+       this page. The grid blocks already carry four colour axes -- outstanding
+       prep, scheduling state (Confirmed vs Planned), priority score, and grey
+       for finished work -- and a fifth on a 30px block would make all five
+       unreadable. The tab strip is where the method belongs anyway: every
+       calendar except Master IS exactly one method, so the icon takes that
+       method's colour (tokens.css --method-*, same values as METHOD_META) and
+       the tab's own background/border/text keep saying which one is selected.
+       Keyed on the group key, same as GROUP_ICON above. Master mixes methods
+       and keeps the neutral selected/unselected treatment. */
+    const GROUP_METHOD = {press1:'var(--method-sp)', press2:'var(--method-sp)',
+                          embroidery:'var(--method-em)', heat:'var(--method-hp)'};
     const calendars = [{key:'all', label:'Master'}].concat(serverGroups.map(g=>({key:g.key,label:g.label}))).map(c=>{
       const on = activeGroup===c.key;
       return {
         label:c.label, count:countFor(c.key), icon:GROUP_ICON[c.key]||'ti-printer',
         bg: on?'#241110':'transparent', border: on?'#7A241C':'#2a2a2f',
-        textColor: on?'#E8A89F':MUT, dotColor: on?'#E8A89F':FAINT,
+        textColor: on?'#E8A89F':MUT, dotColor: GROUP_METHOD[c.key] || (on?'#E8A89F':FAINT),
         countColor: on?INK:DIM,
         onPick:()=>{ if(activeGroup!==c.key) this.setState({group:c.key}); },
       };
