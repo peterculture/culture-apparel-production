@@ -2141,6 +2141,97 @@
       };
     });
   }
+  /**
+   * "How many methods does this order have, and which one am I looking at?"
+   * for a card drawer (B21).
+   *
+   * A method card is one Production_Method__c, but a manager standing at it is
+   * usually asking about the JOB -- an order printed front-and-back, or screen
+   * printed with a heat-pressed tag, is several cards that travel together and
+   * finish together. The drawer already lists the order's methods; what it
+   * could not say is how many there are, which row is the card you opened, and
+   * why that count may not match what you can see on the board.
+   *
+   * `records` are the RAW Production_Method__c rows from
+   * /api/production-methods?orderId= -- deliberately that fetch and not the
+   * board record's rec.ProductionMethods, because the board's own query is
+   * filtered to BOARD_STATUSES (production-orders/index.js) and therefore
+   * cannot see a Pre-Production, On Hold or Cancelled sibling at all. Counting
+   * off the board record would have quietly reported "1 method" for a two-
+   * method job whose second method has not left pre-production yet, which is
+   * the exact question this is meant to answer.
+   *
+   * ⚠️ Multiple_Production_Methods__c is NOT this count and must never be used
+   * for it: it is a checkbox the CAM ticks meaning "another method is COMING"
+   * -- forward-looking intent. It can be false with two methods and true with
+   * one. See the comment at pre-production.html's mgr panel.
+   *
+   * Cancelled is excluded from the count -- the house convention, matching
+   * gate 3 of createReworkIfNeeded ("every NON-CANCELLED method Completed").
+   * But the list underneath still renders the cancelled row, so a count that
+   * silently disagreed with the visible rows would be a second puzzle; `note`
+   * reconciles BOTH: what was left out of the count, and what is counted but
+   * has no card on the board.
+   *
+   * `shown` is false for 0 or 1 counted methods. A single-method order is the
+   * common case and gets nothing at all -- no "1 method" chip, no empty row.
+   */
+  function methodSiblings(records, currentMethodId, opts){
+    var rows = records || [];
+    var o = opts || {};
+    /* Which statuses get a card is a property of the BOARD, not of this
+       helper, so the caller supplies the test. index.html passes
+       stageOfMethod() (plus its Order.Status = 'Complete' override, which
+       forces every method onto the board); pre-production.html shows exactly
+       Pre-Production, so a sibling In Production is off ITS board while being
+       perfectly visible on the other one. Defaulting to stageOfMethod() would
+       have made every pre-production card report itself as off-board. */
+    var onBoard = (typeof o.onBoard === 'function') ? o.onBoard
+                : function (s) { return !!stageOfMethod(s); };
+    var offBoard = [];
+    var counted = [];
+    var cancelled = 0;
+    rows.forEach(function (r) {
+      var status = (r && r.Status__c) || '';
+      if (status === 'Cancelled') { cancelled++; return; }
+      counted.push(r);
+      if (!onBoard(status)) offBoard.push(status || 'no status');
+    });
+    if (counted.length < 2) {
+      return { shown: false, countLabel: '', hasNote: false, note: '' };
+    }
+    var parts = [];
+    if (offBoard.length) {
+      // Distinct statuses, in the order met -- "Pre-Production, On Hold" says
+      // more than "2 methods" and costs nothing.
+      var seen = [];
+      offBoard.forEach(function (s) { if (seen.indexOf(s) < 0) seen.push(s); });
+      parts.push(offBoard.length === 1
+        ? ('one has no card on this board (' + seen.join(', ') + ')')
+        : (offBoard.length + ' have no card on this board (' + seen.join(', ') + ')'));
+    }
+    if (cancelled) {
+      parts.push(cancelled === 1 ? 'one more is cancelled and not counted'
+                                 : (cancelled + ' more are cancelled and not counted'));
+    }
+    var note = parts.length ? (parts.join(' · ').charAt(0).toUpperCase() + parts.join(' · ').slice(1) + '.') : '';
+    return {
+      shown: true,
+      countLabel: counted.length + ' methods on this order',
+      hasNote: !!note,
+      note: note,
+    };
+  }
+  /* Salesforce returns 18-character Ids and a caller may be holding the
+     15-character form, so the card's own method id and the fetched row's id
+     are compared on the first 15 -- the house rule, and the reason this is a
+     function rather than `===` at three call sites. Matching by Id and never
+     by Type__c is deliberate: under D11/B4 an order can carry two Screen Print
+     methods on different placements, and a type match would mark both. */
+  function sameMethodId(a, b){
+    if (!a || !b) return false;
+    return String(a).slice(0, 15) === String(b).slice(0, 15);
+  }
   // Salesforce's compound Address fields (ShippingAddress, BillingAddress)
   // come back over REST as an object -- { street, city, state, postalCode,
   // country, ... } -- or null if nothing's been entered. Turns that into two
@@ -2374,6 +2465,7 @@
     getShippingOrders: getShippingOrders, completeOrder: completeOrder, getStatsTrend: getStatsTrend,
     CHECK_FIELD: CHECK_FIELD, RECV_FROM_SF: RECV_FROM_SF, RECV_TO_SF: RECV_TO_SF, RECV_ORDER: RECV_ORDER, RECV_OPTIONAL: RECV_OPTIONAL, recvKeysBaseline: recvKeysBaseline, loadRecvKeys: loadRecvKeys, TIME_OPTIONS: TIME_OPTIONS,
     PLACEMENTS: PLACEMENTS, methodsList: methodsList, METHOD_META: METHOD_META,
+    methodSiblings: methodSiblings, sameMethodId: sameMethodId,
     getOrders: getOrders, getProductionOrders: getProductionOrders, getInbox: getInbox, getPreProductionItems: getPreProductionItems, patchItem: patchItem, deleteItem: deleteItem, createItem: createItem, searchPlans: searchPlans, searchPresses: searchPresses, createMethod: createMethod, createProductionRun: createProductionRun, getProductionRuns: getProductionRuns, patchProductionRun: patchProductionRun, deleteProductionRun: deleteProductionRun, getProposedRuns: getProposedRuns, patchProposedRun: patchProposedRun, patchMethodStatus: patchMethodStatus, patchMethodChecklist: patchMethodChecklist, getMethodsForOrder: getMethodsForOrder, patchMethodFields: patchMethodFields, deleteMethod: deleteMethod, patchOrder: patchOrder, getOrderSizes: getOrderSizes,
     getCountableRuns: getCountableRuns, getRunResults: getRunResults, submitRunResults: submitRunResults,
     getRunLineItems: getRunLineItems, getMethodAllocation: getMethodAllocation, patchRunLineItems: patchRunLineItems,
