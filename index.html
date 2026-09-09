@@ -3157,7 +3157,18 @@ class Component extends DCLogic {
       const orderTotalNum = Number(src.qty);
       const unallocated = (methodDone == null || !Number.isFinite(orderTotalNum))
         ? null : (orderTotalNum - methodDone);
-      const rawRuns = st.runsByMethod[src.id] || [];
+      /* Sorted, NOT raw (E2.6). These rows and the "Working on" run picker
+         above are the same runs shown twice, and the picker has always gone
+         through runsInOrder() -- scheduled start ascending, unscheduled last,
+         ties broken by Name. These rows used to render in whatever order
+         /api/production-runs happened to return. That endpoint does sort
+         (ORDER BY Scheduled_Start__c ASC NULLS LAST), so the two agreed in
+         practice, but on two runs booked for the SAME time SOQL has no
+         secondary sort and the client does -- and a locally created run is
+         appended here before any reload, so the list re-ordered itself under
+         the manager on the next poll. One ordering for both lists means "the
+         second run" means the same run wherever you read it. */
+      const rawRuns = this.runsInOrder(src.id);
       const runsView = rawRuns.map(r=>{
         const f = st.runEdits[r.id] || this.runEditFieldsFromRecord(r);
         /* Where this run stands on the shop calendar. This board did not show
