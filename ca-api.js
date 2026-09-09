@@ -2113,11 +2113,16 @@
   // /api/production-orders attach the raw list as rec.ProductionMethods; this
   // turns it into small, render-ready chips so boards don't have to re-derive
   // labels/colors themselves.
+  /* Colours come from tokens.css (--method-*), not literals. Every page links
+     that file, so one edit there repaints every board, the printed order sheet
+     included. See the block above --method-sp for why these are deliberately
+     NOT --ok and --warn: those two mean "fine" and "watch this", and a method
+     chip in the exact status green would read as a verdict on the job. */
   var METHOD_META = {
-    'Screen Print': { key:'sp', short:'Screen', color:'#C6372B' },
-    'Embroidery':   { key:'em', short:'Embroid', color:'#5E9B9A' },
-    'Heat Press':   { key:'hp', short:'Heat',    color:'#C9923A' },
-    'Promotional Items': { key:'promo', short:'Promo', color:'#8E6FB0' }
+    'Screen Print': { key:'sp', short:'Screen', color:'var(--method-sp)' },
+    'Embroidery':   { key:'em', short:'Embroid', color:'var(--method-em)' },
+    'Heat Press':   { key:'hp', short:'Heat',    color:'var(--method-hp)' },
+    'Promotional Items': { key:'promo', short:'Promo', color:'var(--method-promo)' }
   };
   function methodsList(rec){
     var raw = (rec && rec.ProductionMethods) || [];
