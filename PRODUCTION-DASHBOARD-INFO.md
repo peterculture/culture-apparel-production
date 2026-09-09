@@ -4,10 +4,76 @@
 system reference, trap list, task tracking, validation checklists and change history — one file, so
 there is one place to look and one place to update.
 
-**Last updated: 2026-09-04.** Replaces `ROADMAP.md`, `CLAUDE-CODE-QUEUE.md`, `CLAUDE.md`,
+**Last updated: 2026-09-09.** Replaces `ROADMAP.md`, `CLAUDE-CODE-QUEUE.md`, `CLAUDE.md`,
 `HANDOFF.md`, `VALIDATION-INTEGRATIONS.md`, `VALIDATION-SCENARIOS.md`, `SELECTOR-CHANGE.md` and
 `README.md`. See §12 for what happened to each of the old files and which ones were deliberately not
 carried over.
+
+---
+
+## 0. Cold start — read this first if you are a new project or session
+
+**This file is the entire handoff. There is no other document, no wiki, and no one to ask.** It was
+written to be picked up by a Claude project that has never seen this work. If something is not in
+here, it was not carried over on purpose — see §12.
+
+**Who you are working with.** Anthony runs Culture Apparel Print Shop and is the *entire* dev team
+on this project. There is no separate Salesforce admin, no ops person, and no one to escalate to.
+📌 Where older notes name "Peter" and "Anthony" as if they were two people, **they are one person.**
+
+**What the thing is.** A production dashboard for a screen-printing shop: nine static HTML pages
+plus ~50 Cloudflare Pages Functions that proxy Salesforce. No build step, no bundler, no test suite,
+no `package.json`. It is backed by Salesforce, where a large amount of the actual logic lives in
+Flows and Apex — which is why roughly half of §4 is Salesforce work, not code.
+
+**The five standing rules. These are not suggestions and every one of them has already cost real work.**
+
+1. **Do not push.** Work on a branch off `origin/main` and leave it committed there. Anthony pushes
+   to `main` himself and runs his own tests after yours.
+2. **One story per commit, with the Asana id in the message.**
+3. **Do not create new `.md` files.** Everything goes in this document. The previous set of
+   documents went stale in exactly the way a second file always does — see §12.
+4. **Back this file up outside the repo. It exists in exactly one place.** ⚠️ **CORRECTED
+   2026-09-09:** this rule used to say the file was tracked-but-uncommitted, and it is not — it is
+   **untracked** (`??`) and `git log --all -- PRODUCTION-DASHBOARD-INFO.md` returns **nothing**, so
+   it is in no commit on any branch or remote. That *inverts* the original risk: git leaves untracked
+   files alone on checkout, so **a branch switch will not clobber this file.** What it means instead
+   is that 368KB of the only record of this project lives on one iCloud-synced disk with no copy
+   anywhere. The clobbering incident was real, but it happened to `ROADMAP.md` and
+   `CLAUDE-CODE-QUEUE.md`, which *were* tracked. **Commit this file.**
+5. **A green board is not a passing test.** Every board falls back to demo data with an amber chip
+   when its fetch fails, so a broken change renders as a working page full of plausible fake
+   numbers. Check the network tab, not the screen; open the record, not the card.
+
+**Two facts that change how you reason about everything else.**
+
+- 🚩 **One deployment serves three orgs.** dev2, staging and production are selected at runtime from
+  a KV value (`sf_env:active` in the `INVENTORY` namespace). A code change goes live for **all
+  three at once** — there is no "ship to staging only." Write code that degrades safely when a field
+  does not exist in the active org.
+- 🚩 **Salesforce work is verified in a browser, by hand, and it is slow and trap-laden.** There is
+  no CLI or API path available. Read the browser recipes in §2 before your first Salesforce click;
+  they will save you an afternoon.
+
+**Salesforce reference — ids that keep coming up:**
+
+| Thing | dev2 | staging |
+|---|---|---|
+| `OrderScheduling` flow (active) | **V23** · `301ca00000TpfrdAAB` | **V36** · `301ca00000TpeArAAJ` |
+| `ProductionRunTriggerHelper` (Apex class) | `01pca000002mKEfAAM` | `01pca000002n7vJAAQ` |
+| `ProductionRunTrigger` (Apex trigger) | `01qca000004l6Z8AAI` | `01qca000004nFhyAAE` |
+| `OrderScheduling` durable id | — | `3005e000001R0ziAAC` |
+
+⚠️ **The orgs are diverged and always have been** — `OrderScheduling` sat at V22 in dev2 while
+staging was at V35. Version numbers do not line up between orgs; do not use them to infer parity.
+§9 is the parity record.
+
+📌 **Sandboxes inherit production's User ids on refresh**, so an 18-character User id that resolves
+in dev2 resolves in staging and production too. That is why the hardcoded `0055e000005tFYfAAM` in
+`CreateCalendarEvent` is not a promotion blocker — it has been checked in both.
+
+**Where to go next:** §1 Start here → §2 The traps → §4 Where things stand. §7 holds work that can
+be handed to Claude Code today, including the ready-to-run B9 prompt and the open-loops list.
 
 ---
 
@@ -53,11 +119,12 @@ somewhere outside the repo before switching branches. See §11 for the incident.
 
 ## Contents
 
+0. **Cold start** — read first if you are new to this project
 1. **Start here** — how to work on this repo, and what a session can and cannot do
 2. **The traps** — the hard rules, each of which has cost a real afternoon
 3. **What the system is** — shape, boards, orgs, auth, the data model
 4. **Where things stand** — blocking work, phases, closed items, progress to deployment
-5. **Decisions** — D1 through D11, and the open ones
+5. **Decisions** — D1 through D13, and the open ones
 6. **Who owns what, and the rules of engagement**
 7. **Work queue** — what can be handed to Claude Code right now
 8. **Validation** — the integration checklist and the end-to-end scenarios
@@ -437,9 +504,88 @@ it. Use it before debugging by hand.
   one. Relevant if front/back ever become two methods.
 - `pre-production.html`: `assign()` is local-only — worker assignment never writes to Salesforce,
   and its name list is hardcoded demo people unrelated to `VALID_NAMES`.
-- `README.md` is stale above the fold: it names the pre-switcher `SF_LOGIN_URL` / `SF_CLIENT_ID` /
-  `SF_CLIENT_SECRET` env vars, references `/api/vendors` (now in `_to_delete`), and calls the Pages
-  project `culture-apparel-prepod`. The roles table and Zenkraft sections are still accurate.
+- ~~`README.md` is stale above the fold.~~ ✅ **NO LONGER TRUE — measured 2026-09-09.** None of
+  `SF_LOGIN_URL`, `SF_CLIENT_ID`, `SF_CLIENT_SECRET`, `/api/vendors` or `culture-apparel-prepod`
+  appear in `README.md` any more; it has been rewritten and its opening now matches §3 verbatim.
+  📌 The rough-edge note was itself the stale thing, which is the failure mode this file's §11 update
+  rule exists to prevent — a *correction* has to be written down as promptly as a change.
+
+#### Driving Salesforce from a browser session — what works, and what silently does not
+
+Much of §4's Salesforce work was done by a Claude session steering a real browser, because there is
+no CLI or API path available from here. Everything below was learned the expensive way. **A new
+session should read this before its first Salesforce click**, not after.
+
+🚩 **The REST API is not reachable from browser cookies. Do not try.** `/services/data/vXX/query`
+returns **401 `INVALID_SESSION_ID`** using the page's cookies, and equally using the `sid` read off
+the Lightning domain — a Lightning session id is not API-valid. Several attempts were burned on
+this. **Use the Developer Console Query Editor instead**; it is the only reliable read path.
+
+📌 **The Developer Console query recipe** (works; used for every count in §4):
+
+1. Navigate to `https://<myDomain>/_ui/common/apex/debug/ApexCSIPage` and wait ~8s.
+2. Set the query by script, not by typing — the editor swallows keystrokes:
+   `document.getElementById('queryEditorText-inputEl').value = "SELECT …"`, then dispatch
+   `input` and `change` events on it (both, bubbling).
+3. Click **Execute** at approximately **(35, 879)**. The **Use Tooling API** checkbox is at
+   approximately **(75, 880)**.
+4. Results render in the grid above; read them off a screenshot.
+
+🚩 **`FlowDefinitionView` has two limits that produce misleading results, not errors you'll notice.**
+It does **not support `OR`** — a disjunction fails with *"Disjunctions not supported"* — and it is
+**not available under the Tooling API** (uncheck that box). Both failures land in the small error
+strip under the editor, while the results grid keeps showing the *previous* query's rows. That is
+exactly how a session once concluded "there is no flow named Close" when the query had simply
+errored. **Read the error strip before believing an empty result.** Use a single `LIKE` instead.
+
+📌 **Getting a flow's id without hunting the Setup list.** The Flows list is alphabetical, lazy-loads
+50 at a time, exposes no href on the row (`javascript:void(0)`), and opening a flow triggers a
+popup-blocker prompt. Skip all of it — one query gives the id directly:
+
+```
+SELECT DurableId, ApiName, ActiveVersionId, LatestVersionId, VersionNumber
+FROM FlowDefinitionView WHERE ApiName = 'OrderScheduling'
+```
+
+`ActiveVersionId` is the `301…` id that `flowBuilder.app?flowId=` wants.
+
+🚩 **The Apex editor is EditArea, and setting the textarea does nothing.** Setup's Apex class editor
+runs EditArea inside an iframe and keeps its own model, so writing to the hidden `<textarea>` looks
+like it worked and saves the *old* text. Use `editAreaLoader.getValue(id)` and
+`editAreaLoader.setValue(id, value)`.
+
+🚩 **`ctrl+a` / `cmd+a` does not select-all in Flow Builder or Salesforce inputs — it appends.**
+To replace a field's contents: `End`, then `shift+Home`, then `Delete`.
+
+🚩 **Flow Builder renders a saved merge reference as raw text** in multi-value inputs on first load,
+which reads as "the value was lost." It was not. **The reliable test for "no unsaved diff" is the
+greyed-out Save button**, not what the input looks like.
+
+🚩 **The Order object's custom-field EDIT page wedges the Lightning renderer.** It happened four
+times across a single session, in **both** Lightning and Classic, the fourth time with **no
+interaction at all** — so it is the edit page failing to reach idle, not anything typed into it.
+There is no known workaround from a browser session. **Renaming or re-describing an Order custom
+field is a task to hand to Anthony by hand**; do not burn a session retrying it.
+
+🚩 **Apostrophes break `javascript_tool`.** Single-quoted script strings fail with
+`SyntaxError: Unexpected identifier 's'`. Write comments and strings without apostrophes.
+Some page extractions also return `[BLOCKED: Cookie/query string data]` — narrow the regex so the
+script returns only booleans or short signatures rather than page text.
+
+🚩 **"YOUR FLOW FINISHED" on the Close and Create Order quick action — it is an empty quote, not the flow.**
+Diagnosed 2026-09-09. The quick action ends with the bare message *"YOUR FLOW FINISHED"* and no
+order. The flow is fine. **Cause: a second, empty Quote had taken over syncing.** In the case
+examined, quote `0Q0ca000002GfHNCA0` had been created four minutes earlier with **`IsSyncing = true`
+and zero line items**, which left the Opportunity showing 0 products — so the flow had nothing to
+build an order from and exited down its empty path. **Check for a rogue syncing quote before
+touching the flow:** query the Opportunity's quotes for `IsSyncing = true` and count their line
+items. This is a data condition users create by accident, and it will recur.
+
+📌 **Always read a Salesforce change back off a *fresh page load*, never off the post-save screen.**
+The post-save view can show what you typed rather than what was stored. Every ✅ in §4 that says
+"verified" means: reload the page, reopen the element, confirm the values, confirm Save is greyed.
+
+---
 
 #### Verifying a change
 
@@ -632,10 +778,27 @@ estimated. Owner column: **CC** = Claude Code (repo change), **SF** = this Sales
 | **B5** | ✅ | CC | **DONE 2026-09-03 and ON `origin/main`.** Submitting results that record incomplete garments now routes straight to booking the make-up run, instead of offering a button that can be ignored — D10's argument, one step later. `counting.html` +63/−4, `ca-api.js` +43/−1, `production-runs/index.js` +84/−2, plus `index.html`, `pre-production.html` and `calendar.html`. ⚠️ Shipped with a dead end that **B6b** then fixed. Full detail below. |
 | **B6** | ✅ | CC | **DONE 2026-09-03 and ON `origin/main`.** A reprint is created with its method already mirrored, so the Management inbox — defined as Pre-Production orders with **no** method — excluded it by construction and its runs could not be scheduled. The inbox now also carries reprints that have a method but no runs. `inbox/index.js` +123/−2, `pre-production.html` +59/−6, `ca-api.js` +12/−1. Full detail below. |
 | **B6b** | ⚠️ unpushed | CC | **DONE 2026-09-03**, branch `fix/b6b-postprod-new-run`, commit `ee19fc6`, `index.html` +21/−1. **A hole B5 opened and only showed up once something used it:** Post-Production collapsed the Production Runs section, so the status a make-up run is most likely to be booked from was the one status with no button to book it — and B5's deep link opened a drawer with no form in it. Full detail below. |
-| **B7** | 🔵 P1 | CC (+SF) | **Setup / production time on the method cards** — Ready for Print shows the setup clock, In Production shows the production clock. The clocks are **per method, not per run**, so the run picker is not involved and the card needs no selection logic. **Stage 1 (no blocker):** show the stored figure, presented as *saved* rather than live. **Stage 2 (blocked on E2.3):** make it tick. Full detail below. |
+| **B7** | ✅ stage 1 | CC (+SF) | **Setup / production time on the method cards** — Ready for Print shows the setup clock, In Production shows the production clock. The clocks are **per method, not per run**, so the run picker is not involved and the card needs no selection logic. **Stage 1 (no blocker):** show the stored figure, presented as *saved* rather than live. **Stage 2 (blocked on E2.3):** make it tick. ✅ **STAGE 1 IS BUILT — recorded 2026-09-09, and it had shipped without being written down.** Three commits, all reachable from `fix/e2.6-run-order`: `feat/b7-stage1-method-timers`, then `fix/b7-stage1-idle-state` (`320dbe2`) and `feat/b7-live-on-this-device` (`eec061a`). `index.html:157-181` (markup) and `:2681-2760` (the chip's view model). ⚠️ **Two things shipped that this row did not ask for, and both are defensible but must not be mistaken for stage 2.** (1) **The idle fix:** the first version hid the chip entirely at zero seconds, so on a shop that had not started using timers EVERY card rendered nothing — indistinguishable from the feature never having shipped, which is how it was reported. It now shows the chip with an em dash and the words "not started". "Blank is not zero" was right that `00:00` must never be printed as though measured; it was wrong taken as far as printing nothing. (2) **The live tick:** the card now ticks *on the tablet running the clock*, using B2 step 1's `localStorage` `{running, startedAt, elapsed}` and the same `liveElapsed()` the drawer tiles use — no new field, no new SOQL. 🚩 **This is NOT stage 2 and the wording is what keeps it honest:** a timer running on ANOTHER tablet is invisible here, so that card falls back to the saved figure and says "saved". Stage 2 is the SERVER knowing a clock runs (`Timer_Started_At__c` / `Timer_Running__c`, E2.3), which is what makes two tablets agree. ⛔ **Not verified against dev2** — that pass is still owed. Full detail below. |
 | **B8** | ⚠️ unpushed | CC | **DONE 2026-09-04**, branch `feat/b8-runs-left`, `index.html` + `production-orders/index.js`. **Runs left to print, on the method card** — a manager sees it without opening the drawer. The board had no run data at all: runs arrive per-method through `loadRunsForCard()` when a drawer opens, so `state.runsByMethod` held opened cards only. Added a **separate fail-open follow-up query** in the same handler — flat `SELECT Id, PrintMethod__c, Actual_End__c FROM Production_Run__c WHERE PrintMethod__c IN (…)`, chunked through `runChunkedIdQuery`, aggregated per method. **Kept out of the main SELECT deliberately** (trap 1: one FLS-hidden field empties the whole board; a badge is not worth that). Not a nested subquery (E3.4 — silent truncation at 200), not a rollup field (D9 — a stored derived number nothing refreshes). **"Left to print" reuses `index.html`'s own rule** — a run with no `Actual_End__c` — which is the same test that advances a method to Post-Production, so the badge and the status machine cannot disagree. Counts every placement (B4 made allocation placement-aware; a Front and a Back run both go through the press). **Unknown ≠ zero:** a failed count query leaves the fields absent and the card shows nothing, never "0 left". Shown on Ready for Print and In Production only, beside B7's clock; "all runs printed" at zero, "no runs scheduled" when the method has none (Anthony, 2026-09-04). ⚠️ **Verified against a fake-Salesforce harness and a stubbed board, NOT against dev2** — that pass is still owed. |
 | **B9** | 🟣 SPEC | SF + CC | **The reprint becomes opt-in: the account manager confirms it before it exists.** Today a reprint is created automatically the moment the last method completes. Anthony, 2026-09-04: the AM should be emailed, click through to say whether the customer actually wants the reprint, and only then does it get built — landing in the Management inbox with its methods already mirrored, ready to schedule. ⛔ **NOT READY TO BUILD.** Four decisions are open and two prerequisites do not exist in this system at all: there is **no email capability anywhere in the app** (Salesforce must send it — Anthony, 2026-09-04). The recipient, however, is **already on the Order**: `Opportunity_Owner_Email__c`. Full detail below. |
 | **B10** | ⚠️ unpushed | CC | **DONE 2026-09-08**, branch `feat/method-colours`, `tokens.css` + `ca-api.js` + six pages. **One colour per print method, on every board** — Anthony, 2026-09-08: screen print green, embroidery purple, heat press orange, “a subtle indicator that clearly visually marks them”. The hexes had been copy-pasted into **five** separate places, so they now come from four `tokens.css` variables (`--method-sp` / `-em` / `-hp` / `-promo`) that every page already links, the printed order sheet included. ⚠️ **Deliberately NOT `--ok` / `--warn`**, which are already a green and an orange: those two carry meaning on these boards (“fine” and “watch this one”), and a method chip in the exact status green reads as a verdict on the job rather than a label for the press. Neighbouring hues instead — `--method-sp #4E9A6A` vs `--ok #7FA644`, `--method-hp #D2762F` vs `--warn #C9923A` — all four clearing 4.5:1 on `--surface-card` and 3:1 on the order sheet's white. **Where it shows:** `index.html` board chip and drawer chip (the LABEL is tinted, not just the 8px dot) plus a 3px method stripe on the drawer's method card; `pre-production.html` the same two, plus the column headers, which were already method-keyed; `counting.html` a dot + tinted label on the run cards and the run header; `order-sheet.html` the Method chip and the per-method rows; `calendar.html` the press-group tabs; `stats.html` the per-method timing rows. **Left alone on purpose:** `shipping.html` — its `methodColor` is the **delivery** method (Ship / Pickup / Local Dropoff), a different axis that happens to share the name — and the calendar GRID blocks, which already carry four colour axes (outstanding prep, Confirmed vs Planned, priority score, grey for finished) on a 30px target. **Fixed in passing:** the order sheet's Method chip was `api.methodOf(rec)`, a guess off the press name that falls back to Screen Print whenever it cannot tell; it now reads the order's real `Production_Method__c` records and only guesses when there are none. Colour is why it got fixed — a green “Screen Print” dot on an embroidery sheet is a wrong colour on paper, not just a wrong word. Verified in a wrangler rig on all six pages by reading computed styles, not by looking at the screen. |
+| **B11** | ✅ DONE | CC | **The counting screen can mark a run Submitted when Salesforce rejected every count.** `run-results/index.js:566` — its private `composite()` inspects each sub-response but **never reads `resp.ok`**. When `/composite` itself answers 4xx/5xx the body is a top-level error array, so `data.compositeResponse` is `undefined`, `subs` is `[]`, `failures` is `[]`, and it returns `{ok:true}`. The caller (`:449-461`) treats that as a successful write and falls through to `:464-476`, which PATCHes `Result_Status__c = 'Submitted'`. 🚩 **This is the one defect that D1's model cannot survive:** a perfect run and an untouched run are byte-identical on purpose, so `Result_Status__c` is *the only evidence a human counted* — and this produces a run asserting "counted, all fine" over rejected counts. Gate 2 of `createReworkIfNeeded` then passes, gate 4 sees blanks, and a damaged order silently gets no reprint. ⚠️ **This is not one of the three deliberately-left-alone composite copies behaving consistently — it is one that DRIFTED.** `_composite.js:126` checks `!resp.ok \|\| real` under the comment *"Trap 2: resp.ok alone proves nothing"*, and `run-line-items/index.js:452` checks it too. ✅ **FIXED 2026-09-09**, branch `fix/b11-composite-status`, commit `81b67ec`, `run-results/index.js` +30/−3 — **unpushed.** Reproduced against a fake Salesforce BEFORE fixing, then re-run after; both controls unchanged. Full detail below. |
+| **B12** | 🔴 P0 | CC | **The production board builds an unbounded `IN` list out of the one query the file itself calls unbounded.** `production-orders/index.js:221-225` does `orderIds.map(oid => "'"+oid+"'").join(",")` with no chunking, over the result of the query at `:126-128` whose own comment at `:129-133` says it is *"the one query in the whole app with no date bound (it deliberately pulls in every Completed order ever)"*. An over-long IN list is an **HTTP-level rejection, not a SOQL error** — E5.12 exactly — and it **fails open** (`:236-240` only `console.error`s), so every card loses its size/quantity breakdown behind a 200 and a green chip. ⛔ **CHECK THIS BEFORE ANYTHING ELSE: it may already be live on staging.** dev2 has 81 orders and is nowhere near; staging has **2,164** orders at `Order_Substatus__c = 'Completed'` (§4's own B9 populate check), which at ~21 bytes per quoted Id is a ~45KB query URL. E7.5 made staging a switchable destination, so this is not a future risk there. 📌 The fix is already in the file: `runChunkedIdQuery` is imported at `:36` and used 60 lines below at `:284`. Same unchunked shape at `orders/index.js:209`, `shipping-orders/index.js:117`, `_mockup.js:34`, `shortfalls/index.js:90,106,116`, `shipments/split.js:131`. Full detail below. |
+| **B13** | 🔴 P0 | CC | **A failed run query makes the calendar report the whole shop as unscheduled — and offer slots for all of it.** `calendar/index.js:360-435`: on failure `runsOk` goes false, the else-branch at `:430-432` logs, and **execution continues**. Every order then carries `ProductionRuns: []`, so `o.needsScheduling = o.ProductionRuns.length === 0` (`:456`) is true for everything, `busyByPress` is empty so a `suggestion` is computed for every order against **zero press occupancy**, and the response says `unscheduled: orders.length`. There is **no `runsUnavailable` flag anywhere in the response shape** (`:700-724`). 🚩 **This is not demo mode.** The board is live, the chip is green, and the data is fabricated by omission — a manager dragging those suggestions into place creates duplicate runs on top of work that already exists. The press fetch at `:315-333` has the same shape (`presses = []`, every order gets `noPresses:true`). 📌 **The convention already exists three times over** — `inbox/index.js:322` (`reprintsUnavailable`), `inbox/index.js:87` (`OrderItemsError`), `production-runs/index.js` (`locationAvailable`), and `production-orders/index.js:277-280` deliberately omits run counts rather than defaulting them to 0 *and says so*. The board with the highest stakes has the weakest convention. Full detail below. |
+| **B14** | 🔵 P1 | CC | **The counting screen's "could not load this run" message is structurally unreachable.** `counting.html:483` sets `err` and leaves `detail` null; `runReady` is `!!d && !st.runLoading && !st.result` (`:983`); and the `{{err}}` banner (`:293`) sits **inside** `<sc-if value="{{runReady}}">`, which opens at `:178` and closes at `:298` — verified by counting `sc-if` nesting, the banner is at depth 2 within it. So with `d` null, `runReady` is false, `runLoading` is false, `showResult` is false, and the press operator gets an "All Runs" back button over an **empty page**. ⚠️ The banner is fine for the other two `err` setters (submit failure `:604`, demo mode `:525`) because both have `detail` loaded — it is dead **only** for the load failure, which is the `?runId=` deep-link path, i.e. what a tablet does when it wakes up mid-count and what B5/E1.4 send people down. The catch also discards `e` entirely: no status, no `errText`, no `console.error`. Full detail below. |
+| **B15** | 🔵 P1 | CC | **Shipping's Complete is a phantom write in demo mode.** `shipping.html:820-828`: `if(!this._api \|\| this.state.connection!=='live'){ finish(); return; }` where `finish()` clears the poll and filters the order out of local state — so the manager confirms, the card disappears **exactly as it would on a successful write**, nothing reaches Salesforce and nothing is said. 📌 `canWriteNow()` / `reportBlockedWrite()` are defined in this very file at `:668-677` and used by `setLabelPrinted` nine lines below; the board's most consequential action does not use them. ⚠️ **Severity, stated honestly:** the orders in demo mode are demo orders, so no real order is harmed. The harm is that a board which has *silently fallen into demo mode* — the entire reason the amber chip exists — accepts Completes all afternoon that go nowhere. This is the E4.3 phantom-save pattern on the one path E4.3 did not sweep. `deleteShipmentEntry` (`:709-713`) has the same shape but touches only `_demoShipments`. Full detail below. |
+| **B16** | 🔵 P1 | CC | **Mockup adoption matches on the post-redirect URL, so a redirecting host can never adopt.** `mockup-proxy/index.js:220` sets `current = new URL(raw)` and `:246` reassigns it on every redirect hop; `:277` then passes `current.toString()` into `adoptMockup`, which finds the record by exact match — `WHERE Mockup_URL__c = '<final url>'` (`_mockup-adopt.js:113-116`). But `Design__c.Mockup_URL__c` holds **`raw`**, the URL a human pasted. Any host that 301s therefore returns `no_adoptable_design` forever and the proxy takes branch B on every single load — **the treadmill D8 was written to end.** Even with no redirect, `new URL(raw).toString()` normalizes (lowercased host, percent-encoding, trailing slash), so an exact match can still miss. `raw` is in scope at `:277`; passing it is the whole fix. ✅ **This does not contradict B1's measurement** (adopted 0 → 39) — most direct image URLs do not redirect. What it does is add a **third category to what B1 calls "the permanent floor"**: hosts that redirect. 🔧 **Testable prediction, and it is B1's own instruction:** the census stalls above 16 and stops falling. Full detail below. |
+| **B17** | 🔵 P1 | CC | **The prep checklist rollup turns a failed query into "nothing to do", silently.** All four `runQuery` calls in `_ppi-checklist.js` destructure `{ records }` and **discard `ok`** (`:109`, `:144`, `:160`, `:177`), while `runQuery` (`_sf.js:282-312`) returns `{ok:false, records:<partial>}` on failure. At `:109` a failed lookup becomes `items.length === 0` → `continue`, **with no log at all** — the forward cascade is skipped and nothing anywhere records it. At `:144` a failed lookup is indistinguishable from "item not found". ⚠️ **Severity, stated honestly rather than inflated:** at `:160`/`:177` the concern is `every()` evaluated over a truncated page and written to `Production_Method__c` — but a method's `Pre_Production_Item__c` count will never approach 2000, so that half is **theoretical**. The **silent skip is the real one**, it is routine, and it lands on the fields that decide whether a job goes to the press (`Screens_Completed__c`, `Inks_Mixed__c`). This is the "failures must not look like success" rule, broken in the quietest possible way. Full detail below. |
+| **B18** | 🔵 P2 | CC | **`run-line-items` compares Salesforce Ids on the full string, so a 15-char Id breaks the endpoint.** `SF_ID` accepts 15 **or** 18 characters and SOQL `WHERE Id = '<15-char>'` matches happily, so a 15-char `runId` reaches `run-line-items/index.js:253` (`l.ProductionRun__c === runId`), `:344-346` and `:376` and fails every one. GET then returns `lines: []` while `allocatedElsewhere` **double-counts this run's own rows** — an allocation grid reading "nothing allocated here, everything allocated elsewhere". PATCH returns `line_not_found` for every row. 📌 **The convention exists and its sibling follows it:** `run-results/index.js:436` compares on the first 15 chars under the comment *"Salesforce returns 18-char Ids; a caller may hold the 15-char form."* Low priority only because every caller in this repo passes the 18-char form today; it is a trap for the next one. Full detail below. |
+
+📌 **B11–B18 added 2026-09-09, and how they were found is part of the record.** They came out of a
+full read of the API layer and all nine boards, not from a test pass on the floor, so **every one is
+a reading of the code and none was reproduced against a live org.** Rule 1 says record what was
+measured — this is the honest label for all eight. Two of them (B11, B18) are settled by the
+codebase contradicting itself: a sibling file does the same job the other way and explains why in a
+comment, which is about as close to measured as a static read gets. The rest name the exact check to
+run, and **B12 in particular is answerable with one query against staging** rather than an argument.
+
 
 > ⚠️ **THIS FILE EXISTS ONLY ON ANTHONY'S DISK, AND THAT HAS NOW COST REAL WORK TWICE IN ONE DAY.**
 > `ROADMAP.md` and `CLAUDE-CODE-QUEUE.md` are tracked, but every committed copy — `origin/main` and
@@ -1967,6 +2130,27 @@ debugging a smoke run**, and do not "fix" a check that is only failing because i
 dataless. Worth knowing because §2 already warns that git
 writes on this mount are unreliable — this is the same mount pathology reaching plain reads.
 
+🚩 **MEASURED 2026-09-09: 688 files inside `.git` are evicted, and that is the whole explanation for
+"git writes are unreliable".** Counted by attempting a 1-byte read of every file under `.git` and
+collecting the failures. Two things follow, and the second one is the useful one:
+
+- **Zero working-tree source files were evicted.** Reading, grepping and editing the code is
+  unaffected. It is only *history* operations that break — `git rev-list`, `git merge-base`,
+  `git log <range>` and anything else that walks the object graph, all with **Bus error** rather
+  than a message that names a file.
+- 🪤 **An evicted ref file reports as a CORRUPT ref, and it is not one.**
+  `warning: ignoring broken ref refs/heads/<name>` is what git says about a 41-byte ref file it
+  cannot read. `feat/b9-optin-reprint` and `feat/method-colours` were listed in §7 as "two broken
+  git refs, both unresolved" on that basis. They were fine — hydrating the two files brought both
+  branches straight back, pointing at commits that were already in the current branch's history.
+  📌 **On this mount, read `ignoring broken ref` as *evicted*, not *lost*. Hydrate before concluding
+  anything about it.**
+
+📌 **The hydration trick is the same one that works on a document: get the file staged/copied through
+macOS rather than read through the shell.** And the permanent fix is still the one §1 names — move
+the repo out of the iCloud-synced Desktop folder. Every symptom in this subsection stops at that
+point; none of them stop before it.
+
 ##### ⛔ Decisions Anthony has to make before this is buildable
 
 1. **Is "account manager" `Account.OwnerId`?** If not, name the field — it does not exist
@@ -1984,6 +2168,448 @@ writes on this mount are unreliable — this is the same mount pathology reachin
 📌 **Sequencing.** None of this is urgent relative to Phase A — E7.2 is still the long pole
 and this adds a second org-side dependency (email) on top of it. It is written here so the
 design argument happens once, in writing, rather than three times in a row.
+
+##### B11 · A submit whose counts Salesforce rejected still marks the run Submitted
+
+**✅ FIXED 2026-09-09**, branch `fix/b11-composite-status`, commit `81b67ec`,
+`functions/api/run-results/index.js` +30/−3. ⚠️ **Unpushed.** `node tools/smoke.mjs` passes all 7.
+
+**It was found by reading the code, then REPRODUCED before it was fixed** — the order this project
+asks for. The reading is below; the measurement is at the end of this section.
+
+`run-results/index.js:566-602` is a private `composite()`. It parses the body, walks
+`compositeResponse` entry by entry, prefers the first non-`PROCESSING_HALTED` failure — all of trap
+3, correctly. **What it never does is read `resp.ok`.**
+
+```js
+const resp = await sfFetch(env, `/services/data/${v}/composite`, {...});
+let data = null;
+try { data = await resp.json(); } catch { return { ok:false, detail:`unparseable response (${resp.status})` }; }
+const subs = Array.isArray(data.compositeResponse) ? data.compositeResponse : [];
+```
+
+When `/composite` **itself** answers 4xx or 5xx — a malformed request, a refused token, a governor
+limit, a 500 — the body is a top-level *array of errors*, not an object with `compositeResponse`. So
+`subs` is `[]`, the failure loop never runs, `failures.length` is 0, and the function returns
+`{ ok: true }`.
+
+**Where that lands.** `:449-461` chunks the line-item PATCHes at 25 and checks `res.ok` on each; a
+false `ok:true` sails through. `:464-476` then PATCHes the run:
+
+```js
+const runPayload = { Result_Status__c: RESULT_SUBMITTED, Result_Recorded_At__c: ... };
+```
+
+🚩 **Why this is worse here than the same bug would be anywhere else in the app.** D1 makes a perfect
+run and an untouched run byte-identical on purpose — there is no produced field, only problems are
+recorded. That design has exactly one load-bearing consequence, stated in D1 and in this file's §3:
+**`Result_Status__c` is the only evidence a human counted.** This defect manufactures that evidence
+over counts that were rejected. Downstream, gate 2 of `createReworkIfNeeded` ("every run Submitted")
+passes, gate 4 ("some line carrying misprint or damaged > 0") sees blanks, and the order returns
+`nothing_to_rework`. **A damaged order silently produces no reprint, and the board says it was
+counted.** There is no screen anywhere that can tell you otherwise.
+
+📌 **This is drift, not a deliberate difference.** §2 records that `_rework.js`, `run-results` and
+`run-line-items` carry their own older composite copies, that they work, and that they are
+deliberately left alone. That is true of the other two:
+
+- `_composite.js:126` — `if (!resp.ok || real)`, directly under `// Trap 2: resp.ok alone proves nothing.`
+- `run-line-items/index.js:452` — `if (!resp.ok || realFailure)`, and it logs `resp.status` too.
+
+So "leave the old copies alone" was sound advice about copies that were correct. This one is not,
+and the trap it misses is the trap §2 opens with.
+
+**The fix.** One line, matching `run-line-items`:
+
+```js
+if (!resp.ok || failures.length) { ... }
+```
+
+…and log `resp.status` with the body, because today a rejected composite leaves nothing at all in
+the Pages log.
+
+⚠️ **Also worth knowing while you are in there:** if the body is literally `null`,
+`data.compositeResponse` throws at `:581` and the outer handler returns 500. That one fails loudly
+and is fine — do not "fix" it into silence.
+
+##### ✅ How it was measured — 2026-09-09
+
+A harness outside the repo stubs `globalThis.fetch` and imports **the real
+`functions/api/run-results/index.js`**, so the shipped handler runs against a fake Salesforce. No
+copy of the function was tested — trap: `_sf.js`'s `sfFetch` and `getSalesforceToken` both go through
+global `fetch`, which is what makes the whole endpoint drivable without wrangler, KV or credentials.
+
+| Scenario | Before the fix | After |
+|---|---|---|
+| `/composite` **refuses the batch** — HTTP 400, body a top-level error array, no `compositeResponse` | **HTTP 200, run PATCHed to `Submitted`** 🔴 | HTTP 502 `line_write_failed`, run left `Draft`, status + body logged ✅ |
+| control — happy path, 200 with every sub-request 204 | 200, stamped | 200, stamped — **unchanged** ✅ |
+| control — 200 with one sub-request failing 400 | 502, not stamped, names the real error | identical, and now also logged ✅ |
+
+🪤 **THE FIRST VERSION OF THIS HARNESS PRODUCED A GREEN "REPRODUCED" THAT MEANT NOTHING, and it is
+worth recording because it is this project's own rule biting the person applying it.** The payload
+sent `misprint` where `COUNT_FIELDS` expects **`misprintQty`**, so no field updates were built,
+`parsed` was empty, the chunk loop ran zero times and **`/composite` was never called at all.** All
+three scenarios then returned 200 and looked consistent, and the verdict line cheerfully said
+"B11 REPRODUCED". 📌 **The fix was to assert the thing the test depends on, not just the outcome:**
+the harness now fails hard if `/composite` was not called. **"A green board is not a passing test"
+applies to test harnesses too — assert that the code under test actually ran.**
+
+⛔ **Still owed: the dev2 pass.** Everything above is a fake Salesforce. Nothing here proves what the
+real org does with a refused composite, only what this endpoint does when it gets one.
+
+---
+
+##### B12 · The production board's OrderItem fetch is an unbounded IN list on an unbounded query
+
+**Found 2026-09-09 by reading the code. ⚠️ NOT reproduced — but the arithmetic below uses this
+file's own measured order counts, so the "is it already firing" question is answerable with one
+query rather than a guess.**
+
+Two facts, ninety lines apart in the same file.
+
+`production-orders/index.js:126-133`:
+
+```
+WHERE (Status__c IN (...) OR Order__r.Status = 'Complete') AND Order__c != null
+```
+
+> *"this is the one query in the whole app with no date bound (it deliberately pulls in every
+> Completed order ever, see the comment above), so it's the most likely of the bunch to eventually
+> exceed one query batch as history accumulates."*
+
+`production-orders/index.js:221-225`:
+
+```js
+const quoted = orderIds.map((oid) => `'${oid}'`).join(",");
+const soqlItems = `SELECT OrderId, ... FROM OrderItem WHERE OrderId IN (${quoted})`;
+```
+
+The comment worried about the wrong ceiling. `runQuery` follows `nextRecordsUrl`, so the batch limit
+is handled — but the **IN list built from that result set is not chunked at all**, and an over-long
+IN list is an HTTP-level rejection of a request that never became a query. E5.12 is the precedent and
+its lesson was exactly this: *"an over-long URL is an HTTP rejection, not a SOQL error, so the whole
+block fell into its `catch` and the calendar rendered with no runs and no explanation."*
+
+**Then it fails open.** `:236-240` catches and `console.error`s. The response is a 200, the chip
+stays green, and every card on the Production board silently loses its size and quantity breakdown —
+the numbers a manager reads to decide what to schedule.
+
+⛔ **This is probably not a future problem. Check staging first.**
+
+| Org | Orders in the `IN` list, order of magnitude | Approx query URL |
+|---|---|---|
+| dev2 | 81 orders total | ~2KB — nowhere near |
+| **staging** | **2,164** at `Order_Substatus__c = 'Completed'` alone (§4, B9 populate check) | **~45KB** |
+
+`SOQL_IN_CHUNK` is 200 for a reason `_sf.js` spells out: *"200 x 18 chars plus quoting and commas is
+about 4KB of query, comfortably inside the limit."* Staging is an order of magnitude past that.
+🚩 **E7.5 put production's credentials in place ahead of E7.4, so staging and production are both
+switchable destinations today** — this is not a sandbox curiosity.
+
+📌 **The fix is already imported into this file.** `runChunkedIdQuery` comes in at `:36` and is used
+60 lines below at `:284` for B8's run counts, with a comment saying why. The OrderItem block just
+predates it.
+
+**The same shape, elsewhere, in rough order of exposure:**
+
+| File | Line | Bound by |
+|---|---|---|
+| `_mockup.js` | 34-38 | whichever caller's list is largest — and **this endpoint is one of its callers**, so it inherits the problem above |
+| `orders/index.js` | 209-213 | Pre-Production orders (small, but unbounded in principle) |
+| `shipping-orders/index.js` | 117-118 | Post-Production orders; fails open |
+| `shortfalls/index.js` | 90, 106, 116 | fails closed with a 502 — louder, still wrong |
+| `shipments/split.js` | 131-132 | `allItemIds` uncapped; the *groups* are capped at 25 but items per group are not |
+| `run-results/index.js` | 227, 239 | capped at 200 by `LIST_LIMIT`, i.e. exactly `SOQL_IN_CHUNK` — **safe today, breaks silently the day `LIST_LIMIT` is raised** |
+
+**Verifying it.** Point the deployment at staging and load the production board with the network tab
+open. If the OrderItem query is already failing you will see it in the Pages log as an HTTP error
+from `_sf.js`, and every card will show a piece count with no size breakdown. Then compare one card's
+sizes against the order in Salesforce. **Do not check whether the board renders** — it renders either
+way, which is the defect.
+
+---
+
+##### B13 · A failed run query makes the calendar say the shop is empty, then offer to fill it
+
+**Found 2026-09-09 by reading the code. ⚠️ NOT reproduced against dev2.**
+
+`calendar/index.js:360-385` fetches runs in two halves — a date-range query and a chunked
+by-method query — and tracks `runsOk` across both. On failure of either:
+
+```js
+} else {
+  console.error("Calendar run fetch failed", runsResult.status);
+}
+```
+
+…and execution continues into the scheduling loop. Three things follow, in the same HTTP 200:
+
+1. Every order carries `ProductionRuns: []`.
+2. `o.needsScheduling = o.ProductionRuns.length === 0` (`:456`) — **true for every order in the shop.**
+3. `busyByPress` is empty, so `suggestSlot()` (`:459-500`) hands every order a suggested window
+   computed against **zero press occupancy**, and reserves them against each other so they even look
+   internally consistent.
+
+The response (`:700-724`) reports `unscheduled: orders.length` and carries **no flag anywhere saying
+runs are unknown**.
+
+🚩 **What a manager sees, and why the amber chip does not save them.** This is not demo mode. The
+fetch succeeded, the board is live, the chip is green. The screen says the whole week is unscheduled
+and proposes a slot for every job. Dragging those suggestions into place is one click each and it
+**creates duplicate runs on top of runs that already exist** — on the one screen used to fix
+scheduling. §1's rule is "a green board is not a passing test"; this is the same failure one layer
+down, where the board is not even in demo mode to warn you.
+
+The press fetch at `:315-333` has the identical shape: on failure `presses = []` and every order gets
+`{noPresses: true}` rather than an error.
+
+📌 **The convention this file is missing exists in three sibling endpoints already:**
+
+| Endpoint | Flag | What it says |
+|---|---|---|
+| `inbox/index.js:322` | `reprintsUnavailable` | the reprint sweep could not run |
+| `inbox/index.js:87` | `OrderItemsError` | an empty breakdown is not an order with no garments |
+| `production-runs/index.js` | `locationAvailable` | this org may not have `Print_Location__c` |
+| `production-orders/index.js:277-280` | *(omits the field)* | run counts are absent, never `0` — B8's "unknown ≠ zero", and it says so |
+
+B8 already established the rule for exactly this data: **"Unknown ≠ zero: a failed count query leaves
+the fields absent and the card shows nothing, never '0 left'."** The calendar needs the same rule one
+level up: unknown runs must not render as *no* runs.
+
+**The fix.** Carry `runsUnavailable: true` in the response when `runsOk` is false, and when it is set:
+suppress `needsScheduling`, emit no `suggestion`, and let `calendar.html` say *"Could not load runs —
+this view is incomplete"* instead of "Everything in this window has a run scheduled." ⚠️ **The client
+half is required, not optional** — a flag nothing reads changes nothing.
+
+📌 **While you are in `calendar.html`, two related things:** the unscheduled queue already asserts
+emptiness before its first fetch returns (`:2192`, `queueEmpty: queue.length===0`, where `visible()`
+returns `[]` while `state.data` is null) — E4.5 fixed the label two lines above it at `:2184` and
+stopped short of the panel. And `calendar.html` is the only board that never calls
+`listState()`/`listNotice()` at all.
+
+---
+
+##### B14 · The counting screen cannot show its own load-failure message
+
+**Found 2026-09-09 by reading the code, and the nesting was verified by counting `sc-if` depth
+rather than by eye.**
+
+`counting.html:482-484`:
+
+```js
+}catch(e){
+  this.setState({ runLoading:false, err:'Could not load this run — check the connection and try again.' });
+}
+```
+
+`detail` stays null. Then `:983`:
+
+```js
+runReady: !!d && !st.runLoading && !st.result,
+```
+
+And the banner that renders `{{err}}` is at `:293` — **inside** `<sc-if value="{{runReady}}">`, which
+opens at `:178` and closes at `:298`. Measured: at line 293 the nesting depth inside that block is 2.
+
+So on a failed load: `d` is null → `runReady` false; `runLoading` false; `showResult` false. The
+`showRun` wrapper still renders, so the operator gets the **"All Runs" back button over an empty
+page** and no indication that anything went wrong.
+
+⚠️ **The banner is not dead in general** — and that is why this survived. It renders correctly for the
+other two `err` setters, the submit failure at `:604` and the demo-mode refusal at `:525`, because
+both happen with `detail` already loaded. It is dead **only** for the load failure. That is the
+`?runId=` deep-link path: the one E1.4 sends every operator down on every timer stop (D10), and what a
+shop tablet does when it wakes from sleep mid-count.
+
+The catch also throws `e` away entirely — no status, no `errText()`, not even a `console.error`, so
+there is nothing in the network tab's neighbourhood to find either.
+
+**The fix.** Move the error banner out of the `runReady` block to sit beside the `runLoading` block
+as a sibling, gated on `hasErr` alone. Keep `e`: `err: 'Could not load this run — ' + api.errText(e)`,
+and `console.error` it. 📌 `errText()` exists precisely for this and is already used at `:602` in the
+same file, twelve lines from the submit path that does it right.
+
+**Verifying it.** Open `counting.html?runId=<a real run>` with `/api/run-results` forced to 500.
+Before: a back button and blank space. After: the red banner, naming what Salesforce said.
+
+---
+
+##### B15 · Marking an order Complete in demo mode looks exactly like marking it complete
+
+**Found 2026-09-09 by reading the code.**
+
+`shipping.html:820-828`:
+
+```js
+completeOrder(order){
+  if(!window.confirm('Mark ' + ... + ' complete? It will drop off this board.')) return;
+  ...
+  const finish=()=>{ this.clearPoll(); this.setState(st=>({ orders: st.orders.filter(o=>o.Id!==order.Id), modalId:null })); };
+  if(!this._api || this.state.connection!=='live'){ finish(); return; }
+```
+
+The manager confirms. The card leaves the board. The modal closes. Nothing is written and nothing is
+said — and the visible result is **identical** to the successful path, which calls the same `finish()`.
+
+📌 `canWriteNow()` and `writeFailed()` are defined in this same file at `:668-677`, and
+`setLabelPrinted` — nine lines below — uses them properly. The board's most consequential action does
+not.
+
+⚠️ **Severity, stated straight.** In demo mode the orders are demo orders, so nothing real is lost the
+moment it happens. The exposure is the case demo mode exists to warn about: a board that has **quietly
+dropped to demo** because a query started failing. The shipping desk then marks orders complete for an
+afternoon, every one of them lands nowhere, and the only signal was an amber chip in the header that
+the same person has been ignoring all day precisely because the board kept working. E4.1 is about
+recovering from demo mode; E4.3 was about never showing a save that did not happen. This is the one
+path E4.3 did not sweep.
+
+**The fix.** `if(!this.canWriteNow('Marking the order complete')) return;` before `finish()`, and do
+not mutate local state when the write was refused. `deleteShipmentEntry` (`:709-713`) has the same
+shape and should follow — it only touches `_demoShipments`, so it is cosmetic by comparison, but it is
+the same two lines.
+
+📌 **Two neighbours worth fixing in the same pass, both cheap:**
+- `shipping.html:846` — the board's search builds its haystack from **raw** `GOA_Order_Number__c` and
+  `Customer_Order_Name__c`, while `mk()` twenty lines below correctly puts both through `api.text()`
+  and carries a comment explaining why. That is trap 6: typing `href`, `_self` or `801` matches every
+  card on the board. `counting.html:661-666` does it right.
+- `shipping.html:183` / `:936-939` — the drawer warns *"this order ships together with Order X. Print
+  the label from that order instead"*, but Ship Now's only `disabled` binding is `modal.shipBusy`. A
+  banner is not a guard. ⚠️ Whether the server refuses it is **unchecked** — worth confirming in
+  `shipments/combine.js` before deciding how hard to gate the button.
+
+---
+
+##### B16 · Mockup adoption looks the record up by the wrong URL
+
+**Found 2026-09-09 by reading the code. ⚠️ NOT measured against dev2 — and B1's census is the
+measurement that settles it, see below.**
+
+`mockup-proxy/index.js` follows redirects manually, at most `MAX_REDIRECTS` hops, re-validating each
+one — which is right and is why `redirect: "follow"` was rejected. The variable it walks with is
+`current`:
+
+```js
+let current = parsed;          // :220, where parsed = new URL(raw)
+...
+current = next;                // :246, on every hop
+...
+const adopting = adoptMockup(env, current.toString(), bytes, contentType)   // :277
+```
+
+And `adoptMockup` finds the record by **exact match on that string** (`_mockup-adopt.js:113-116`):
+
+```sql
+SELECT Id, Mockup_URL__c FROM Design__c WHERE Mockup_URL__c = <the url> LIMIT 5
+```
+
+But `Design__c.Mockup_URL__c` holds **`raw`** — the URL somebody pasted. After even one redirect hop
+the two are different strings, the query returns nothing, `targets` is empty, and adoption returns
+`no_adoptable_design`. **Forever.** The next request takes branch B again, fetches the image again,
+and tries to adopt against the same wrong key again.
+
+Two ways to miss, not one:
+
+1. **Any redirect.** A pasted CDN or image-host link 301ing to its canonical form is ordinary.
+2. **Normalization, with no redirect at all.** `new URL(raw).toString()` lowercases the host,
+   percent-encodes, and can add a trailing slash. A pasted URL with an uppercase host or a stray
+   space does not survive the round trip byte-identical.
+
+📌 **Nothing surfaces any of this.** `reason` is logged, not returned; the image renders correctly
+every time; the only symptom is a number that stops moving.
+
+✅ **This does not contradict B1, and B1 is not wrong.** Adopted really did go 0 → 39 — most direct
+image URLs do not redirect, so most of dev2's mockups adopted on first view. What this adds is a
+**third category to what B1 calls "the permanent floor"**, alongside "nobody has opened it" and "the
+original link is dead": **hosts that redirect**, which will never adopt no matter how many times
+someone opens the card.
+
+🔧 **The check is already written into B1** — *"Re-check the census in a few days: it should keep
+falling and must never rise."* If it has stalled somewhere above 16, this is why. Run the census, then
+compare the still-blocked orders' `Mockup_URL__c` against what the proxy actually fetched.
+
+**The fix.** Pass `raw` — it is in scope at `:277`, declared at `:179`. Keep `current` for the fetch,
+the size checks and the logs, which are all about what was really retrieved. ⚠️ **Do not "fix" this by
+storing the redirect target instead**; the pasted URL is the key the record is found by, and rewriting
+`Mockup_URL__c` to a redirect target would break the idempotency rule `_mockup-adopt.js` is built on.
+
+---
+
+##### B17 · A failed checklist query is indistinguishable from "there was nothing to roll up"
+
+**Found 2026-09-09 by reading the code.**
+
+`_ppi-checklist.js` calls `runQuery` four times and destructures `{ records }` every time, dropping
+`ok`:
+
+| Line | Call | What a failure becomes |
+|---|---|---|
+| `:109` | items of a type on a method (forward cascade) | `items.length === 0` → `continue`. **No log at all.** |
+| `:144` | the item's own type + parent method | `rec1` undefined → `return null`, same as "item not found" |
+| `:160` | sibling items, sub-status pipeline | `every()` over whatever came back |
+| `:177` | sibling items, Status-only types | `every()` over whatever came back |
+
+`runQuery` (`_sf.js:282-312`) is explicit that a mid-pagination failure returns
+`{ok:false, records:<what was collected>}` — it keeps page 1 deliberately, so a caller *can* serve
+partial data, and the contract is that the caller reads `ok` to decide.
+
+⚠️ **Two halves, and only one of them is real. Saying which is the point.**
+
+- **The `every()`-over-a-partial-page half is theoretical.** It needs more than 2000
+  `Pre_Production_Item__c` rows of one type on one method. That will not happen. Recording it anyway
+  because the pattern is wrong and will be copied.
+- **The silent-skip half is real and routine.** Any transient failure on the query at `:109` or `:160`
+  means the rollup does not happen, and at `:109` there is not even a `console.error` to find
+  afterwards. The fields it writes are `Screens_Completed__c` / `Inks_Mixed__c` and their siblings —
+  the prerequisite ticks that say a job is ready for the press. A tick that silently fails to update
+  leaves the board asserting the previous state as fact.
+
+📌 This is the "failures must not look like success" convention, broken in the quietest available way.
+`_rework.js` is the model the file cites for it: a named `reason` and a `detail` carrying Salesforce's
+own errorCode.
+
+**The fix.** Read `ok` at all four sites. On `!ok`: `console.error` with the status, and return `null`
+rather than writing a computed boolean. ⚠️ **Do not make it throw** — these are rollups, and §2's rule
+is that a rollup must never fail the caller's own write. The difference between "did not run" and
+"ran and found nothing" needs to reach the log, not the response.
+
+**Verifying it.** Unit-level: stub `runQuery` to return `{ok:false, records:[]}` and assert that
+`rollupItemToMethod` writes nothing and logs. There is no browser step here — the visible symptom is
+the absence of a change, which is exactly why it needs a log rather than a screen.
+
+---
+
+##### B18 · `run-line-items` compares Salesforce Ids on 18 characters
+
+**Found 2026-09-09 by reading the code. Low priority, and the reason is stated below rather than
+implied.**
+
+`SF_ID` is `^[a-zA-Z0-9]{15,18}$` — 15 **or** 18 — and Salesforce matches `WHERE Id = '<15-char>'`
+happily while always *returning* the 18-char form. So a 15-char `runId` passes validation, matches in
+SOQL, and then fails every in-memory comparison in the file:
+
+- `:253` — `lines.filter((l) => l.ProductionRun__c === runId)` → `mine` is empty
+- `:344-346` — `byId` is keyed on 18-char Ids → every row is `line_not_found`
+- `:376` — `line.ProductionRun__c !== runId` → `line_on_other_run` 409
+
+The GET failure is the nastier one: `mine` empty **and** `allocationByOrderProduct(lines, runId)`
+excluding nothing, so this run's own rows get counted as allocated *elsewhere*. The grid then reads
+"nothing allocated on this run, all of it allocated on other runs" — a coherent, plausible, entirely
+false picture of the allocation, on the screen a manager edits allocations from.
+
+📌 **The convention exists and the sibling file follows it.** `run-results/index.js:434-436`:
+
+```js
+// Salesforce returns 18-char Ids; a caller may hold the 15-char form.
+const owns = (id) => ownIds.has(id) || [...ownIds].some((o) => o.slice(0,15) === id.slice(0,15));
+```
+
+**Why P2 and not higher:** every caller in this repo passes the 18-char form today, so nothing is
+broken right now. It is a trap for the next caller, and for anyone testing by pasting an Id out of a
+Salesforce URL — which is the 15-char form. **The fix is to compare on `.slice(0,15)` at all three
+sites**, matching `run-results`.
+
+---
 
 ##### Closed. Do not re-open, do not re-audit.
 
@@ -2034,6 +2660,16 @@ outstanding except Anthony's own push, which is true of every story in this proj
 `git cat-file`. Because the whole story IS a deletion, "is it done?" and "is the file gone from
 main?" look like the same question and are not. **Merge that one branch and E5.8 closes outright**;
 move it into the Weeks 3–4 list at that point, not before.
+
+🪤 **While it sits there it is a live trap, not just dead weight — noted 2026-09-09.**
+`_priority-rollup.js`'s own header still argues confidently that the score is mirrored onto
+`Production_Method__c.Production_Priority__c` and that the stations sort by it. Both `_priority.js`
+(`:29-39`) and `calendar/index.js` (`:22-27`) state the opposite — that the module and the field were
+deleted under D9. So the file most likely to be read *first* by someone wondering what it does is the
+one that is wrong, and its advice is to wire it up. ⚠️ **If the merge is going to wait, put a one-line
+"DELETED under D9, see `_priority.js`" at the very top of the file** so the header cannot mislead
+anyone in the meantime. The field itself is untouched in dev2 either way — deleting code does not
+delete a field.
 
 ⚠️ **Three ✅ stories are deliberately NOT in the closed list, and must not be added without a fresh
 check:**
@@ -2086,6 +2722,32 @@ matters:
 - `ProductionAutoSchedulerSelector` change on PR-0085 — typed time preserved, run ended `Confirmed`.
 - **E7.1 in dev2 only.** `Production_Calendar_Setting__c` had *zero records*; an org-level record was
   created with `Calendar_Owner_Id__c = 005ca00000BhcA9AAJ` (Anthony Martinez).
+
+##### Traps re-verified clean in the code — 2026-09-09
+
+Recorded because a defect list with no denominator is misleading, and because "is trap N still
+observed everywhere?" is a question that otherwise gets re-answered from scratch every few weeks.
+This is a **static sweep of the whole `functions/` tree and all nine boards**, not a live-org test —
+it proves the code says the right thing, not that Salesforce agreed with it.
+
+| Trap / rule | Result |
+|---|---|
+| **1** — FLS-hidden field empties the SELECT | `runQueryOptionalField` used for `Print_Location__c` in `calendar` (3 sites), `production-runs`, `run-results`, `proposed-runs`; for `Multiple_Production_Methods__c` in `inbox` and `orders`. `Reject_Reason__c` / `Notes__c` absent from both `LINE_FIELDS` lists and from the `run-results` write body. ✅ |
+| **2** — `__r` names are not guessable | No `PrintMethod__r` anywhere. Every run → method → order walk is an explicit query or semi-join. ✅ |
+| **4** — `Quantity_Planned_c__c` | Spelled correctly in all four places. ✅ |
+| **5** — stored values, not labels | `Production` at `orders/[id].js:92` and `_pm-rollup.js:41`; `Delivery` at `orders/[id].js:110`; `'Complete'` (Order) vs `'Completed'` (method) used correctly **and distinguished in comments** at `calendar/index.js:216` and `production-orders/index.js:116`. ✅ |
+| **9** — every write ends at `Confirmed` | `production-runs/index.js:341` inserts `Planned`, `:243-254` PATCHes to `Confirmed`; `production-runs/[id].js:251` returns `RUN_CONFIRMED` unconditionally. The only path leaving a run on `Planned` is a genuinely failed second write, which is logged and reported as `published:false`. ✅ |
+| **10** — never DELETE a line item | No DELETE against `Production_Run_Line_Items__c` exists anywhere; `run-line-items` writes only `Planned_Qty__c`. ✅ |
+| Allow-listed writes | No caller-supplied field name reaches any write body. Every PATCH builds its payload from a fixed key set. ✅ |
+| Shape validation before a WHERE | Every `searchParams` value and `params.id` reaching a SOQL literal is `SF_ID`-tested or `soqlQuote`d first — all call sites checked, including the interpolated `'${itemId}'` in `_ppi-checklist.js`, which is guarded by `isSfId` / `SF_ID` in **both** callers. ✅ |
+| `<sc-for>` / `<sc-if>` inside `<table>` | Zero occurrences on any of the nine pages; `tools/check-dc-templates.mjs` passes. ✅ |
+
+⚠️ **Three conventions did NOT come through clean, and they are B11–B18:** composite responses
+(`run-results` alone ignores `resp.ok` — B11), IN-list chunking (six unchunked sites — B12), and
+"failures must not look like success" (B13, B17). 📌 So the pattern is worth naming: **the rules with
+a shared helper behind them held; the rules that live only as prose in this file drifted.** Trap 1
+has `runQueryOptionalField`, trap 10 has no API to violate, escaping has `soqlEscape` — all clean.
+Chunking has `runChunkedIdQuery` and *still* drifted, because nothing forces a caller to use it.
 
 ##### Two known-stale documents in the repo
 
@@ -2155,10 +2817,12 @@ week numbers.
 | **E6.6** | ✅ | **DONE 2026-09-01**, branch `feat/e6.6-remove-station-tokens`, unpushed. **Deleted, per Anthony's decision.** The whole per-station auth system — HMAC signing, verify, 12h cookie, station PINs, `/api/station-login` — was complete, correct, and had never been plugged in: `verifyStationToken()` had zero callers, no page called `CAApi.stationLogin()`, no endpoint checked anything. It read like protection, which is worse than nothing because people trust it. **`STATION_CONFIG` stays** — six live endpoints import it, and the file was two unrelated things sharing a name. **`safeEqual()` stays too**, and that mattered: `admin/sf-env.js` imports it to compare `SF_ENV_SWITCH_PIN`, which is a *real* gate today (unlike `requireCap`, still report-only), so removing it would have weakened the env switcher. What protects these endpoints instead: personal PINs plus E6.5's `requireCap` (`items.status`, `orders.receive`, `inventory.edit`). Verified with `ACCESS_ENFORCE=1` that a worker still reaches every station write, and that `/api/station-login` is gone. −129 lines. |
 | **E6.8** | ✅ | **DONE 2026-09-02**, branch `feat/e6.8-roster-from-config` (stacked on E6.6), unpushed. All three claims were real and the middle one was worse than written. **(1) Roles from config:** an entry may now carry `"role"` (`{"Parker":{"pin":"3391","role":"admin"}}`); `ADMIN_NAMES`/`MANAGER_NAMES` remain the fallback. `rosterRole()` is shared with `capsFor` so a role change moves the UI *and* the API together — deriving them separately would have meant promoted-in-the-buttons, refused-by-every-endpoint. An unrecognised role string logs and falls back; it never grants. **(2) Revocation:** `capsFor` fell back to role-derived defaults for a name it could not find, so removing someone from `WORKER_PINS` changed *nothing* until their cookie expired — and a removed manager kept manager caps, because the fallback read the hardcoded arrays rather than the secret. Absence from a roster that parsed is now `[]`. Gated on the JSON having actually parsed, so a stray comma can't read as "everyone revoked". Also closed a prototype leak: `capsFor(env, 'constructor')` used to return worker caps. **(3) Shared PIN:** last-match-wins is now a refusal (`pin_ambiguous`, 500, no cookie). Measured before/after: with Titus and Parker sharing a PIN, Titus typing it signed in **as Parker, role manager, with a manager session cookie**. ⚠️ Revocation only *blocks* once `ACCESS_ENFORCE=1`; today it still correctly blocks new logins. **Decided, not built** (Anthony, 2026-09-02): `confirmManager()` leaves the tablet's server session as the manager for 12h. Accepted — the manager logs out when they walk away, and `worker-logout` does clear the cookie. Recorded in `ca-api.js` above `confirmManager()`, including the one caveat if it is ever revisited: nothing on screen says the session changed, so the habit it relies on has no cue in the UI. |
 
-> ⚠️ **Before anyone sets `ACCESS_ENFORCE=1`:** the counting screen's submit gates on
-> `results.submit`, which appears in exactly one place in the codebase — the check itself. It is
-> not in `DEFAULT_MANAGER_CAPS` and workers derive no capabilities, so enforcement would leave only
-> Anthony able to record production results. **Grant it first.**
+> ✅ ~~**Before anyone sets `ACCESS_ENFORCE=1`:** the counting screen's submit gates on
+> `results.submit` … enforcement would leave only Anthony able to record production results.~~
+> **CLEARED — verified in the code 2026-09-09.** `results.submit` is in **both** capability sets:
+> `_session.js:78` (inside `DEFAULT_MANAGER_CAPS`, in the shop-floor group appended to it) and
+> `_session.js:107` (`DEFAULT_WORKER_CAPS`). E6.5 granted it; this warning was written before that
+> and outlived it. **Trap 2 below is still open.**
 >
 > Also unresolved: `confirmManager()` confirms via `POST /api/worker-login`, which *also* issues the
 > signed `ca_sess` cookie — so a successful manager confirmation leaves that tablet's server session
@@ -3068,17 +3732,24 @@ network tab, not the screen.
 
 ##### Two traps that must be cleared before `ACCESS_ENFORCE=1`
 
-1. **`results.submit` appears in exactly one place in the codebase — the check itself.** It is not
-   in `DEFAULT_MANAGER_CAPS`, and workers derive no capabilities. Turning enforcement on would leave
-   only Anthony able to record production results. Grant it first.
+1. ✅ ~~**`results.submit` appears in exactly one place in the codebase — the check itself.**~~
+   **CLEARED 2026-09-09.** It is in `DEFAULT_MANAGER_CAPS` (`_session.js:78`) *and*
+   `DEFAULT_WORKER_CAPS` (`_session.js:107`). E6.5 fixed this; §4 records the fix and this section
+   did not. One trap left, not two.
 2. **`confirmManager()` confirms via `POST /api/worker-login`, which also issues the signed
    `ca_sess` cookie.** A successful manager confirmation therefore leaves that tablet's server
    session as that manager. Inert while `requireCap` is report-only. Needs an answer before
    enforcement.
 
-Current state, confirmed by grep: **4** route files call `requireCap`, against **24** files with
-POST/PATCH/DELETE handlers. `verifyStationToken` (`functions/api/_station.js:84`) has **zero
-callers** — it reads as active protection and is not.
+⚠️ ~~Current state, confirmed by grep: **4** route files call `requireCap`, against **24** files
+with POST/PATCH/DELETE handlers. `verifyStationToken` has zero callers.~~ **RE-MEASURED 2026-09-09,
+and both halves were out of date.** Today: **23** files carry a mutating handler and **21** of them
+call `requireCap`. The two that do not are `worker-login` and `worker-logout` — requiring a session
+to create one is circular, and they are deliberately open. `verifyStationToken` is **gone** (E6.6
+deleted the whole station-token system); only its post-mortem comment survives in `_station.js`.
+📌 The 4-of-24 figure predates E6.5 by a day. It is left visible rather than deleted because a
+stale *measurement* is the specific thing this file's rule 1 warns about, and it sat here for a
+week reading as current.
 
 Run report-only for at least five working days and read every `[access] would deny` line before
 flipping the flag.
@@ -3343,9 +4014,18 @@ Follow the link to where it lands.
 
 ---
 
-#### B7 stage 1 · Setup / production time on the method cards — READY TO BUILD
+#### B7 stage 1 · Setup / production time on the method cards — ✅ BUILT, do NOT rebuild it
 
-**Blocked half is stage 2 only.** Stage 1 has no blocker. Full story in `ROADMAP.md` under **B7**.
+⚠️ **Correction, 2026-09-09.** This entry said READY TO BUILD and carried a full build brief. **It
+had already been built** — three commits, all reachable from `fix/e2.6-run-order`
+(`feat/b7-stage1-method-timers`, `fix/b7-stage1-idle-state` `320dbe2`,
+`feat/b7-live-on-this-device` `eec061a`), and §4's table still marked it `🔵 P1` while the code was
+on disk. This is the second time in two days that a *completed* story read as untouched here; the
+first was the B9 code half. 📌 **The brief below is left in place because it is still the right
+spec** — and because the shipped version deviates from it in two named ways (see the B7 row in §4),
+so the two are worth reading together. **What is actually left: the dev2 verification pass.**
+
+**Blocked half is stage 2 only.** Stage 1 has no blocker. Full story in §4 under **B7**.
 
 **Files:** `index.html`, `pre-production.html`.
 
@@ -3384,6 +4064,147 @@ replaces them with stale committed copies — this has already cost work twice. 
 repo first and restore after.
 
 One commit with the Asana id, do not push. Run `node tools/smoke.mjs` before finishing.
+
+---
+
+#### B9 (code half) · ✅ ALREADY BUILT 2026-09-08 — do NOT rebuild it
+
+⚠️ **Correction, 2026-09-09.** An earlier draft of this entry said the B9 code half had not started
+and carried a prompt to build it. **That was wrong** — it was written from stale session memory and
+contradicted this file's own change log. The code half was **built on 2026-09-08**. Rule 1 of this
+document applies to me as much as anyone: record what was measured. What follows is the measured
+state.
+
+✅ **BUILT, branch `feat/b9-optin-reprint`, UNPUSHED.** Files: `functions/api/_rework.js`,
+`functions/api/inbox/index.js`, `functions/api/rework-check.js`.
+
+🔑 **The gate is inside `createReworkIfNeeded`, not at the call sites — and that is deliberate.**
+There are two callers (`production-methods/[id].js:290` and `run-results/index.js:525`) because
+printing finishing and counting finishing are different moments and either can be last. A gate at
+one would simply let the reprint fire from the other. **So neither caller changed, and a third
+caller added later inherits the gate for free.** Do not "fix" this by moving the gate outward.
+
+📌 Other properties worth not rediscovering: the gate sits **after** the damage gate, so a clean
+order never claims the AM (verified — zero-damage completed order returns `nothing_to_rework` and
+writes nothing). **Org detection is field presence, not config** — `Misprint_Outcome_By__c` is
+probed via `runQueryOptionalField`, because one KV-switched deployment serves three orgs and an env
+flag cannot tell them apart. **Any probe failure falls back to the legacy path on purpose**: that
+reproduces today's loud behaviour rather than failing silently toward never building a reprint.
+Approved reprints are built by a bounded sweep on the Management inbox — no callout, no cron.
+`rework-check` learned the four new states.
+
+⛔ **What is actually left, and why B9 is still on hold:**
+
+1. **The flow entry criteria must change before activation.** The flow currently triggers on
+   `Order_Substatus__c = 'Completed' AND Misprint_Outcome__c is null`, which has **no damage
+   condition** — see §4 B9. It must be re-pointed to trigger on `Misprint_Outcome__c` becoming
+   `Awaiting AM`.
+2. **Both B9 flows remain saved INACTIVE in both sandboxes and the email stays OFF** until the
+   branch is pushed. Activating first means AMs get asked to confirm reprints that the code then
+   creates anyway.
+3. **`refs/heads/feat/b9-optin-reprint` is one of the two broken git refs** listed below (dated
+   2026-09-08 20:25). **Establish whether the branch and its commit are still intact before
+   planning anything else on B9** — that is the first question, not a footnote.
+
+📌 **If the branch turns out to be lost**, the story in §4 B9 carries enough detail to rebuild it:
+the gate's location and rationale, the two call sites, the field-presence probe, and the fallback
+behaviour are all recorded above and there. 🚩 And if you do rebuild: **`grep` silently skips files
+it cannot read** — iCloud eviction makes a file answer `Resource deadlock avoided` and grep just
+omits it, with no error and no exit code. That is how the second call site was missed on the first
+pass. Verify a call-site list with explicit per-file reads and confirm you found **two**.
+
+---
+
+#### B11–B18 · The 2026-09-09 code read — all eight are Claude Code's, all eight are unblocked
+
+**Added 2026-09-09.** Full write-ups in §4; this is the hand-over view. Nothing here waits on
+Salesforce, ops, or a decision from Anthony. ⚠️ **All eight were found by reading the code and none
+was reproduced against a live org** — so each entry below names the check that turns a reading into a
+measurement, and that check is part of the story, not optional afterwork.
+
+| Id | P | Files | The change |
+|---|---|---|---|
+| ~~**B11**~~ | ✅ DONE | `functions/api/run-results/index.js:566` | ✅ **Shipped 2026-09-09**, branch `fix/b11-composite-status`, commit `81b67ec`, unpushed. Reproduced first, both controls unchanged. See §4 for the harness and the false-pass it started with. |
+| **B12** | 🔴 P0 | `functions/api/production-orders/index.js:221` | Route the OrderItem fetch through `runChunkedIdQuery` (already imported at `:36`). Then the five siblings listed in §4. |
+| **B13** | 🔴 P0 | `functions/api/calendar/index.js:430` + `calendar.html` | Carry `runsUnavailable`; suppress `needsScheduling` and `suggestion` when runs are unknown; make the board say so. **Both halves, or it changes nothing.** |
+| **B14** | 🔵 P1 | `counting.html:293` | Move the `{{err}}` banner out of the `runReady` block; keep `e` and put it through `errText()`. |
+| **B15** | 🔵 P1 | `shipping.html:823` | Route Complete through `canWriteNow()`. Same file: the `text()`-less search haystack at `:846`. |
+| **B16** | 🔵 P1 | `functions/api/mockup-proxy/index.js:277` | Pass `raw`, not `current.toString()`. |
+| **B17** | 🔵 P1 | `functions/api/_ppi-checklist.js:109,144,160,177` | Read `ok`; log and return `null` on failure. **Do not make it throw** — rollups never fail their caller. |
+| **B18** | 🔵 P2 | `functions/api/run-line-items/index.js:253,344,376` | Compare on `.slice(0,15)`, matching `run-results/index.js:436`. |
+
+**Sequencing, and it is not the table's order.** **B12 first** — not because it is the worst, but
+because the check is one query and the answer changes how urgent it is (staging has ~2,164 completed
+orders against dev2's 81; if it is already failing there, it stops being a code story and starts
+being a live incident). **Then B11**, which is the highest-consequence single line in the list.
+Everything else can go in any order.
+
+📌 **B11, B17 and B13 are the same defect wearing three hats** — a failure that reaches the caller as
+success, as silence, and as emptiness. If only one gets done, do B11: it is the one where the app
+manufactures the evidence that a human did something.
+
+⚠️ **Do not batch these into one commit.** One story per commit with the Asana id, as always — and
+these in particular will want to be reverted independently, because three of them change what an
+endpoint returns on a failure path and that is exactly the kind of change that surprises a board.
+
+⚠️ **B12 and B13 both change behaviour under failure, which is the hardest thing here to test.** The
+tool that fits is the one E2.6 and B8 already used: a `wrangler pages dev` rig against a fake
+Salesforce that can be told to fail one specific query. **Assert on what the endpoint returned, not
+on what the board rendered** — every one of these bugs renders as a working page.
+
+📌 **Before switching or creating a branch:** `PRODUCTION-DASHBOARD-INFO.md` is **untracked** and in
+no commit anywhere (corrected 2026-09-09 — see §0 rule 4). A checkout will not touch it, but there is
+also no copy to fall back on. Back it up outside the repo, and commit it.
+
+---
+
+#### Open loops carried into the next project — 2026-09-09
+
+Nothing here is broken. These are threads that were deliberately left mid-air, listed so a new
+session does not have to reconstruct them from the change log. Each says who it is waiting on.
+
+**Waiting on Anthony (do not start these unprompted):**
+
+| Thread | State | What is needed |
+|---|---|---|
+| **B9 code half** | ✅ **already built** on `feat/b9-optin-reprint`, unpushed; both flows saved **INACTIVE**; email OFF | ✅ **Ref confirmed intact 2026-09-09** — it holds `b47c233`, which is already in `fix/e2.6-run-order`’s history; the “broken ref” was iCloud eviction (see the debt list below). So: change the flow entry criteria to `Misprint_Outcome__c` = `Awaiting AM`, push, and only then activate |
+| **E5.8** | Branch `chore/e5.8-delete-priority-rollup` is done and unpushed | Anthony pushes; the story then closes outright |
+| **E7.8 part 2** | Part 1 shipped (V23 dev2 / V36 staging) | Anthony to watch a real week on the Google calendar and decide whether the order-level block should disappear once runs exist |
+| **`feat/received-status`** (`0f98aca`) and **`feat/b8-runs-left`** | Built, unpushed | dev2 verification, then push |
+| **B7 stage 1** (3 branches), **B10** (`feat/method-colours`), **E2.6** (`fix/e2.6-run-order`) | Built, unpushed. All three verified in a rig, **none against dev2** | The same dev2 pass the two rows above are waiting on. Worth doing as one sitting on one order rather than three |
+| **Misprint_Outcome trio Descriptions** | Renamed fields still carry Descriptions citing the deleted `Reprint_Decision__c` | A hand edit by Anthony — see §2, the Order custom-field edit page wedges the renderer |
+
+**Carried technical debt (safe to leave, expensive to forget):**
+
+- **E7.3** — both Global Value Sets are built, but **there is no UI path to repoint an existing local
+  picklist to a Global Value Set** (no "Promote to Global Value Set" button exists). The four
+  existing `Print_Location__c` fields therefore cannot adopt them. The value now sits entirely with
+  **E7.4**: create production's two fields **from the shared set** at build time. Do not re-litigate
+  the repoint; it was checked.
+- **E7.7** — built and verified in both sandboxes, but the **execute-test was never run** (delete a
+  run from a multi-run order in dev2 and confirm `Print_Date__c` rolls back correctly). Coverage on
+  `ProductionRunTrigger` and `ProductionRunTriggerHelper` is **0%**, and **E7.4 needs 75% org-wide**
+  to deploy. That test debt is E7.4's blocker, not E7.7's.
+- **B9 leftovers** — the email template and Email Alert are now **orphaned in both orgs** after the
+  flow was repointed at the formula field. The Send Email element's API name is still
+  `Send_Reprint_Email_Fallback`, which no longer describes what it does. Two unverified assumptions
+  remain in that flow: that the Task's `WhatId` works on Orders (i.e. that Orders have activities
+  enabled), and whether the null check should be `Is Null` or `Is Blank`.
+- ✅ ~~**Two broken git refs** — `refs/heads/feat/b9-optin-reprint` and `feat/method-colours`.~~
+  **NOT BROKEN — diagnosed and recovered 2026-09-09.** Both refs were intact all along and hold
+  `b47c233` (B9) and `25a2a15` (B10) — **commits that are already in `fix/e2.6-run-order`'s own
+  history**, so no work was ever at risk. 🚩 **The cause was iCloud eviction, not git corruption:**
+  the two 41-byte ref *files* were dataless on disk, so `cat` gave `Resource deadlock avoided` and
+  git reported `warning: ignoring broken ref`. Forcing macOS to hydrate the two files restored them,
+  and `git branch` lists both again. 📌 **Read `warning: ignoring broken ref` on this mount as
+  "evicted", not "lost" — hydrate before you conclude anything.** Same pathology as the
+  30-minute unreadable-file incident recorded above, reaching the ref layer instead of the worktree.
+
+**Test identity:** the address to test either org's email path with is
+**`anthony@cultureapparel.com`**. 🚩 Remember the sandbox scrambling trap in §4 — Salesforce appends
+`.invalid` to every `User.Email` on refresh, but **custom field data is not scrambled**, so
+`Opp_Owner_Email__c` holds *real, un-scrambled* addresses inside the sandboxes. That is a live
+hazard, not a curiosity: an alert pointed at that field can reach a real customer from a sandbox.
 
 ---
 
@@ -4255,9 +5076,16 @@ Newest first. One line per change; link to the story that carries the detail.
 
 | Date | What | Where |
 |---|---|---|
+| 2026-09-09 | ✅ **B11 FIXED — a refused composite no longer reads as a successful submit.** `run-results`' private `composite()` now checks `!resp.ok` alongside the sub-request list, and `console.error`s the status and body (that path logged nothing at all before). Branch `fix/b11-composite-status`, commit `81b67ec`, **unpushed**. **Reproduced before fixing**, against a fake Salesforce driving the real handler: batch refused → was 200 with the run stamped `Submitted`, now 502 with the run left `Draft`; both controls (happy path, single sub-request failure) unchanged. 🪤 **The first harness was a false pass** — it sent `misprint` where `COUNT_FIELDS` wants `misprintQty`, so `/composite` was never called and all three scenarios agreed on nothing; it now asserts the batch call happened. **A green board is not a passing test, harnesses included.** ⛔ dev2 pass still owed | §4 B11, §7 |
+| 2026-09-09 | 📌 **Everything from the 2026-09-09 code read now lives in THIS file and nowhere else.** The working notes it was written from have been deleted, per rule 3 — two documents on one subject is the drift this project keeps paying for, and a backup `.md` sitting in the repo is still a second `.md` in the repo. Folded in with the defects: the `.git` eviction measurement and the evicted-ref trap (§2), the `_priority-rollup.js` header trap (§4, beside E5.8), and a **traps-re-verified-clean table** (§4) so the defect list has a denominator | §2, §4, §7, §11 |
+| 2026-09-09 | 🔴 **Eight defects logged as B11–B18 from a full read of the API layer and all nine boards.** Two are the same class of bug the project keeps paying for — a failure that reaches the caller looking like success. **B11:** `run-results`' private `composite()` never reads `resp.ok`, so a wholly rejected write returns `{ok:true}` and the run is stamped `Submitted` — manufacturing the one piece of evidence D1's model depends on. **B12:** the production board builds an unbounded `IN` list out of the query its own comment calls unbounded; dev2 is nowhere near it, **staging is ~10x past it**. **B13:** a failed run query makes the calendar report the whole shop unscheduled and offer slots for all of it, at HTTP 200 with a green chip. Then B14 (counting's load-failure banner is unreachable), B15 (shipping's Complete is a phantom write in demo mode), B16 (mockup adoption matches the post-redirect URL, so a redirecting host never adopts), B17 (`_ppi-checklist` reads a failed query as "nothing to do"), B18 (`run-line-items` compares Ids on 18 chars). ⚠️ **All eight are readings of the code; none was reproduced against a live org** — each entry names the check that would settle it | §4 B11–B18, §7 |
+| 2026-09-09 | ⚠️ **Six drift corrections — the file had gone stale against its own disk in six places.** §4 marked **B7 as `🔵 P1` planned while stage 1 was built** (three branches, all reachable from `fix/e2.6-run-order`) and §7 still carried a build brief for it — the second completed-story-reads-as-untouched in two days, after the B9 code half. §7's `results.submit` trap was **cleared by E6.5 a week ago** and the warning outlived it in two places. §7's "4 route files call `requireCap` against 24" re-measured to **21 of 23**, and `verifyStationToken` is gone entirely (E6.6). The `README.md`-is-stale rough edge is **itself stale** — none of the strings it names are in the file. 📌 **A correction has to be written down as promptly as a change; five of these six were corrections that were never written back** | §0, §4, §7 |
+| 2026-09-09 | ✅ **The "two broken git refs" were never broken — iCloud eviction, not corruption.** `feat/b9-optin-reprint` and `feat/method-colours` hold `b47c233` and `25a2a15`, **both already in `fix/e2.6-run-order`'s history**, so no work was ever at risk. The 41-byte ref *files* were dataless on disk, so git reported `warning: ignoring broken ref`. Hydrating them restored both branches. 🚩 **688 files inside `.git` are currently evicted** — that is the mechanism behind every "git writes are unreliable" note in §2: `git rev-list`, `git merge-base` and `git log <range>` die with **Bus error**. **Zero working-tree source files are evicted**, so reading and editing code is unaffected; only history operations are. 📌 Read `ignoring broken ref` on this mount as *evicted*, not *lost* | §7 open loops, §2 |
+| 2026-09-09 | 🚩 **CORRECTION — this file is UNTRACKED, not tracked-but-uncommitted, and that inverts §0 rule 4.** `git log --all -- PRODUCTION-DASHBOARD-INFO.md` returns nothing: it is in no commit on any branch or remote. So **a branch switch will not clobber it** — git leaves untracked files alone — and the twice-destroyed-notes incident belonged to `ROADMAP.md` and `CLAUDE-CODE-QUEUE.md`, which *were* tracked. What it actually means is that 368KB of the only record of this project sits on one iCloud disk with no copy anywhere. **Commit it.** A dated pre-edit backup was left at `_to_delete/PRODUCTION-DASHBOARD-INFO.backup-2026-09-09.md` | §0 rule 4, §4 |
 | 2026-09-09 | **E2.6 verified — the run pointer holds on a multi-run method** — three full setup/print cycles driven in a rig with every write asserted server-side, plus out-of-order working, Pause-is-not-Stop, and a mid-run refresh. One real inconsistency found and fixed: the drawer's Production Runs rows rendered in raw endpoint order while the run picker sorted, so the two lists could disagree on runs sharing a scheduled time. Branch `fix/e2.6-run-order`, unpushed. **Not yet verified against dev2** | §4 E2.6, §8 S5 |
 | 2026-09-08 | **One colour per print method, everywhere (B10)** — screen print green, embroidery purple, heat press orange, promo teal, as four `tokens.css` variables replacing five copy-pasted palettes. Deliberately NOT `--ok`/`--warn`, which already mean “fine” and “watch this one”. Applied on `index.html`, `pre-production.html`, `counting.html`, `order-sheet.html`, `calendar.html` (tabs only) and `stats.html`; `shipping.html` untouched — its `methodColor` is the delivery method. Also fixed the order sheet's Method chip, which guessed from the press name and defaulted to Screen Print. Branch `feat/method-colours`, unpushed | §4 B10 |
 | 2026-09-08 | **B9 code half shipped — the reprint is opt-in** — `createReworkIfNeeded` now consults `Order.Misprint_Outcome__c` before building. Gate lives in `_rework.js`, so **neither call site changed** and neither can bypass it. An org without the audit fields (production) builds automatically exactly as before. Approved reprints are built by a bounded sweep on the Management inbox — no callout, no cron, no Access exception. `rework-check` learned the four new states. Branch `feat/b9-optin-reprint`, unpushed. ⚠️ **Flow entry criteria must change before activation** — see §4 B9 | §4 B9 |
+| 2026-09-09 | 📌 **Document closed out for handoff to a new Claude project.** Added **§0 Cold start** (the five standing rules, the one-deployment/three-orgs fact, and an org id reference table); added the **Salesforce-in-browser recipes** to §2 (Dev Console query editor, `FlowDefinitionView` limits, EditArea, the REST 401 dead end, the Order custom-field edit-page wedge, and the *read it back off a fresh load* rule); recorded the **"YOUR FLOW FINISHED"** diagnosis (a rogue `IsSyncing` quote with zero line items, not the flow); corrected a **false §7 entry of my own** that said the B9 code half had not started — it was **built 2026-09-08** on `feat/b9-optin-reprint`, and §7 now records the measured state plus the three things actually blocking B9; and added an explicit **open-loops list** naming what waits on Anthony versus what is carried debt. Contents updated to D13. | §0, §2, §7, §11 |
 | 2026-09-09 | ✅ **E7.8 part 1 BUILT in both sandboxes — `CreateCalendarEvent` no longer duplicates the order block.** Check for Matching Records flipped **Disabled -> Enabled**, condition **Related To ID Equals `recordId`**, single match -> update, multiple -> update most recently modified. **dev2 V22 -> V23** (`301ca00000TpfrdAAB`), **staging V35 -> V36** (`301ca00000TpeArAAJ`), both Active and both read back off a fresh load with Save greyed out. Run-level Events (WhatId = `Production_Run__c`) are untouched, so an order keeps one block per run — Anthony confirmed that is wanted. **Part 2 (should the order block yield once runs exist?) remains open, deferred to Anthony after a real week on the calendar.** | §4 E7.8 |
 | 2026-09-09 | ✅ **E7.8 investigated — the two calendar writers do not collide.** `OrderScheduling` is a **screen Flow** (Active V22, dev2 `301ca00000TKM8ZAAX`), not Apex; its `CreateCalendarEvent` inserts an `Event` with **WhatId = the ORDER** and matching **disabled**, so re-running it duplicates. `ProductionEventPublisher` writes Events with **WhatId = the RUN** and dedupes via `SELECT ... FROM Event WHERE WhatId IN :runIds`. Different grains — nothing overwrites anything; the overlap is on the calendar view. **Staging data:** 292 Events / 224 distinct WhatIds; only 4 WhatIds have >1, of which exactly **one Order**; **no Production_Run__c (prefix `a3T`) has a duplicate**. Hardcoded `Assigned To ID 0055e000005tFYfAAM` **checked and safe** — resolves to Culture Operations in both sandboxes because sandboxes inherit production User ids | §4 E7.8 |
 | 2026-09-09 | ✅ **E7.7 BUILT in dev2 AND staging** — `ProductionRunTriggerHelper.afterDelete(Trigger.old)` -> `OrderPrintDateRollup.syncFromRuns`, and `ProductionRunTrigger` is now `(after insert, after update, after delete)`. Helper edited first so the trigger compiles. Read back via Tooling API in both: Active, **UsageAfterDelete true**, `LengthWithoutComments` 467 in both orgs (identical). ⚠️ **Compiled and active, NOT executed** — no run was deleted to prove it fires; do that in dev2 before trusting it. 🚩 Coverage is 0% on trigger and helper in both orgs (pre-existing) and this adds uncovered lines — **E7.4 needs 75% org-wide** | §4 E7.7 |
