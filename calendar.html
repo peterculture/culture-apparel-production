@@ -273,6 +273,9 @@ window.__resources = Object.assign({}, window.__resources, {
                   <sc-if value="{{b.roomy}}" hint-placeholder-val="{{ true }}">
                     <div style="font:400 10px/1.3 'Archivo';color:var(--text-secondary);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{b.customer}}</div>
                     <div style="font:400 9px/1.3 'Archivo';color:var(--text-faint);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{b.time}}</div>
+                    <sc-if value="{{b.hasQty}}" hint-placeholder-val="{{ true }}">
+                      <div style="font:400 9px/1.3 'Archivo';color:var(--text-faint);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{b.qtyLabel}}</div>
+                    </sc-if>
                   </sc-if>
                   <sc-if value="{{b.hasPrepOpen}}" hint-placeholder-val="{{ false }}">
                     <div style="display:inline-flex;align-items:center;gap:4px;margin-top:5px;font:700 8px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#E0B870;background:#221a0c;border:1px solid #4a3a18;border-radius:5px;padding:4px 5px;white-space:nowrap"><i class="ti ti-alert-triangle"></i>{{b.prepOpenLabel}}</div>
@@ -1752,12 +1755,27 @@ class Component extends DCLogic {
         const h=Math.max(30,(it.endH-it.startH)*ROW_H-3);
         const w=100/laneCount;
         const pname=t(r.Press||pressName(r.Press__c));
+        /* B20: the ORDER's garment count on the block. qtyOf() reads
+           Order.TotalQuantity, which /api/calendar already rolled up from
+           OrderItem, so this costs no request and adds nothing to any SELECT.
+           null (unknown) renders NOTHING -- never "0 pcs", which would read as
+           a real, empty job.
+
+           Only at the `roomy` tier. These blocks are as short as 30px and as
+           narrow as 60px, and they already ration what they show across three
+           tiers on purpose (see showPress/showScore/roomy below); a fourth
+           line forced onto a cramped block would push out the order number,
+           which is the one thing that must always survive. The title tooltip
+           carries it at EVERY tier instead, so it is always reachable. */
+        const blockQty=this.qtyOf(o);
+        const qtyLabel=blockQty==null?'':blockQty+' pcs on this order';
         return {
           num:t(o.GOA_Order_Number__c)||o.OrderNumber||'—',
           customer:t(o.Account&&o.Account.Name)||'—',
+          hasQty: !!qtyLabel, qtyLabel,
           press:pname, pressColor: done?FAINT:sched.accent,
           time:hhmm(r.Scheduled_Start__c)+'–'+hhmm(r.Scheduled_End__c||r.Scheduled_Start__c),
-          title:[t(o.Account&&o.Account.Name), pname, hhmm(r.Scheduled_Start__c)+'–'+hhmm(r.Scheduled_End__c||r.Scheduled_Start__c)].filter(Boolean).join(' · '),
+          title:[t(o.Account&&o.Account.Name), pname, hhmm(r.Scheduled_Start__c)+'–'+hhmm(r.Scheduled_End__c||r.Scheduled_Start__c), qtyLabel].filter(Boolean).join(' · '),
           score:(p.score||1).toFixed(1), scoreColor: done?FAINT:scoreColor(p.score||1),
           color: done?FAINT:prepColor(o.prep&&o.prep.key),
           borderStyle: done?'solid':sched.border,
