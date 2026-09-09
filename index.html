@@ -145,7 +145,7 @@ window.__resources = Object.assign({}, window.__resources, {
                   <div style="font:600 15px/1.1 'Oswald';color:#ECEAE4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{o.customer}}</div>
                   <div style="font:400 10px/1 'Archivo';color:var(--text-muted);margin-top:4px">{{o.num}} · {{o.account}}</div>
                 </div>
-                <span style="margin-left:auto;flex-shrink:0;display:flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:var(--text-secondary)"><span style="width:8px;height:8px;border-radius:50%;background:{{o.methColor}}"></span>{{o.methShort}}</span>
+                <span style="margin-left:auto;flex-shrink:0;display:flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:{{o.methColor}}"><span style="width:8px;height:8px;border-radius:50%;background:{{o.methColor}}"></span>{{o.methShort}}</span>
               </div>
               <div style="display:flex;align-items:center;gap:8px;min-width:0"><span style="font:600 12px/1 'Oswald';color:#ECEAE4;background:#1e1e22;border-radius:5px;padding:4px 8px;flex-shrink:0">{{o.qty}} pcs</span><span style="font:400 11px/1 'Archivo';color:var(--text-secondary);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{o.garment}}</span></div>
               <sc-if value="{{o.hasProgress}}" hint-placeholder-val="{{ true }}">
@@ -224,7 +224,7 @@ window.__resources = Object.assign({}, window.__resources, {
     <aside style="position:fixed;top:0;right:0;bottom:0;z-index:61;width:min(460px,100vw);background:#0C0C0E;border-left:1px solid #232327;box-shadow:-30px 0 70px -20px rgba(0,0,0,.8);display:flex;flex-direction:column;animation:ca-slide .22s ease">
       <div style="display:flex;align-items:flex-start;gap:12px;padding:20px 22px;border-bottom:1px solid #1b1b1e;border-top:4px solid {{open.urgColor}}">
         <div style="min-width:0">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font:600 10px/1 'Oswald';letter-spacing:.08em;color:var(--text-muted)">{{open.num}}</span><span style="display:inline-flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:var(--text-secondary)"><span style="width:7px;height:7px;border-radius:50%;background:{{open.methColor}}"></span>{{open.methLabel}}</span></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font:600 10px/1 'Oswald';letter-spacing:.08em;color:var(--text-muted)">{{open.num}}</span><span style="display:inline-flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:{{open.methColor}}"><span style="width:7px;height:7px;border-radius:50%;background:{{open.methColor}}"></span>{{open.methLabel}}</span></div>
           <div style="font:600 21px/1.05 'Oswald';color:#ECEAE4">{{open.customer}}</div>
           <div style="font:400 12px/1 'Archivo';color:var(--text-muted);margin-top:5px">{{open.account}}</div>
         </div>
@@ -361,7 +361,7 @@ window.__resources = Object.assign({}, window.__resources, {
           <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:11px">Production Methods</div>
           <div style="display:flex;flex-direction:column;gap:7px">
             <sc-for list="{{open.methodsView}}" as="pm" hint-placeholder-count="1">
-              <div style="display:flex;flex-direction:column;background:#121215;border:1px solid #232327;border-radius:8px;overflow:hidden">
+              <div style="display:flex;flex-direction:column;background:#121215;border:1px solid #232327;border-left:3px solid {{pm.color}};border-radius:8px;overflow:hidden">
                 <div style="display:flex;align-items:center;gap:10px;padding:11px 13px">
                   <span style="width:8px;height:8px;border-radius:50%;background:{{pm.color}};flex-shrink:0"></span>
                   <span style="font:500 12px/1 'Archivo';color:#ECEAE4">{{pm.label}}</span>
@@ -2630,7 +2630,11 @@ class Component extends DCLogic {
   renderVals(){
     const st = this.state;
     const accent = this.props.accentColor || '#C6372B';
-    const M = { sp:{label:'Screen Print',short:'Screen',color:'#C6372B'}, em:{label:'Embroidery',short:'Embroid',color:'#5E9B9A'}, hp:{label:'Heat Press',short:'Heat',color:'#C9923A'}, promo:{label:'Promotional Items',short:'Promo',color:'#8E6FB0'} };
+      /* Local copy for the board's own chips. Colours reference the same
+         tokens as METHOD_META in ca-api.js -- two literal palettes is how
+         a board ends up disagreeing with the order sheet about what colour
+         embroidery is. */
+    const M = { sp:{label:'Screen Print',short:'Screen',color:'var(--method-sp)'}, em:{label:'Embroidery',short:'Embroid',color:'var(--method-em)'}, hp:{label:'Heat Press',short:'Heat',color:'var(--method-hp)'}, promo:{label:'Promotional Items',short:'Promo',color:'var(--method-promo)'} };
     const W = { MA:{name:'Marcus A.',color:'#C6372B'}, DK:{name:'Dana K.',color:'#5E9B9A'}, PR:{name:'Priya R.',color:'#C9923A'}, JT:{name:'Jules T.',color:'#7FA644'} };
     const U = { over:'#E24A3A', today:'#E24A3A', soon:'#C9923A', ok:'var(--text-muted)', done:'#7FA644' };
     // nx.label is a BUTTON CAPTION ("Start Production"), not a Status__c
