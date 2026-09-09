@@ -141,7 +141,7 @@ window.__resources = Object.assign({}, window.__resources, {
           <div style="font:400 12px/1.4 'Archivo';color:var(--text-secondary)">{{c.customer}}</div>
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font:400 11px/1 'Archivo';color:var(--text-muted)">
             <span><i class="ti ti-printer" style="font-size:12px;margin-right:5px"></i>{{c.runName}}</span>
-            <span>{{c.methodType}}</span>
+            <span style="display:inline-flex;align-items:center;gap:5px;color:{{c.methodColor}}"><span style="width:8px;height:8px;border-radius:50%;background:{{c.methodColor}};flex-shrink:0"></span>{{c.methodType}}</span>
             <sc-if value="{{c.hasPress}}" hint-placeholder-val="{{ false }}"><span>{{c.pressName}}</span></sc-if>
             <sc-if value="{{c.hasDate}}" hint-placeholder-val="{{ false }}"><span><i class="ti ti-calendar" style="font-size:12px;margin-right:5px"></i>{{c.printDate}}</span></sc-if>
           </div>
@@ -184,7 +184,7 @@ window.__resources = Object.assign({}, window.__resources, {
           <div style="font:400 13px/1.4 'Archivo';color:var(--text-secondary)">{{d.customer}}</div>
           <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;font:400 11px/1 'Archivo';color:var(--text-muted)">
             <span><i class="ti ti-printer" style="font-size:12px;margin-right:5px"></i>{{d.runName}}</span>
-            <span>{{d.methodType}}</span>
+            <span style="display:inline-flex;align-items:center;gap:5px;color:{{d.methodColor}}"><span style="width:8px;height:8px;border-radius:50%;background:{{d.methodColor}};flex-shrink:0"></span>{{d.methodType}}</span>
             <span>{{d.placements}}</span>
             <span>Planned {{d.plannedTotal}}</span>
             <sc-if value="{{d.hasDate}}" hint-placeholder-val="{{ false }}"><span><i class="ti ti-calendar" style="font-size:12px;margin-right:5px"></i>{{d.printDate}}</span></sc-if>
@@ -387,6 +387,18 @@ window.__resources = Object.assign({}, window.__resources, {
 const VALID_NAMES = (window.CAApi && window.CAApi.VALID_NAMES) || ['Anthony','Asher','Alex','Parker','Titus','Gian','Isaac','Bronson','Zach','Logan','Avery','Jeff'];
 
 const ACCENT = '#C9923A';
+
+/* Print-method identity colour, keyed by Production_Method__c.Type__c exactly
+   as Salesforce stores it. METHOD_META lives in ca-api.js and its colours are
+   the tokens.css --method-* variables, so this board agrees with the boards,
+   the drawer and the printed order sheet without a second palette here. An
+   unknown or missing type falls back to the muted text colour: no method
+   means no method marker, not a wrong one. */
+function methColor(type){
+  const meta = (window.CAApi && window.CAApi.METHOD_META) || {};
+  const m = meta[String(type||'').trim()];
+  return (m && m.color) || 'var(--text-muted)';
+}
 
 class Component extends DCLogic {
   constructor(props){
@@ -665,6 +677,11 @@ class Component extends DCLogic {
         orderNumber: txt(r.goaNumber)||txt(r.orderNumber)||txt(r.name)||'—',
         customer: txt(r.customer)||txt(r.orderName)||'—',
         runName: txt(r.name), methodType: txt(r.methodType)||'—',
+        // Method identity colour, from the same METHOD_META every other
+        // board reads (tokens.css --method-*). The card's LEFT STRIPE is
+        // already spoken for by counting status, so the marker here is the
+        // dot + tinted label -- same treatment as index.html's chip.
+        methodColor: methColor(r.methodType),
         hasPress: !!r.pressName, pressName: txt(r.pressName),
         hasDate: !!r.scheduledStart, printDate: fmtRunDate(r.scheduledStart),
         statusLabel: counted?'Counted':'To Count',
@@ -986,6 +1003,7 @@ class Component extends DCLogic {
         hasDate: !!(d&&d.scheduledStart), printDate: d?fmtRunDate(d.scheduledStart):'',
         customer: d?(txt(d.customer)||txt(d.orderName)||'—'):'',
         runName: d?txt(d.name):'', methodType: d?(txt(d.methodType)||'—'):'',
+        methodColor: methColor(d&&d.methodType),
         placements: d?(txt(d.placements)||'').split(';').join(' · '):'',
         plannedTotal: String(rowsSrc.reduce((a,r)=>a+(Number(r.plannedQty)||0),0)),
         statusLabel: d&&d.resultStatus==='Submitted'?'Counted':'To Count',
