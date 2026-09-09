@@ -634,6 +634,8 @@ estimated. Owner column: **CC** = Claude Code (repo change), **SF** = this Sales
 | **B6b** | ⚠️ unpushed | CC | **DONE 2026-09-03**, branch `fix/b6b-postprod-new-run`, commit `ee19fc6`, `index.html` +21/−1. **A hole B5 opened and only showed up once something used it:** Post-Production collapsed the Production Runs section, so the status a make-up run is most likely to be booked from was the one status with no button to book it — and B5's deep link opened a drawer with no form in it. Full detail below. |
 | **B7** | 🔵 P1 | CC (+SF) | **Setup / production time on the method cards** — Ready for Print shows the setup clock, In Production shows the production clock. The clocks are **per method, not per run**, so the run picker is not involved and the card needs no selection logic. **Stage 1 (no blocker):** show the stored figure, presented as *saved* rather than live. **Stage 2 (blocked on E2.3):** make it tick. Full detail below. |
 | **B8** | ⚠️ unpushed | CC | **DONE 2026-09-04**, branch `feat/b8-runs-left`, `index.html` + `production-orders/index.js`. **Runs left to print, on the method card** — a manager sees it without opening the drawer. The board had no run data at all: runs arrive per-method through `loadRunsForCard()` when a drawer opens, so `state.runsByMethod` held opened cards only. Added a **separate fail-open follow-up query** in the same handler — flat `SELECT Id, PrintMethod__c, Actual_End__c FROM Production_Run__c WHERE PrintMethod__c IN (…)`, chunked through `runChunkedIdQuery`, aggregated per method. **Kept out of the main SELECT deliberately** (trap 1: one FLS-hidden field empties the whole board; a badge is not worth that). Not a nested subquery (E3.4 — silent truncation at 200), not a rollup field (D9 — a stored derived number nothing refreshes). **"Left to print" reuses `index.html`'s own rule** — a run with no `Actual_End__c` — which is the same test that advances a method to Post-Production, so the badge and the status machine cannot disagree. Counts every placement (B4 made allocation placement-aware; a Front and a Back run both go through the press). **Unknown ≠ zero:** a failed count query leaves the fields absent and the card shows nothing, never "0 left". Shown on Ready for Print and In Production only, beside B7's clock; "all runs printed" at zero, "no runs scheduled" when the method has none (Anthony, 2026-09-04). ⚠️ **Verified against a fake-Salesforce harness and a stubbed board, NOT against dev2** — that pass is still owed. |
+| **B9** | 🟣 SPEC | SF + CC | **The reprint becomes opt-in: the account manager confirms it before it exists.** Today a reprint is created automatically the moment the last method completes. Anthony, 2026-09-04: the AM should be emailed, click through to say whether the customer actually wants the reprint, and only then does it get built — landing in the Management inbox with its methods already mirrored, ready to schedule. ⛔ **NOT READY TO BUILD.** Four decisions are open and two prerequisites do not exist in this system at all: there is **no email capability anywhere in the app** (Salesforce must send it — Anthony, 2026-09-04). The recipient, however, is **already on the Order**: `Opportunity_Owner_Email__c`. Full detail below. |
+| **B10** | ⚠️ unpushed | CC | **DONE 2026-09-08**, branch `feat/method-colours`, `tokens.css` + `ca-api.js` + six pages. **One colour per print method, on every board** — Anthony, 2026-09-08: screen print green, embroidery purple, heat press orange, “a subtle indicator that clearly visually marks them”. The hexes had been copy-pasted into **five** separate places, so they now come from four `tokens.css` variables (`--method-sp` / `-em` / `-hp` / `-promo`) that every page already links, the printed order sheet included. ⚠️ **Deliberately NOT `--ok` / `--warn`**, which are already a green and an orange: those two carry meaning on these boards (“fine” and “watch this one”), and a method chip in the exact status green reads as a verdict on the job rather than a label for the press. Neighbouring hues instead — `--method-sp #4E9A6A` vs `--ok #7FA644`, `--method-hp #D2762F` vs `--warn #C9923A` — all four clearing 4.5:1 on `--surface-card` and 3:1 on the order sheet's white. **Where it shows:** `index.html` board chip and drawer chip (the LABEL is tinted, not just the 8px dot) plus a 3px method stripe on the drawer's method card; `pre-production.html` the same two, plus the column headers, which were already method-keyed; `counting.html` a dot + tinted label on the run cards and the run header; `order-sheet.html` the Method chip and the per-method rows; `calendar.html` the press-group tabs; `stats.html` the per-method timing rows. **Left alone on purpose:** `shipping.html` — its `methodColor` is the **delivery** method (Ship / Pickup / Local Dropoff), a different axis that happens to share the name — and the calendar GRID blocks, which already carry four colour axes (outstanding prep, Confirmed vs Planned, priority score, grey for finished) on a 30px target. **Fixed in passing:** the order sheet's Method chip was `api.methodOf(rec)`, a guess off the press name that falls back to Screen Print whenever it cannot tell; it now reads the order's real `Production_Method__c` records and only guesses when there are none. Colour is why it got fixed — a green “Screen Print” dot on an embroidery sheet is a wrong colour on paper, not just a wrong word. Verified in a wrangler rig on all six pages by reading computed styles, not by looking at the screen. |
 
 > ⚠️ **THIS FILE EXISTS ONLY ON ANTHONY'S DISK, AND THAT HAS NOW COST REAL WORK TWICE IN ONE DAY.**
 > `ROADMAP.md` and `CLAUDE-CODE-QUEUE.md` are tracked, but every committed copy — `origin/main` and
@@ -1150,6 +1152,839 @@ not trustworthy" and that adding one belongs with E2.3. One org change, three pa
 ---
 
 
+---
+
+##### B9 · The reprint becomes opt-in — the account manager confirms it first
+
+**Asked for by Anthony, 2026-09-04. This is a SPEC, not a queued story.** Written down now
+because the shape is agreed and the open questions are worth arguing before anyone codes.
+
+**What he wants.** When an order with misprints or damaged garments finishes, email the
+account manager for that order's account. The email carries a link. The AM opens it and
+says either *the customer wants the reprint* or *the customer is satisfied, no reprint*.
+**The reprint order does not exist until they confirm.** Once confirmed, its methods land
+in the Pre-Production Management tab to have runs scheduled, with all the method
+information already carried over.
+
+📌 **Half of this is already built, and it is the second half.** B6 shipped the landing:
+`_rework.js` mirrors type, placements and vendor onto the reprint's methods, and
+`fetchReprintsAwaitingRuns()` puts a Pre-Production reprint that has methods but no runs
+into the Management inbox. So "falls back into pre-production management with all method
+info already saved" is **the behaviour that exists today** — this story does not rebuild
+it, it puts a gate in front of it.
+
+**What changes is the trigger.** Right now the reprint is created automatically:
+`rollupOrderSubstatus()` lands on `Completed`, and `createReworkIfNeeded()` runs
+immediately from **two** call sites — `production-methods/[id].js:290` and
+`run-results/index.js:525`. Both would have to stop creating and start *notifying*.
+
+##### ⛔ Two prerequisites that do not exist. Check these before anything else.
+
+1. 🚩 **THIS APP CANNOT SEND EMAIL, AT ALL.** Swept the whole `functions/` tree on
+   2026-09-04: no mail library, no provider, no SMTP, nothing. Cloudflare Workers cannot
+   open an SMTP connection either, so "just send an email" means **either** an outbound
+   email API (a vendor, a secret, an egress allowance, a deliverability story, a bounce
+   story) **or** letting Salesforce send it — an Email Alert from a record-triggered Flow,
+   or Apex. 📌 **Salesforce sending it is almost certainly right**: the recipient lookup,
+   the record and the template all already live there, and it keeps a whole new outbound
+   dependency out of a system whose one deployment serves three orgs.
+2. ✅ **THE ACCOUNT MANAGER IS ALREADY ON THE ORDER — CORRECTED 2026-09-04.** An earlier
+   version of this entry said no Account Manager field existed. **That was wrong, and it
+   was wrong because the search was too narrow** — it filtered Account's fields for the
+   label "Manager" and stopped. Anthony pushed back, said to look at Account *and*
+   Opportunity, and he was right. What is actually there, read from dev2's Object Manager:
+
+   | Object | Field | Type | Notes |
+   |---|---|---|---|
+   | Order | `Opportunity_Owner_Email__c` | Formula (Text) | **`Opportunity.Owner.Email`** — the recipient. Live, always current, nothing to maintain. Created by Peter Larson 2025-05-09. |
+   | Order | `Opportunity_Owner__c` | Lookup(User) | The AM as a user record. |
+   | Order | `Opportunity_Owner_Name__c` | Formula (Text) | For the greeting. |
+   | Order | `Opp_Owner_Email__c` | **Email** | ⚠️ See the trap below. |
+   | Order | `OwnerId` | Lookup(User,Group) | "Order Owner" — NOT the AM. |
+   | Account | `OwnerId` | Lookup(User) | "Account Owner". No custom AM field on Account; its full 45-field list was read, not just a label filter. |
+   | Opportunity | `OwnerId`, `Opportunity_Owner_Email__c`, `Opportunity_Owner_Name__c` | | The source the Order's copies derive from. |
+
+   📌 **No new field is needed for the recipient.** The Order already carries the AM's
+   address as a live formula, so a Flow on Order can address the email with no lookup,
+   no traversal and no backfill.
+
+   🚩 **TRAP — TWO FIELDS ON ORDER SHARE THE LABEL "Opportunity Owner Email".**
+   `Opportunity_Owner_Email__c` is the **formula** (`Opportunity.Owner.Email`, always
+   current). `Opp_Owner_Email__c` is a **writable Email field** — a snapshot, which means
+   it can be stale or blank and nothing recomputes it. **Use the formula.** This is the
+   same duplicate-label shape as `Receiving_Status__c` / `ReceivingStatus__c` documented
+   above, and it is the second one found in this org in a single day: **when a field's
+   label is ambiguous here, check the API name before you bind anything to it.**
+
+   ⛔ **Still to confirm with Anthony:** that Opportunity Owner is who he means by "the
+   account manager" in every case, and that it is populated on real orders. The formula
+   returns blank if the Order has no Opportunity — and `OpportunityId` is in
+   `CLONED_ORDER_FIELDS`, so a reprint inherits it, but an order created outside the
+   "Close and Create Order" path may not have one at all. **A blank recipient must fail
+   loudly, not silently skip the email.**
+
+##### 🔒 The link in the email is the hard part, and it collides with E6.4
+
+**A link that mutates data, sent to somebody's inbox, is a capability URL.** Two problems
+meet here and neither is optional:
+
+- **Cloudflare Access fronts the entire deployment, `/api/*` included** (E6.4). Its Allow
+  policy is a manager email list; its Bypass is the shop's public IP. An AM clicking from
+  a phone at home is **neither** — they will hit a login screen, or, if someone "fixes"
+  that by widening the policy, the perimeter this project just finished proving gets a
+  hole in it for the sake of one link. **Do not widen Access to make the link work.**
+- **The token has to be its own authorisation.** Single-purpose, bound to one order, one
+  decision, expiring, single-use, and useless for anything else. It must not reuse
+  `ca_sess`, must not grant any capability from `_session.js`, and a leaked or forwarded
+  link must at worst let someone answer one reprint question — never reach a board.
+
+📌 **The obvious alternative deserves a real hearing: put the decision in Salesforce, not
+in this app.** The AM is a Salesforce user, the email would come from Salesforce, and a
+link to a record with two buttons needs no token, no new endpoint and no Access exception
+at all. That trades a nicer UI for a dramatically smaller attack surface, and it is the
+option this document would pick unless Anthony wants the AM never to touch Salesforce.
+
+##### ⚠️ What this breaks if it is built carelessly
+
+- **Gate 1 changes meaning.** `createReworkIfNeeded`'s first gate is *no existing reprint
+  for this order*, which is what makes it safe to call repeatedly. Once a reprint can be
+  *pending*, "already exists" and "already decided" stop being the same question, and a
+  half-answered order must not be able to produce a second reprint.
+- **THERE ARE NOW THREE OUTCOMES, NOT TWO.** S6's false-pass note already says *"no
+  reprint needed" and "the reprint failed" must never look the same*. Add a third:
+  **"the AM said the customer does not want one."** A declined reprint is a real business
+  outcome and must be recorded as such — with who declined it and when — not left as an
+  absence that is indistinguishable from a failure or from silence.
+- **Nothing must rot silently.** If the AM never answers, misprints sit forever with no
+  owner and no reprint. **This is exactly B5's argument about incomplete garments**: the
+  one thing coming out of counting that has no owner until a human acts is the thing that
+  gets lost. A pending decision needs to be *visible* somewhere — a queue, a badge, an
+  ageing indicator — or this new gate becomes a new silent failure mode.
+- **`rework-check` must learn the new states.** `GET /api/rework-check?orderNumber=…` is
+  the read-only trace of the gates and is the first thing anyone runs when a reprint does
+  not appear. If it cannot say "waiting on the AM since Tuesday" or "declined by X on
+  Friday", every one of those becomes an afternoon of guessing.
+
+##### 📍 WHERE THIS STANDS — 2026-09-08
+
+✅ **CODE HALF BUILT 2026-09-08**, branch `feat/b9-optin-reprint`, unpushed. `_rework.js`,
+`inbox/index.js`, `rework-check.js`.
+
+**The gate is inside `createReworkIfNeeded`, not at the call sites.** There are two callers —
+`production-methods/[id].js:290` and `run-results/index.js:525` — because printing finishing and
+counting finishing are different moments and either can be last. A gate at one would simply let the
+reprint fire from the other, so **neither file changed**. A third caller added later inherits it.
+
+**Placed after the damage gate, not before it.** Only then is a reprint warranted at all, so a
+clean order never claims the AM. Verified: a completed order with zero damage returns
+`nothing_to_rework` and writes nothing.
+
+**Org detection is field presence, not config.** `Misprint_Outcome_By__c` exists only where B9 was
+built, probed through `runQueryOptionalField`. An env flag cannot distinguish orgs (one deployment,
+KV-switched), and a per-org allow-list is something somebody forgets the day B9 reaches production —
+failing *silently* toward never building a reprint again. **Any probe failure falls back to the
+legacy path**, deliberately: that re-creates today's behaviour, which is loud. Deferring on failure
+would mean no reprint ever and nobody finds out until a customer asks.
+
+**Gate 1 split in two.** "A reprint child already exists" still guards duplicates. A second,
+independent gate answers "has this been decided" — needed because a *declined* order has no child,
+so gate 1 alone would happily build one on the next call.
+
+**How the approval gets back here: a bounded sweep on `/api/inbox`.** There is no inbound-auth
+pattern in `functions/`, no webhook, no cron, and Access fronts `/api/*` — a Flow callout would need
+a hole in the perimeter E6.4 just proved, for one link. So nothing is pushed. The sweep runs after
+the response via `waitUntil`, takes the 3 oldest approved-but-unbuilt orders per load, and builds
+them where the manager already goes to schedule their runs (B6 put reprints in that list). An
+approved reprint appears on the next poll, seconds later.
+
+⚠️ **BEFORE ACTIVATING THE FLOW — its entry criteria is wrong for this design.** It currently fires
+on `Order_Substatus__c = 'Completed' AND Misprint_Outcome__c is null`, which has **no damage
+condition**, so as built it emails the AM about every completed order including perfectly clean
+ones. The app now sets `Awaiting AM` itself — it is the only thing that knows every gate passed and
+damage > 0 — so **re-point the Flow to trigger on `Misprint_Outcome__c` becoming `Awaiting AM`** and
+let it do nothing but send the email.
+
+📌 **All three declined values are treated as declines** — `Credit`, `Refund` and `Credit/Refund`.
+The 2023 combined value was superseded and never deactivated. If that distinction ever has to
+matter here it is a picklist cleanup first, not a branch in `_rework.js`.
+
+**`rework-check` reports five outcomes**, in the same order the code checks them: *not built here*
+(no B9 in this org) · *decision not yet requested* (blank) · *awaiting_am since <date>* ·
+*approved, not yet built* · *declined_by_am by <name> on <date>* · plus *unknown_outcome* if a
+picklist value is added without teaching `_rework.js`.
+
+⚠️ **Verified against fake-Salesforce harnesses driving the real functions, NOT against dev2.**
+Every decision path and every verdict was exercised, including probe failure and the clean-order
+case. The dev2 pass is still owed — `GET /api/rework-check?orderNumber=…` on a real damaged order is
+the tool for it.
+
+
+**Anthony's answers (2026-09-04/08):** Salesforce sends the email · the decision is made on
+a Salesforce record, not behind a token in this app · the recipient is the Opportunity
+Owner, already on the Order as `Opportunity_Owner_Email__c` · **the field stays BLANK as the
+resting state** (no `Not Needed` value) · **the email stays OFF until the code half ships**.
+
+✅ **FOUR FIELDS BUILT IN BOTH ORGS 2026-09-08**, by hand in each rather than by change set
+(so there was no deploy-inactive step to miss). Verified by reading each field's detail page
+back, not from the save dialogs.
+
+| Field | Type | dev2 | staging |
+|---|---|---|---|
+| ~~`Reprint_Decision__c`~~ | Picklist, restricted | ⛔ **DELETED 2026-09-08** | ⛔ **DELETED 2026-09-08** |
+| `Misprint_Outcome_By__c` | Lookup(User) | ✅ | ✅ |
+| `Misprint_Outcome_At__c` | Date/Time | ✅ | ✅ |
+| `Misprint_Outcome_Notes__c` | Text Area(255) | ✅ | ✅ |
+
+⚠️ **The three audit fields were created as `Reprint_Decision_By/At/Notes__c` and renamed
+to `Misprint_Outcome_By/At/Notes__c` on 2026-09-08.** Anything written before that date —
+older notes, screenshots, exported metadata — uses the old names.
+
+`Reprint_Decision__c` **lived for five hours**. It was collapsed into `Misprint_Outcome__c`
+the same day on Anthony's call — see the section below. The three By/At/Notes fields SURVIVE
+as `Misprint_Outcome__c`'s audit trail, and were renamed to match it on 2026-09-08.
+
+FLS on the surviving three: Visible to all 27 profiles in both orgs, none read-only —
+deliberate, because trap 1 means a field the integration user cannot read fails the WHOLE
+SELECT and empties the board. Tighten later if it matters, but never by guessing which
+profile the integration user has.
+
+📌 **Staging was a clean slate here** (0 pre-existing `Reprint*` fields) — the opposite of
+`Receiving_Status__c`, where staging held a value deactivated in May that needed
+reactivating AND re-assigning to record types. **Two org changes in two days, two different
+starting states. Do not generalise; check.**
+
+---
+
+##### 🚩 STOP — `Misprint_Outcome__c` ALREADY MODELS THIS DECISION, and predates it by 2.5 years
+
+Found 2026-09-08, on Order, created by Brad Oliver **2023-02-04**. Restricted picklist,
+four active values: **`Credit/Refund` · `Reprint` · `Refund` · `Credit`**. Its help text:
+
+> *"Select whether the customer will accept a refund/credit or needs the garments reprinted.
+> Notification will go to Print Shop of the outcome."*
+
+**That is this story's process, already modelled — including the notification.** And it is
+RICHER than `Reprint_Decision__c`: the customer's answer is not reprint-or-nothing, they may
+take a credit or a refund. Approved/Declined collapses three real business outcomes into one.
+
+⚠️ **The two fields are arguably different things** — `Misprint_Outcome__c` is *what the
+customer chose*, `Reprint_Decision__c` was *whether the AM has answered yet*. But that is two
+overlapping fields covering one conversation, which is precisely the drift this project keeps
+paying for.
+
+✅ **DECIDED AND DONE 2026-09-08 — Anthony: "Yes collapse onto Misprint Outcome."**
+
+| Step | dev2 | staging |
+|---|---|---|
+| `Awaiting AM` added to `Misprint_Outcome__c`, assigned to all 6 record types | ✅ | ✅ |
+| `Reprint_Decision__c` deleted (now `Reprint_Decision_del__c`, Undelete only) | ✅ | ✅ |
+
+`Misprint_Outcome__c` now reads, in both orgs:
+**`Credit/Refund` · `Reprint` · `Refund` · `Credit` · `Awaiting AM`**
+
+📌 dev2 and staging **share the field id `00N5e00000cnxhi`** for `Misprint_Outcome__c` — the
+two `Reprint_Decision__c` fields did not (dev2 `00Nca00000B3j6F`, staging `00Nca00000B3ZTa`).
+Never assume ids match across orgs; never assume they differ either.
+
+📌 **Still open:** `Credit/Refund` (2023) was superseded by separate `Refund` and `Credit`
+(2024) but never deactivated, so three of the five values overlap. ✅ The audit-trio rename
+is **done** — see the field table above.
+
+---
+
+##### 🪤 TRAP — a custom field cannot be deleted while any Lightning page references it, and the UI hides this three ways
+
+Deleting `Reprint_Decision__c` took **six attempts** because every failure looked like a
+different problem. What actually happens:
+
+1. **The field detail page has no Delete button at all** — only `Edit`, `Set Field-Level
+   Security`, `View Field Accessibility`, `Where is this used?`. True in Lightning Object
+   Manager AND in the Classic detail page. Delete lives **only** on the row in the field
+   list (`/p/setup/layout/LayoutFieldList?type=Order&setupid=OrderFields`).
+2. **That row's `Del` link fires a JS `confirm()`**, which the browser-automation extension
+   auto-dismisses, so the click silently does nothing. **Cmd/Ctrl-click the `Del` link** to
+   open its href in a new tab — that bypasses the onclick and lands on the real
+   `CustomFieldConfirmDeletePage`. (`/setup/ui/deletefield.jsp` does **not** exist; don't
+   guess URLs.)
+3. **On that confirm page the "Yes, I want to delete" checkbox must be verified checked
+   before clicking Delete.** The first click on a background tab only focuses it. Pressing
+   Delete unchecked re-renders the same page with no message — indistinguishable from a
+   failed delete.
+4. Only once it actually submits do you get the real answer, on `deleteredirect.jsp`:
+   **"Unable to Complete the Requested Change — The <field> custom field is used in a
+   component on the <page> Lightning page."** Remove the field from every page listed
+   (Lightning App Builder → select the field in the Field Section → trash icon → Save),
+   then delete succeeds.
+
+🚩 **The blocking pages were DIFFERENT in each org** — and neither list matched the other:
+
+| Org | Lightning pages that had to be edited first |
+|---|---|
+| dev2 | `Shipping Receiving`, `PrintShopOrderMobile` |
+| staging | `Ecommerce`, `Order Record Page` (`Order_Record_Page1`), `Production Order Page` |
+
+That is org drift in the **page layer**, invisible from the field list, and it means "I
+removed it from the pages" is never transferable between orgs. **Read the error, don't
+assume the same pages.** Where `Misprint Outcome` was not already on a page it was dropped
+into the slot `Reprint Decision` vacated, so the surviving By/At/Notes fields still sit next
+to the field they now audit.
+
+📌 Deleted custom fields are recoverable for **15 days** (Undelete on the detail page), after
+which they are erased permanently.
+
+---
+
+##### ⛔ THE FLOW IS BLOCKED — two separate problems
+
+**1. There is no Order-level damage rollup. At all.** Order's fields filtered for "Damage"
+return **0 items**. Misprint has six; damage has none. The truth lives where `_rework.js`
+reads it — `Production_Run_Line_Items__c.Misprint_Qty__c` / `Damaged_Qty__c`.
+
+⚠️ **`Misprint__c` is NOT "this order had misprints."** `_rework.js` sets it TRUE on the
+**reprint child order** — it means *this order IS a reprint*. It reads like the trigger
+condition and is close to its opposite. Do not use it.
+
+**2. A Flow cannot reach those line items, and the fix is itself blocked.** The line item's
+only link toward the Order is `Order_Product__c` (Lookup), and Flow's Get Records cannot
+filter on `Order_Product__r.OrderId`. This is the wall B4 hit; its answer was a formula field
+(`Run_Print_Location__c`, and `Method__c` before it). The equivalent here is:
+
+```
+Order_Id__c  =  CASESAFEID(Order_Product__r.OrderId)
+```
+
+🚩 **IT COULD NOT BE CREATED — `Production_Run_Line_Items__c` REFUSES FIELD CREATION WITH
+"Insufficient Privileges", THROUGH THE OBJECT MANAGER UI AS WELL AS THE DIRECT URL.**
+
+📌 **This contradicts the workaround recorded under B4**, which says the direct URL was the
+problem and the UI "worked first time". It does not now. **Controlled 2026-09-08:** in the
+same session, the same minute, `Order`'s New Field wizard loads normally while this object's
+returns Insufficient Privileges. So it is **object-specific — not the session, not the URL.**
+The object itself looks ordinary: Custom, Deployment Status Deployed, no managed package, no
+namespace, 15 fields. **Either something changed since B4 on 2026-09-03, or B4's field was
+created by a route not yet identified. Needs Anthony.**
+
+##### ✅ `Order_Id__c` EXISTS — created by Anthony 2026-09-08, verified in both orgs
+
+| | dev2 | staging |
+|---|---|---|
+| Field id | `00Nca00000B3hKp` | `00Nca00000B3vSJ` |
+| Object id | `01Ica000000So1w` | `01Ica000000Otsz` |
+| Object **label** | Production Run Line Item | Production Run Line Item**s** |
+
+Both: `Order_Id__c`, Formula (Text), `CASESAFEID(Order_Product__r.OrderId)`. Read back off
+each field's detail page, not from a save dialog. Flow's Get Records can now filter line
+items by Order. **The "Insufficient Privileges" wall recorded above was never diagnosed** —
+Anthony created the field through a route that worked for him. If it recurs, that is still
+an open question.
+
+---
+
+##### 🚩🚩 STOP — `Misprint_Outcome__c` IS NOT AN INERT FIELD. WRITING TO IT FIRES LIVE AUTOMATION.
+
+Found 2026-09-08, **before** building the B9 flow, by clicking *Where is this used?* on the
+field. This is the single most important fact about B9 and it invalidates the plan as
+written.
+
+**`Printshop Misprint Process` is an ACTIVE record-triggered flow on Order** (a record is
+updated, 5 entry conditions, 2 scheduled paths). It runs in **two** places at once — as
+after-save *Actions and Related Records* **and** as *Run Asynchronously*. Both of its
+relevant decision outcomes have **exactly one condition**:
+
+```
+{!$Record.Misprint_Outcome__c}   Is Null   =   False
+```
+
+…with **"If the condition requirements are met"** selected — *not* "only if the record is
+updated to meet the requirements". So it fires on **any** non-blank value, on **every**
+qualifying update, not just on the transition.
+
+**What fires the moment `Misprint_Outcome__c` becomes non-blank:**
+
+| Branch | Element | Effect |
+|---|---|---|
+| Run Immediately → `MisprintOutcomeAdded` | `MisprintOrderNotifyPrintShop` (Action) | notifies the **Print Shop** that the customer has decided |
+| Run Immediately → `MisprintOutcomeAdded` | `UpdateOrderStatus` (Update Records) | **changes the Order's status** |
+| Run Asynchronously → `Copy 2 of MisprintOutcomeAdded` | `Slack: Post Message Action 1` (Apex Action) | posts to **Slack** |
+
+⛔ **Therefore: a B9 flow that sets `Misprint_Outcome__c = 'Awaiting AM'` would tell the print
+shop and Slack that the customer has answered, and move the order's status — at the exact
+moment the truth is "nobody has answered yet."** It is the sequencing hazard again, in a new
+place, and this one reaches real people through Slack and email rather than just a board.
+
+📌 The 2023 help text — *"Notification will go to Print Shop of the outcome"* — was the
+warning. It was read as documentation of intent; it is documentation of **live behaviour**.
+**Read a field's help text as a claim about running automation, and verify it with "Where is
+this used?" before writing to any field you did not create.**
+
+🚩 **Version drift on the one flow that governs this process:**
+
+| | dev2 | staging |
+|---|---|---|
+| `Printshop Misprint Process` | **V28**, Active (last saved 2025-10-22) | **V14**, Active |
+| Flows on Order update, total | 19 | 20 |
+
+Fourteen versions apart, in the flow B9 has to work alongside. Anything done to it must be
+done **by hand in each org** — change sets deploy flows inactive (§9) — and production is a
+third unknown, picked up at **E7.4**.
+
+##### ⛔ THE DECISION THIS NEEDS — Anthony's call
+
+**Option A — guard the existing flow.** ✅ **CHOSEN BY ANTHONY AND DONE 2026-09-08.**
+
+**Option B — never let automation write `Awaiting AM`.** Leave `Misprint_Outcome__c` meaning
+only "what the customer chose", drive the waiting state off something the existing flow does
+not watch, and **remove `Awaiting AM` from the picklist again**. Cost: reintroduces a second
+field for one conversation — the drift the collapse just removed — but touches no live flow.
+
+**Option C — treat blank as "awaiting".** No new value at all; the gate is "order complete +
+damage > 0 + outcome still blank". Cheapest and touches nothing, but there is then no record
+that the AM was ever asked, and no way to distinguish "asked, no reply" from "never asked".
+
+⛔ **The B9 flow itself is still NOT created.** Only the guard below exists.
+
+---
+
+##### ✅ THE GUARD — `Awaiting AM` is now treated as "still blank" by `Printshop Misprint Process`
+
+Anthony's call: keep one field for one conversation, and teach the existing flow to ignore
+the waiting state. **Three outcome edits per org, both orgs done and read back off a fresh
+page load of the ACTIVE version.**
+
+| Outcome | Was | Now |
+|---|---|---|
+| `MisprintDetailsOutcome` → `MisprintDetailsAdded` | Misprint Outcome **Is Null = True** | **Any (OR):** Is Null = True **OR** Equals `Awaiting AM` |
+| `MisprintDetailsOutcome` → `MisprintOutcomeAdded` | Misprint Outcome **Is Null = False** | **All (AND):** Is Null = False **AND** Does Not Equal `Awaiting AM` |
+| `Misprint Outcome Slack` → `Copy 2 of MisprintOutcomeAdded` | Misprint Outcome **Is Null = False** | **All (AND):** Is Null = False **AND** Does Not Equal `Awaiting AM` |
+
+| Org | New active version | Old version |
+|---|---|---|
+| dev2 | **V29** Active (`301ca00000TnkHEAAZ`) | V28 superseded |
+| staging | **V16** Active (`301ca00000Tnq3CAAR`) | V14 superseded, V15 superseded — see below |
+
+📌 **The third edit was not in the original plan and is the one that matters most.**
+`MisprintDetailsAdded` fires the *manager* notification and its only condition was "outcome
+is blank". Guarding just the other two outcomes would have left `Awaiting AM` silently
+**suppressing the manager notification** on any later edit to Misprint Details — a
+regression invisible until someone noticed the emails had stopped. The rule the guard
+implements is one sentence: **inside this flow, `Awaiting AM` means the same thing as blank.**
+
+🪤 **A staging version was saved wrong and had to be fixed — read your edits back off a
+fresh page load, not off the editor you just typed into.** Staging **V15** saved
+`MisprintDetailsAdded` as **AND** instead of **OR** — "Misprint Outcome is blank AND equals
+Awaiting AM" is unsatisfiable, so that branch could never fire and the manager notification
+was dead for as long as V15 was active (a few minutes). Caught on the verification pass and
+corrected in **V16**. The same click sequence produced the right result in dev2 and the wrong
+one in staging: the option click landed but did not commit before the next click moved on.
+**Every condition in a flow you edit through the UI gets read back after activation.**
+
+📌 The guard is a **no-op against existing data** — nothing writes `Awaiting AM` yet, so no
+order in either org matches the new clause. That is why it was safe to activate immediately.
+
+⚠️ **Production still has the unguarded flow** and picks this up at **E7.4**. A change set
+deploys flows INACTIVE (§9), so the guard must be activated by hand there, and it must land
+**before** anything that writes `Awaiting AM`.
+
+##### ✅ THE RECORD-TRIGGERED FLOW IS BUILT — `B9 Order Complete With Damage - Awaiting AM`
+
+Built by hand in both orgs 2026-09-08, **saved INACTIVE in both, read back off a fresh page
+load of the saved version.**
+
+| | dev2 | staging |
+|---|---|---|
+| Flow API name | `B9_Order_Complete_With_Damage_Awaiting_AM` | same |
+| Version / state | **V1, Inactive** | **V1, Inactive** |
+| flowId | `301ca00000TnpLgAAJ` | `301ca00000TnvhGAAR` |
+
+**Shape:**
+
+```
+Start   Order · A record is updated · Optimize for: Actions and Related Records
+        Entry (AND):  Production Status Equals "Completed"   <- Order_Substatus__c, trap 5
+                      Misprint Outcome Is Null = True
+        When to run:  ONLY when a record is updated to meet the condition requirements
+
+Get Records  "Get Damaged Line Items"  on Production_Run_Line_Items__c
+        Custom condition logic:  1 AND (2 OR 3)
+          1  Order Id     Equals        {!$Record.Id}      <- the new Order_Id__c formula
+          2  Misprint Qty Greater Than  0
+          3  Damaged Qty  Greater Than  0
+        Store: only the first record, automatically store all fields  (existence check)
+
+Decision  "Has Misprint Or Damage"
+        Outcome "Damage Found":  {!Get_Damaged_Line_Items} Is Null = False
+        Default Outcome -> End
+
+Update Records  "Set Awaiting AM"
+        Use the order record that triggered the flow
+        Misprint Outcome = Awaiting AM
+
+Decision  "AM Email On Order"                         <- the email half, added 2026-09-08
+        Outcome "Has AM Email":  {!$Record.Opp_Owner_Email__c} Is Null = False
+          -> Action "Send Reprint Email To AM"  (Email Alert)
+                emailAlert-Order.B9_Reprint_Confirmation_to_AM
+                Record ID = {!$Record.Id}
+        Default Outcome                                <- the copied field is blank
+          -> Action "Send Reprint Email Fallback"  (core Send Email)
+                Recipient Addresses = {!$Record.Opportunity_Owner_Email__c}   <- the formula
+                Compose Email Content, subject + body typed inline
+```
+
+##### THE EMAIL HALF — template, alert, and the two constraints that shaped it
+
+| | dev2 | staging |
+|---|---|---|
+| Classic email template `B9_Reprint_Confirmation_Request` | `00Xca000001vOIg` | `00Xca000001vPYz` |
+| Email Alert `B9_Reprint_Confirmation_to_AM` | `01Wca000000RTIr` | `01Wca000000RTKT` |
+
+Template is **Text** (not HTML) — no Classic Letterhead dependency and nothing that can
+mangle merge fields. Body merge fields were taken from the Classic picker's own
+`value=` attributes, not guessed: `{!Order.OrderNumber}`, `{!Order.Account_Name__c}`,
+`{!Order.Customer_Order_Name__c}`, `{!Order.Misprint_Details__c}`,
+`{!Order.Opportunity_Owner_Name__c}`, and **`{!Order.Link}`** (label "Detail Link") for the
+record link. Alert recipient type is **Email Field -> Opportunity Owner Email**; the picker
+offers only the two Email-type fields, so the Formula(Text) one cannot be chosen there at all.
+
+🪤 **The same-label collision is invisible in Flow Builder's resource picker — the chips and
+the list show only the LABEL, so "Opportunity Owner Email" appears twice, identically.**
+Two ways to tell them apart, both used here:
+1. **Hover the ⓘ on the option.** The popover shows **API Name** — that is the only place
+   in the picker where the two are distinguishable.
+2. After selecting, reopen the combobox: the input shows the resolved
+   `{!$Record.Opp_Owner_Email__c}`.
+In both orgs the FIRST entry is `Opp_Owner_Email__c` (Email) and the SECOND is
+`Opportunity_Owner_Email__c` (Formula) — verified by tooltip in each org separately, not
+assumed from ordering. **Never pick one of these by position; check the tooltip.**
+
+🪤 **A Send Email action that uses an email TEMPLATE cannot send to an arbitrary address.**
+Setting `Email Template Name` makes `Recipient ID` required, and that wants a Contact/Lead/User
+Id — which would drag a copied lookup field back into the fallback, defeating its whole
+purpose. So the fallback uses **Compose Email Content** with the subject and body typed
+inline. Cost: the wording now lives in two places (template + fallback action). Benefit: the
+fallback can reach `Opportunity_Owner_Email__c`, which reads straight through the Opportunity
+and cannot go stale. **If the copy changes, change it in both.**
+
+📌 The alert's From is **"Current User's email address"** — the email appears to come from
+whoever's action completed the last production method, not from a shared address. Fine for a
+sandbox; decide before production whether it should be an Org-Wide Address.
+
+🚩 **The first build of this flow used the WRONG trigger, and the doc recorded it.** It was
+`Status Equals "Complete"` — the standard `Order.Status`, which is set by the **Shipping /
+Receiving** dashboard (`functions/api/orders/[id]/complete.js`) when the order physically
+ships. That is a *later, different* moment than production finishing. The reprint moment is
+`Order.Order_Substatus__c` (label **"Production Status"**) rolling up to `Completed`, which
+is the exact line that fires `createReworkIfNeeded` (`production-methods/[id].js:290`). Both
+orgs corrected 2026-09-08 and read back off a fresh page load; **dev2 and staging flowIds
+both changed on save** (see the table above — a Flow save can mint a new flowId even when the
+version number does not move).
+
+**Two field labels, two different completions, one letter apart — this is trap 5 wearing a
+different hat:**
+
+| Label in Flow Builder | API name | Stored value | Set by | Means |
+|---|---|---|---|---|
+| Status | `Status` | `Complete` (no "d") | Shipping/Receiving dashboard | order shipped/received |
+| Production Status | `Order_Substatus__c` | `Completed` (with "d") | `rollupOrderSubstatus`, when every method is done | **production finished — the reprint moment** |
+
+📌 The Flow picklist picker shows **labels**, not stored values. `Order_Substatus__c`'s
+"In Production" is stored as `Production`; picking "Completed" in the picker does store
+`Completed`, but never assume that from the picker alone.
+
+📌 **Why each choice, so nobody "simplifies" it later:**
+
+- **`Misprint Outcome Is Null` is an ENTRY condition, not just a decision.** It stops the flow
+  re-firing on later updates and stops it ever overwriting a real customer decision.
+- **"Only when a record is updated to meet the condition requirements"** — the other setting
+  re-evaluates on every qualifying update, which is exactly the mistake `Printshop Misprint
+  Process` makes and the reason the guard was needed.
+- **Only the first record.** The flow needs to know *whether* there is damage, not how much;
+  storing one record keeps it cheap and needs no loop.
+- **No recursion.** The Update sets `Misprint_Outcome__c`, which re-triggers `Printshop
+  Misprint Process` — guarded, so it falls to Default Outcome — and cannot re-trigger this
+  flow, because its entry condition now fails.
+
+⛔ **BOTH COPIES ARE DELIBERATELY INACTIVE.** `createReworkIfNeeded` still creates the reprint
+the moment the last method completes (`production-methods/[id].js:290`, `run-results/index.js:525`).
+Activate this flow only alongside the code change that stops that — otherwise the AM is asked
+to approve a reprint that already exists, which is the sequencing hazard, not a fix for it.
+
+##### ⛔ STILL TO BUILD — what is actually left, as of 2026-09-08
+
+##### 🚩 POPULATE CHECK — run 2026-09-08, and it kills the primary email branch
+
+Counted with SOQL `COUNT(field)` (counts non-null) in the Developer Console, both orgs.
+
+| Population | Orders | `Opp_Owner_Email__c` (Email Alert recipient) | `Opportunity_Owner_Email__c` (formula fallback) |
+|---|---|---|---|
+| **dev2** — all orders | 81 | **0** (0%) | 80 (99%) |
+| **dev2** — `Misprint__c = true` | 24 | **0** (0%) | 24 (100%) |
+| **staging** — all orders | 6,695 | 123 (1.8%) | 6,467 (96.6%) |
+| **staging** — `Misprint__c = true` | 74 | **0** (0%) | 60 (81%) |
+| **staging** — `Order_Substatus__c = 'Completed'` ← **the B9 trigger population** | 2,164 | 101 (4.7%) | **2,163 (99.95%)** |
+
+**What this means for the flow as built.** The Decision routes to the Email Alert when
+`Opp_Owner_Email__c` Is Null = False. That is true for **no order in dev2 and 4.7% of
+staging's completed orders**. So in practice every order takes the *Default* outcome and the
+Classic template + Email Alert we built in both orgs is dead code. The email would still go
+out — via the fallback's inline copy — but through the branch that was meant to be the
+exception.
+
+📌 **The two fields are not a primary and a backup, they are a live field and an abandoned
+one.** `Opp_Owner_Email__c` is a writable copy that something stopped populating; the formula
+is derived from `Opportunity.Owner.Email` and cannot go stale. The design had them backwards.
+
+✅ **Coverage on the population that matters is excellent** — 2,163 of 2,164 completed orders
+carry an address. The 14 blank misprint orders in staging are almost all stuck in
+Pre-Production (13 of 14, all `Honey Bee Entertainment`) and never reach the trigger. **All 14
+have a blank `OpportunityId`** — no Opportunity means no owner means no email. Exactly one
+completed order (`00009272`, One North Coast) has no address, and it is the one row in 2,164.
+
+✅ **CONFIRMED 2026-09-08 — the formula IS the field Anthony asked for.** Read off the field
+detail page in staging, not inferred:
+
+```
+Opportunity_Owner_Email__c   Data Type: Formula
+    Opportunity.Owner.Email
+    created Peter Larson, 2025-05-09
+```
+
+That is exactly the chain from the Opportunity's Details tab: **Opportunity → Owner (the name
+shown) → that User → their Email.** No copy, no intermediate custom lookup, nothing to go
+stale. `Opportunity_Owner__c` (Lookup(User), `00NRi000003fPQX` in staging) is a *different*
+route to nominally the same person and is NOT used.
+
+---
+
+##### 🪤 TRAP — sandbox email scrambling makes `.invalid` addresses, and the STALE field is the dangerous one
+
+Found while sampling the formula's actual values in staging:
+
+| Order | `Opportunity_Owner_Email__c` (formula, live) | `Opp_Owner_Email__c` (copy, stale) |
+|---|---|---|
+| 00007092 | `vitaliy@cultureapparel.com.invalid` | `vitaliy@cultureapparel.com` |
+| 00006512 | `abby@cultureapparel.com.invalid` | `abby@cultureapparel.com` |
+| 00006497 | `ben@cultureapparel.com.invalid` | `ben@cultureapparel.com` |
+
+**Salesforce appends `.invalid` to every `User.Email` when a sandbox is created or refreshed**,
+so nothing in a sandbox can accidentally email a real person. **2,050 of the 2,163 completed
+staging orders (94.8%) carry a `.invalid` address.** The 113 clean ones are users whose email
+was de-scrambled by hand afterwards (Anthony, Tom Cibic).
+
+Two consequences, and the second is a hazard:
+
+1. ✅ **Expect ZERO delivered emails when testing B9 in staging.** That is the sandbox working
+   as designed, NOT a broken flow. To test delivery end-to-end, de-scramble ONE test user's
+   email in Setup → Users and use an order owned by them. Do not de-scramble in bulk.
+2. 🚩 **`Opp_Owner_Email__c` holds UN-scrambled, real, live addresses inside the sandbox** —
+   it is a pre-refresh copy of production data, and a custom field's data is not scrambled.
+   **A flow that sends to it from staging emails real staff from a sandbox.** This is a second,
+   independent reason to abandon that field, on top of it being empty 95% of the time.
+
+📌 In **production** the formula returns the real live address, which is the point. The
+`.invalid` behaviour exists only in sandboxes.
+
+✅ **TEST USER: nothing to de-scramble — Anthony's user is already clean in BOTH orgs.**
+Checked 2026-09-08:
+
+| Org | User | Username | Email | Active |
+|---|---|---|---|---|
+| dev2 | Anthony Martinez `005ca00000BhcA9AAJ` | `anthony@cultureapparel.com.dev2` | `anthony@cultureapparel.com` | ✅ |
+| staging | Anthony Martinez `005ca00000B0aWtAAJ` | `anthony@cultureapparel.com` | `anthony@cultureapparel.com` | ✅ |
+
+📌 Note staging's **username has no sandbox suffix** while dev2's does. Username and Email are
+separate fields; only Email matters for delivery, and only Email gets the `.invalid` treatment.
+
+✅ **Email Deliverability is `All email` in BOTH orgs** (Setup -> Email -> Deliverability),
+checked the same day. A refreshed sandbox normally reverts to **System email only**, which
+silently swallows every flow email regardless of address. **Check this first after any
+refresh** — it looks exactly like a broken flow.
+
+**Orders that will actually route to Anthony** (`Opportunity_Owner_Email__c` = his address):
+dev2 **80 of 81**; staging **26**, none of which have `Misprint_Outcome__c` set yet, so all 26
+are eligible test candidates. Any order whose Opportunity is owned by someone else still
+resolves to a `.invalid` address and will deliver nothing — pick the test order by its
+**Opportunity owner**, not by convenience.
+
+---
+
+✅ **DONE 2026-09-08 in dev2 AND staging — flows still INACTIVE.** The Decision was inverted
+rather than rebuilt, which was the smallest safe change:
+
+```
+Decision  "AM Email On Order"
+        Outcome "No AM Email"  (API: No_AM_Email)
+              {!$Record.Opportunity_Owner_Email__c}  Is Null = True
+          -> Create Records "Task No AM Email On Order"
+                 Object   Task
+                 Subject  "Misprint decision needed - no AM email on this order"
+                 WhatId   {!$Record.Id}          (picker label "Related To ID")
+                 OwnerId  {!$Record.OwnerId}     (picker label "Assigned To ID")
+        Default Outcome   <- every order that HAS an address
+          -> Action "Send Reprint Email To AM"   (core Send Email, inline subject/body)
+                 Recipient Addresses = {!$Record.Opportunity_Owner_Email__c}
+```
+
+- The **Email Alert element was deleted** from both flows. The Classic template and the
+  `B9_Reprint_Confirmation_to_AM` alert still EXIST in both orgs but are now **orphaned** —
+  nothing references them. Delete them or leave them; they are inert either way.
+- The email body now lives in **one place** (the inline Send Email), so the
+  duplicated-copy problem is retired.
+- Both flows saved clean, both still **Inactive**, both flowIds changed on save:
+  dev2 `301ca00000To7lgAAB`, staging `301ca00000To95rAAB`.
+- Verified off **fresh loads of both orgs**: outcome label/API name, the resource resolving to
+  `Opportunity_Owner_Email__c`, `Is Null` / `True`, and the recipient.
+
+⚠️ **Three things deliberately left as they are:**
+1. The Send Email element's **API name is still `Send_Reprint_Email_Fallback`** — only its
+   label was changed to "Send Reprint Email To AM". Renaming the API name risks the connector;
+   the label is what the canvas shows. Cosmetic mismatch, recorded so it does not confuse.
+2. The Task's **`WhatId` assumes Order supports activities.** Not proven — if Orders do not
+   have activities enabled, this element faults at runtime. Confirm on the first debug run.
+3. The condition is **`Is Null`**, not `Is Blank`. The SOQL evidence says the empty case is a
+   true null (COUNT gave 2163 of 2164), so this is right for the data as it stands, but a
+   formula returning `''` rather than null would slip through to the email branch.
+
+📌 dev2's numbers are directionally right but not representative — every Opportunity in it is
+owned by Anthony, so its 100% is one user, not a healthy distribution. **Staging is the org to
+judge coverage from.** Production has not been counted; do that before the production rollout.
+
+---
+
+**Salesforce, in order:**
+
+1. ~~Pick the recipient field~~ ⚠️ **PICKED, THEN DISPROVED.** Built as `Opp_Owner_Email__c`
+   via Email Alert with the `Opportunity_Owner_Email__c` formula as fallback — the populate
+   check showed the two are backwards. The formula is the field with the data. See item 5.
+2. **Approve / Decline mechanism** on the Order, stamping outcome + by + at + notes. **Shape
+   not decided** (screen flow from the record page vs. two Quick Actions vs. a link that runs
+   a flow). This is the piece the email's link points at, so it comes before the email.
+3. ~~Rename the audit trio~~ ✅ **DONE 2026-09-08 in dev2 AND staging**, verified off fresh
+   loads of each org's Order field list. Labels and API names both moved; data types survived
+   (Lookup(User) / Date/Time / Text Area(255)).
+   - ⚠️ **Still owed: the field Descriptions.** All three still cite the deleted
+     `Reprint_Decision__c` / `Reprint_Decision_By__c`. Harmless to the runtime, misleading to
+     the next reader. Fix when something next edits these fields.
+4. ~~Email alert + template + Action element~~ ✅ **DONE in dev2 and staging, flows still
+   INACTIVE.** What is left on the email is verification, not building:
+   - ~~Populate check~~ ✅ **DONE 2026-09-08 — and it says the primary branch is dead.**
+     See "🚩 POPULATE CHECK" below. The Email Alert's recipient field is empty on 0/81 dev2
+     orders and 101/2164 staging completed orders; the formula fallback covers 2163/2164.
+     **The Decision should be inverted before activation.**
+   - **The template's copy is duplicated in the fallback action.** Edit both or they drift.
+   - **Decide the From address** — currently the running user, not an Org-Wide Address.
+5. ~~Invert the email Decision before activating~~ ✅ **DONE 2026-09-08 in both sandboxes**,
+   flows still INACTIVE. See the populate-check section for the shape as built and the three
+   caveats (Send Email API name, Task WhatId, Is Null vs Is Blank).
+6. **Decide `Credit/Refund`.** The 2023 value was superseded by separate `Refund` and `Credit`
+   (2024) and never deactivated — three of the five values now overlap. Cosmetic until an AM
+   is choosing from that list; then it is a real confusion.
+
+**Then the code half** (Claude Code): stop `createReworkIfNeeded` creating the reprint on
+completion, and instead create it only when the outcome becomes `Reprint`. Nothing above goes
+live until this ships.
+
+**Then production, at E7.4** — it has **none** of B9, and critically **not the guard either**.
+The guard must land and be activated there BEFORE anything that writes `Awaiting AM`.
+
+##### 🚩 CORRECTION — B9's recipient field is the wrong half of a same-label collision
+
+This story has said throughout that the AM is "already on the Order as
+`Opportunity_Owner_Email__c`". **That field cannot be an email alert recipient.** Order has
+three candidates, and the two named "Opportunity Owner Email" are a textbook instance of the
+same-label collision rule below:
+
+| Label | API name | Type | Usable as an Email Alert recipient? |
+|---|---|---|---|
+| Opportunity Owner Email | `Opportunity_Owner_Email__c` | **Formula (Text)** | ❌ no — alerts need a real Email field |
+| Opportunity Owner Email | `Opp_Owner_Email__c` | **Email** | ✅ yes |
+| Opportunity Owner | `Opportunity_Owner__c` | **Lookup(User)** | ✅ yes, as a related user — and it also yields the User Id |
+
+**The formula reads (dev2 `00NRi000003hbQn`):**
+
+```
+Opportunity.Owner.Email
+```
+
+Two consequences, both important:
+
+- **It is clean.** A plain cross-object formula, no `HYPERLINK()`. Trap 6 does **not** bite
+  here — it returns a bare address, so it is fine as *text* even though an Email Alert will
+  not take it.
+- **It bypasses the lookup.** It reads `Opportunity.Owner`, **not** `Opportunity_Owner__r`.
+  So `Opportunity_Owner__c` and `Opp_Owner_Email__c` are both **stored copies** that something
+  must keep in sync, and the formula does not depend on either. The formula is the only one of
+  the three that cannot go stale.
+
+✅ **DECIDED 2026-09-08 — Anthony chose the Email Alert to `Opportunity_Owner__c` (Lookup(User),
+recipient type "related user").** Reasons: it matches how the org already notifies
+(`MisprintOrderNotifyManager` / `MisprintOrderNotifyPrintShop` are alert-style actions), it
+follows the person's User record so their address is current even if the lookup row is old,
+and it yields a User Id to stamp into the decided-by field.
+
+⚠️ **THE RISK THAT COMES WITH THAT CHOICE, AND HOW IT FAILS.** `Opportunity_Owner__c` is a
+copy, and nothing in the schema guarantees it is populated on every order — the formula
+certainly does not read it. **If the lookup is blank, the alert simply does not send: no
+error, no retry, and the order sits in `Awaiting AM` forever with nobody asked.** Two
+consequences to build in:
+
+1. **Verify population before activating**, in both orgs and again in production: how many
+   Orders have `Opportunity_Owner__c` blank, and does it agree with `Opportunity.Owner`?
+2. **Consider a fallback.** The cheapest is a second recipient on the alert, or a Decision in
+   the flow that routes to a Send Email on `{!$Record.Opportunity_Owner_Email__c}` (the
+   never-stale formula) when the lookup is empty. Not built; flagged.
+
+🚩 **THE SEQUENCING HAZARD — still live.** The app creates the reprint automatically the
+moment the last method completes (`createReworkIfNeeded`, from `production-methods/[id].js:290`
+and `run-results/index.js:525`). Until the code half stops that, **the AM would be asked to
+approve a reprint that already exists** — the gate is theatre, and a decline leaves a real
+order on the books. Everything built so far is inert, which is why it was safe to build first.
+**The email is the switch, and it stays off.**
+
+##### 🚩 A THIRD same-label collision, and a standing rule
+
+| API name | Type | |
+|---|---|---|
+| `TotalQtyMisprints__c` | Number(5,0), writable | **the one the app SELECTs** |
+| `Total_Quantity_Misprints__c` | Formula (Number) | a second, derived one |
+
+Three duplicate/near-duplicate pairs found in this org in two days —
+`Receiving_Status__c`/`ReceivingStatus__c`, `Opportunity_Owner_Email__c`/`Opp_Owner_Email__c`,
+and this. 📌 **Standing rule: an ambiguous field label in this org is a warning sign. Check
+the API name before binding anything — a flow, a formula, or a SELECT — to it.**
+
+##### 📌 iCloud eviction, and how to get out of it
+
+On 2026-09-08 this file became unreadable to every shell tool for ~30 minutes:
+`Resource deadlock avoided` on plain `head`/`cat`. **Cause: iCloud had evicted it** — a
+directory listing showed `cloudOnly: true`, i.e. the file is dataless on disk. It is not a
+lock and waiting does not fix it. **Fix: stage the file** (which forces iCloud to hydrate it);
+the shell can read it immediately after.
+
+⚠️ **It hits `node tools/smoke.mjs` too.** With the repo evicted, node fails reading its own
+source with `Unknown system error -35` (EDEADLK) before a single check runs — so a smoke
+failure in this state says nothing about the code. **Hydrate the repo before trusting or
+debugging a smoke run**, and do not "fix" a check that is only failing because its file is
+dataless. Worth knowing because §2 already warns that git
+writes on this mount are unreliable — this is the same mount pathology reaching plain reads.
+
+##### ⛔ Decisions Anthony has to make before this is buildable
+
+1. **Is "account manager" `Account.OwnerId`?** If not, name the field — it does not exist
+   yet.
+2. **Where does the decision get made** — a page in this app behind a one-time token, or a
+   record in Salesforce with two buttons? This decides whether there is any app work at all.
+3. **Where does the pending decision live before it is answered?** Either the reprint Order
+   is created immediately in a pending state and confirmation activates it, or nothing is
+   created and the intent is held somewhere else. The first keeps `_rework.js` almost
+   unchanged but puts an order on the books the customer has not agreed to; the second
+   keeps the books clean but needs a new place to hold the intent and the token.
+4. **What happens on decline, and on silence?** Does a declined reprint close the loop for
+   good, can it be reopened, and does anything chase an AM who has not answered?
+
+📌 **Sequencing.** None of this is urgent relative to Phase A — E7.2 is still the long pole
+and this adds a second org-side dependency (email) on top of it. It is written here so the
+design argument happens once, in writing, rather than three times in a row.
+
 ##### Closed. Do not re-open, do not re-audit.
 
 Week 1 — **E6.1** SOQL injection in production-methods · **E5.1** method edit / order stage ·
@@ -1325,7 +2160,7 @@ week numbers.
 | **E1.4** | ✅ | **DONE 2026-09-02**, branch `feat/e1.4-stop-to-counting`, unpushed. **Rewritten, not cancelled (D10).** The story as written was dead — D1 removed the produced field on purpose. Rebuilt as: stopping the PRODUCTION timer on a run takes the operator straight to `counting.html?runId=<that run>`. **The gap was worse than the story said:** the board's one Run Results link is gated on `isPP`, and a multi-run method goes BACK to Ready for Print after each stop — so between runs there was no path to counting at all, and gate 2 of `createReworkIfNeeded` needs every run Submitted, so one uncounted run silently blocks the reprint for the whole order. I argued for a prompt over a jump (it interrupts the changeover on multi-run jobs); **Anthony chose the jump** — counting is the step that gets skipped and a button can be ignored. Navigation now waits for all three writes (seconds, actual end, status), which needed `pushMethod`/`stampRunActual` to stop being fire-and-forget; on a write slower than the 6s cap the seconds are written into B2's localStorage store **synchronously** before leaving. Verified both paths. |
 | **E2.4** | ✅ | **DONE 2026-09-01**, branch `feat/e2.4-timer-guardrails`, unpushed. `TIMER_MAX_HOURS = 12` (a deploy-time constant, like `WEIGHTS`); past it a timer stops itself, records the **capped** value rather than the runaway one, and says so on the tile. **Deliberately not `stopTimer()`** — stop means "this run is finished" and stamps the run's Actual End, releases the run pick and advances the method to Post-Production. None of that is true when a tile was simply left counting, and moving a job on the board because a timer expired overnight would be a worse bug than the one being fixed. Verified: writes the ceiling once, **zero** status PATCHes, no Actual End. **The ceiling measures one continuous stretch, not accumulated total** — testing caught that against cumulative elapsed the guardrail traps itself (after an auto-stop the elapsed IS the ceiling, so Start re-trips it instantly and the worker can never resume); it also would have stopped a legitimately long job spread over two days. Also caught in testing: stale DEMO timers survive the demo→live transition, and the guardrail was PATCHing `production-methods/GOA-4809` — a demo card id. Now scoped to cards actually on the board, with a re-entrancy guard against two ticks firing before the first `setState` commits. ⚠️ The flag is UI-only — there is no Salesforce field for "this number is not trustworthy"; adding one belongs with E2.3. The **capped value** is the durable half. |
 | **E2.5** | ✅ | **DONE 2026-09-02**, branch `feat/e2.5-actual-vs-scheduled` (stacked on E6.6/E6.8), unpushed. New "Actual vs Scheduled" panel on `stats.html`: jobs compared, scheduled hours (`Order.Duration__c`), actual hours (`Print_Setup_Timer__c + Production_Timer__c`), signed variance, plus a per-method table. **No new SOQL** — both figures were already in `production-orders`' SELECT and on the client, so this carries none of the FLS risk of adding a field. **Only finished orders count** (`Status === 'Complete'`); a job still on the press has banked partial hours and would report the shop as permanently ahead. **Untimed jobs are excluded, not counted as zero**, and the excluded count is displayed as prominently as the comparison — "we only timed 6 of 19" is the more useful finding, and averaging in a 0 would report a shop that finishes instantly. **Per-method rows cover single-method orders only**: `Duration__c` is one figure per order, so splitting it across a two-method job would be inventing data. A11y: the Chart.js canvas gets `role="img"` and a generated name, and both it and the new panel get real ARIA data tables (divs with explicit roles — `<table>` is unusable here, `<sc-for>` gets foster-parented out). Verified: unit-tested the arithmetic against crafted records, then drove all four states in a browser (live, all-untimed, nothing-finished, demo) with the a11y tree confirming both tables announce. Also added `--border-card` to `tokens.css` — E10.2 missed it; still a literal `#1b1b1e` in 40 places across seven pages, a mechanical follow-up. |
-| **E2.6** | P1 | Verify timer-to-run derivation on multi-run methods. The "which cycle am I on" pointer is derived from run actuals, not stored — elegant, and untested against a real three-run method. |
+| **E2.6** | ✅ | **DONE 2026-09-09**, branch `fix/e2.6-run-order`, `index.html` +12/−1. **Verified: the derivation is sound, and the one thing it depends on has been made explicit.** Driven in a wrangler rig against a stateful fake Salesforce — one Screen Print method, four runs, every write recorded and asserted on the server, not read off the screen. **All three cycles walked end to end:** setup Start/Stop advanced Ready for Print → In Production; production Start/Stop stamped **only** the pointed-at run's `Actual_Start__c`/`Actual_End__c`, accumulated the per-method seconds, rewound the method to Ready for Print while runs remained, and moved it to Post-Production only after the last one. The pointer landed on **run 2 after run 1 and run 3 after run 2**, each time re-derived from run actuals across a full page reload (E1.4 navigates to `counting.html` on every Stop, so each cycle starts from a cold board). **Out-of-order also holds:** picking run 3 first stamped run 3 alone and the pointer fell back to run 1 — and `caTimerRunByMethod` was written back as `{}` **before** the navigation, so the released pick does not survive as a stale pointer. **Pause is correctly not Stop:** it committed the seconds and stamped no actual end, moved no status and moved no pointer. **A mid-run board refresh** lost neither the running elapsed nor the pointer. **The one real finding, and it is fixed:** the drawer shows the same runs TWICE — the "Working on" picker (sorted by `runsInOrder()`) and the Production Runs rows below (which took `st.runsByMethod` raw, in whatever order the endpoint returned). They agreed only because `/api/production-runs` happens to `ORDER BY Scheduled_Start__c ASC NULLS LAST`, which is the same rule — **except on two runs booked for the same time**, where SOQL has no secondary sort and the client tie-breaks on `Name`, and except for a locally created run, which was appended and then re-ordered itself on the next load. Both lists now go through `runsInOrder()`, so "the second run" means the same run wherever you read it. ⚠️ Verified against a fake Salesforce, **not against dev2** — that pass is still owed, and S5 in §8 is the script for it. |
 | **E1.5** | ✅ | **DONE 2026-09-02**, branch `feat/e1.5-line-item-detail` (stacked), unpushed. Two halves in very different states. **The order sheet already had a grid — and it was silently wrong.** It grouped by COLOUR alone and labelled each row with whichever garment arrived first, so black tees and black hoodies on one order merged into a single row. Measured: 50 tees + 15 hoodies printed as "Black · Next Level 3600 Tee · S 12 / M 24 / L 29" — the hoodies appeared **nowhere on the sheet** and the press was told to run 65 of a garment only 50 of which existed. On the one document whose whole job is telling the press what to pull. **The calendar had no line detail at all**, just a piece count; its drawer now shows the same breakdown. Both go through one new `sizeGrid()` in `ca-api.js`, grouped by garment **and** colour, so the screen a run is booked from and the sheet the press works off cannot disagree. It also **sorts** the rows — `/api/order-sizes` has no `ORDER BY`, so the same order could previously print its rows differently on different days. Calendar data is fetched per-order **on drawer open**, deliberately not added to `/api/calendar`'s bulk OrderItem roll-up: a drawer is a click, the board is the thing that must never go blank (rule #1). Loading / failed / genuinely empty are three distinct messages. ARIA table roles on the new grid. Verified in a browser across all three states plus the printed sheet. Zebra striping re-keyed to colour — with colours now repeating, index striping rendered two "BLACK" tags differently. |
 
 ##### Phase F — Pre-production automation *(the biggest feature still unbuilt)*
@@ -1422,6 +2257,20 @@ is still unchecked.** See **B4** in Part 0.
 **D7 — OVERTURNED 2026-09-02, same day. ~~Mockups arrive as Vault uploads.~~** Staging disproved it: real orders carry pasted third-party links and **not one order in either sandbox has ever used the Vault flow**. The belief that they did came from how the process is *documented*, not from the data. Left here rather than deleted, because the failure mode is worth remembering — a decision was nearly closed on how the system was believed to work. **D7b stands and is now the plan.** The original text: ~~mockups arrive as Vault uploads, so the allowlist is not the problem.~~ Real artwork is uploaded to the Design record's Vault tab, which yields a Salesforce ContentVersion URL and takes branch A of `mockup-proxy` — no allowlist involved. dev2's 38 blocked images are test junk, not a defect. **D7b, the contingency:** if a real org is ever found to hold pasted third-party links, the fix is to **fetch and cache the image at intake**, never to widen `ALLOWED_MOCKUP_HOSTS` — widening is a permanent treadmill and re-opens the SSRF surface E6.2 closed. See **B1** in Part 0.
 
 **D8 — pasted mockups are adopted INTO Salesforce, lazily, on first use. DECIDED 2026-09-02.** Supersedes D7b's "cache it at intake". On the first request for an uncached external mockup, the proxy fetches it once, saves it as a file on the Design record, rewrites `Mockup_URL__c` to the Salesforce servlet URL, and serves the bytes; every later request takes branch A. **No R2 bucket, no binding, no ops step** — and it does not build a cache beside the problem, it converts the data into the shape `_mockup.js` always documented. Lazy rather than at intake: self-healing, no trigger to build, and it only ever fetches images someone actually looked at. ⚠️ **Caching relocates the SSRF risk rather than removing it** — every branch-B protection stays except the host allowlist, plus a new size cap and timeout; and this turns a GET into a write, so adoption must be idempotent, must never overwrite a Vault URL, and must leave the field untouched when the fetch fails. Full spec in `CLAUDE-CODE-QUEUE.md`. **Owner: Claude Code.**
+
+**D12 — the reprint becomes opt-in, gated on the account manager. PROPOSED 2026-09-04, NOT
+YET DECIDED.** Today `createReworkIfNeeded` builds the reprint automatically the moment the
+last method on an order completes. Anthony wants the account manager emailed first, to
+confirm the customer actually wants it; the reprint is created only on confirmation, and
+then lands in the Management inbox exactly as B6 already delivers it. **This overturns the
+central assumption of `_rework.js` — that damage becomes a reprint automatically "at the
+moment the numbers become final"** — and replaces it with damage becoming a *question*.
+What it rules out: any design where a reprint appears without a human having agreed to it,
+and equally any design where declining one is indistinguishable from the reprint having
+failed. ⛔ **Decisions 1, 2 and 4 answered by Anthony 2026-09-04** (Salesforce sends the email; the
+decision is made on a Salesforce record, not in this app; the recipient is the Opportunity
+Owner, already on the Order). **Still open: where the pending decision lives — see B9.** Do not
+build against this until it carries a decision date.
 
 **Still open — cleared allocation rows.** Today a cleared size is set to `Planned_Qty__c = 0` and the
 row is never deleted, so zero rows still render on the counting screen. The alternative is deleting
@@ -2824,8 +3673,10 @@ The note survives taps through **all four** statuses.
 allocations do not double-count: the Flow computes each size as *order qty − what earlier runs on
 the method already planned − `Incomplete_Qty__c`*. Clearing a size writes **0**, never deletes.
 
-> ⚠️ **False pass:** the "which cycle am I on" pointer is **derived from run actuals, not stored** —
-> elegant, and untested against a real three-run method (E2.6). Check it explicitly on run 2 and 3.
+> ⚠️ **False pass:** the "which cycle am I on" pointer is **derived from run actuals, not stored**.
+> Check it explicitly on run 2 and 3. ✅ Verified against a fake Salesforce 2026-09-09 (E2.6) — runs 2
+> and 3 both derived correctly, out-of-order working included. **Still unverified against dev2**, which
+> is what this scenario is for: the rig cannot prove Salesforce actually persists the actuals.
 >
 > ⚠️ Also: if the app ever empties a run of rows, the skeleton Flow regenerates the whole thing from
 > its own arithmetic on the next save, **silently overwriting a manager's edit**.
@@ -2855,6 +3706,11 @@ that stopped it. Run it *before* debugging by hand.
 > that is the reprint. **Incomplete garments are intact on a shelf and need press time on the same
 > method** — that is a make-up run. Never merge them; never derive one from the other. Prove both
 > paths separately.
+>
+> ⚠️ **This scenario changes completely if B9 / D12 lands.** S6 currently expects the
+> reprint to appear on its own once every run is Submitted and every method Completed. Under
+> B9 it would appear only after the account manager confirms, and "no reprint" would have
+> three possible meanings instead of two. **Rewrite S6 with that story, not after it.**
 >
 > 🔴 **Known open (B3):** scheduling the make-up run currently fails with
 > *"Could not create run — check press / schedule"*. That message is a catch-all that discards the
@@ -3373,6 +4229,31 @@ Newest first. One line per change; link to the story that carries the detail.
 
 | Date | What | Where |
 |---|---|---|
+| 2026-09-09 | **E2.6 verified — the run pointer holds on a multi-run method** — three full setup/print cycles driven in a rig with every write asserted server-side, plus out-of-order working, Pause-is-not-Stop, and a mid-run refresh. One real inconsistency found and fixed: the drawer's Production Runs rows rendered in raw endpoint order while the run picker sorted, so the two lists could disagree on runs sharing a scheduled time. Branch `fix/e2.6-run-order`, unpushed. **Not yet verified against dev2** | §4 E2.6, §8 S5 |
+| 2026-09-08 | **One colour per print method, everywhere (B10)** — screen print green, embroidery purple, heat press orange, promo teal, as four `tokens.css` variables replacing five copy-pasted palettes. Deliberately NOT `--ok`/`--warn`, which already mean “fine” and “watch this one”. Applied on `index.html`, `pre-production.html`, `counting.html`, `order-sheet.html`, `calendar.html` (tabs only) and `stats.html`; `shipping.html` untouched — its `methodColor` is the delivery method. Also fixed the order sheet's Method chip, which guessed from the press name and defaulted to Screen Print. Branch `feat/method-colours`, unpushed | §4 B10 |
+| 2026-09-08 | **B9 code half shipped — the reprint is opt-in** — `createReworkIfNeeded` now consults `Order.Misprint_Outcome__c` before building. Gate lives in `_rework.js`, so **neither call site changed** and neither can bypass it. An org without the audit fields (production) builds automatically exactly as before. Approved reprints are built by a bounded sweep on the Management inbox — no callout, no cron, no Access exception. `rework-check` learned the four new states. Branch `feat/b9-optin-reprint`, unpushed. ⚠️ **Flow entry criteria must change before activation** — see §4 B9 | §4 B9 |
+| 2026-09-08 | ✅ **B9 email path repointed to the formula field in dev2 AND staging** — Decision inverted to `Opportunity_Owner_Email__c Is Null = True`, Email Alert element deleted, blank case now creates a Task on the order (WhatId `{!$Record.Id}`, owner `{!$Record.OwnerId}`), every populated order takes the Default outcome into the core Send Email. Both saved **Inactive** and read back off fresh loads; new flowIds dev2 `301ca00000To7lgAAB`, staging `301ca00000To95rAAB`. Template + alert now orphaned but harmless | §4 B9 |
+| 2026-09-08 | 🩤 **Flow Builder renders a saved merge reference as raw text in multi-value inputs on first load.** dev2's Recipient Addresses came back reading `$Record.Opportunity_Owner_Email__c` with no braces and no pill — it looks like a literal string and is not. Proof: re-picking the same resource left **Save greyed out** (no diff). Use the greyed Save button as the test; do not "fix" what is not broken | §4 B9 |
+| 2026-09-08 | 🚩🚩 **Sandbox email scrambling found — and the stale field is the dangerous one.** `Opportunity_Owner_Email__c` is confirmed `Formula: Opportunity.Owner.Email` (read off the field detail page) = the source Anthony asked for. But **2050 of 2163** completed staging orders resolve to a `.invalid` address, because Salesforce scrambles `User.Email` on sandbox refresh. So B9 test sends in staging deliver NOTHING — by design. Meanwhile `Opp_Owner_Email__c` holds **un-scrambled real addresses**, so sending to it from a sandbox would email real staff | §4 B9 |
+| 2026-09-08 | 🚩 **Populate check done — B9's primary email branch is dead code.** `Opp_Owner_Email__c`, the Email Alert's recipient, is populated on **0/81** dev2 orders and **101/2164** staging completed orders; the `Opportunity_Owner_Email__c` formula covers **2163/2164**. Every order would take the fallback branch. Recommendation recorded: drop the Decision + Email Alert, send via the formula alone, give the blank case a visible Default. Coverage risk is ~1 in 2,164 | §4 B9 |
+| 2026-09-08 | ✅ **Audit trio renamed in dev2 AND staging** — `Reprint_Decision_By/At/Notes__c` → `Misprint_Outcome_By/At/Notes__c`, labels and API names, verified off fresh field-list loads in both orgs. Pre-flight was clean: no Apex, formulas, validation rules or flows — the only references (2 Lightning pages, 4 layouts, 8 report types) bind by field **id** and followed the rename automatically. Field **Descriptions** still cite the deleted `Reprint_Decision__c` | §4 B9 |
+| 2026-09-08 | 🚩 **The Order custom-field EDIT page wedges the browser renderer** — 4 times, in Lightning Object Manager AND Classic, and once with no interaction at all: the page loads, reads fine, then never reaches idle and every later call times out. Not the Field Name input, not the Setup iframe. Anthony did the dev2 renames by hand; staging went through afterwards. **If a field edit page hangs, hand it to a human rather than retrying** | §4 B9 |
+| 2026-09-08 | ✅ **B9's email half built in dev2 AND staging** — Classic Text template + Email Alert (recipient Email Field -> `Opp_Owner_Email__c`) + a Decision with a fallback that sends to the never-stale `Opportunity_Owner_Email__c` formula. Both flows saved clean and still **INACTIVE**. Two traps recorded: Flow's resource picker shows only labels (use the ⓘ tooltip to tell the colliding fields apart), and a templated Send Email requires a Recipient ID so the fallback had to compose inline | §4 B9 |
+| 2026-09-08 | 🚩 **B9's trigger was wrong and both orgs were fixed** — the flow fired on `Status = Complete` (Shipping/Receiving, set when the order ships). The reprint moment is `Order_Substatus__c = Completed` (label "Production Status"), the line that fires `createReworkIfNeeded`. Corrected and read back in dev2 + staging; **both flowIds changed on save** — dev2 `301ca00000TnlZpAAJ`, staging `301ca00000Tnuy2AAB` | §4 B9 |
+| 2026-09-08 | ✅ **B9 recipient decided: Email Alert → `Opportunity_Owner__c` (related user)**. Formula confirmed as `Opportunity.Owner.Email` — clean, no HTML, but it bypasses the lookup, so the lookup is an unverified copy. Blank lookup = silent non-send; verify population before activating | §4 B9 |
+| 2026-09-08 | 🚩 **B9's email recipient was pointed at a formula field** — `Opportunity_Owner_Email__c` is Formula(Text) and cannot be an Email Alert recipient. The Email-type field is `Opp_Owner_Email__c`; `Opportunity_Owner__c` Lookup(User) is likely the better target. Same-label collision, caught before the email was built | §4 B9 |
+| 2026-09-08 | ✅ **B9 record-triggered flow built in dev2 AND staging** — `B9 Order Complete With Damage - Awaiting AM`, V1 **Inactive** in both, verified off fresh loads. Entry: Status = Complete AND Misprint Outcome is blank, only on the transition. Get Records `1 AND (2 OR 3)` via `Order_Id__c`. Stays inactive until the code half stops the auto-reprint | §4 B9 |
+| 2026-09-08 | ✅ **`Awaiting AM` guard shipped in both sandboxes** — `Printshop Misprint Process` now treats it as still-blank across all three affected outcomes. dev2 **V29** Active, staging **V16** Active. Production unguarded until E7.4 | §4 B9 |
+| 2026-09-08 | 🪤 **Staging V15 saved a condition as AND instead of OR** (unsatisfiable, killed the manager notification for minutes) — caught on read-back, fixed in V16. Rule: read flow edits back off a fresh load of the ACTIVE version | §4 B9 |
+| 2026-09-08 | 🚩🚩 **B9 STOPPED at the pre-flight check** — `Misprint_Outcome__c` is watched by the ACTIVE flow `Printshop Misprint Process` (dev2 V28 / staging V14) on `Is Null = False`. Writing `Awaiting AM` would notify the Print Shop, change Order status and post to Slack. Three options recorded; **no flow built** | §4 B9 |
+| 2026-09-08 | ✅ **`Order_Id__c` created by Anthony on `Production_Run_Line_Items__c`** in dev2 AND staging — `CASESAFEID(Order_Product__r.OrderId)`, Formula(Text), both read back. Unblocks Flow Get Records by Order | §4 B9 |
+| 2026-09-08 | ✅ **B9 collapsed onto `Misprint_Outcome__c`** — `Awaiting AM` added and assigned to all 6 record types in dev2 AND staging; `Reprint_Decision__c` **deleted** in both (recoverable 15 days). By/At/Notes survive as its audit trail, rename still pending | §4 B9 |
+| 2026-09-08 | 🪤 **New trap: a custom field can't be deleted while any Lightning page references it** — and the field detail page has no Delete button, the list's `Del` link is swallowed by a JS confirm, and an unchecked confirm box fails silently. **The blocking pages differed per org** (dev2 2, staging 3, no overlap) | §4 B9 |
+| 2026-09-08 | 🚩 **`Misprint_Outcome__c` found — it already models the reprint/refund decision** (Feb 2023, values Credit/Refund · Reprint · Refund · Credit). Recommendation: collapse `Reprint_Decision__c` into it before anything depends on either | §4 B9 |
+| 2026-09-08 | 🚩 **`Production_Run_Line_Items__c` refuses field creation** (Insufficient Privileges, UI and URL) — blocks `Order_Id__c`, which the B9 flow needs. Contradicts B4's recorded workaround; controlled against Order in the same session | §4 B9 |
+| 2026-09-08 | **B9 fields built in dev2 AND staging** — `Reprint_Decision__c` (restricted, no default, blank = resting state) plus By/At/Notes, FLS granted, both orgs verified by reading them back. Still inert: no flow, no email | §4 B9 |
+| 2026-09-04 | **B9 paused at the build step** — decisions answered, schema proposed, nothing created in any org. Resume at "PICK UP HERE" in the B9 entry | §4 B9 |
+| 2026-09-04 | **B9 / D12 specced** — reprints become opt-in, gated on account-manager confirmation by email. Not buildable yet: the app has no email capability and Account has no Account Manager field | §4 B9, §5 D12 |
 | 2026-09-04 | **Runs left to print on the method card (B8)** — bulk per-method count from a separate fail-open query, kept out of the board's own SELECT. Reuses the existing "no Actual End" rule so the badge and the status machine agree. Unknown renders nothing, never "0 left". Branch `feat/b8-runs-left`, unpushed. **Not yet verified against dev2** | §4 B8 |
 | 2026-09-04 | **`Received` added to `Order.Receiving_Status__c`** — dev2 + staging, all 6 record types. New chip on the pre-production board and the garment station, guarded so an org without the value never offers it. Branch `feat/received-status`, commit `0f98aca`, unpushed. **Production does not have the value** (E7.4) | §9 |
 | 2026-09-04 | 🚩 **`Order.ReceivingStatus__c` is a SECOND field with the SAME label** — an emoji formula over the picklist. Staging's copy was a generation stale and rendered `Counted In` and `Staged` as "N/A". Both orgs now match | §9 |
