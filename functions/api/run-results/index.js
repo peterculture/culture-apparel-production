@@ -591,12 +591,43 @@ async function composite(env, compositeRequest) {
       });
     }
   }
-  if (failures.length) {
+  if (!resp.ok || failures.length) {
+    /* B11, 2026-09-09. THE `!resp.ok` HALF IS NOT REDUNDANT -- READ THIS BEFORE
+       SIMPLIFYING IT BACK OUT.
+       /composite fails in two different shapes and this function used to check
+       only one of them:
+         1. It accepts the batch, runs it, and reports per-sub-request results
+            inside a 200. That is the loop above.
+         2. It REFUSES the whole batch -- malformed request, refused token, a
+            governor limit -- with a 4xx/5xx whose body is a top-level error
+            ARRAY and no compositeResponse at all.
+       In case 2 `subs` fell back to [], the loop found nothing, and this
+       returned ok:true. The caller took that as a successful write and went on
+       to PATCH Result_Status__c = 'Submitted' (see step 2 below).
+       That is the worst possible place for a false success: under D1 this app
+       stores only problems, so a perfect run and an untouched run are
+       byte-identical and Result_Status__c is the ONLY evidence a human counted.
+       A refused batch therefore forged exactly that flag -- the run read as
+       "counted, nothing wrong" over counts Salesforce had thrown away, gate 4
+       of createReworkIfNeeded saw blanks, and the reprint was never built.
+       Nothing on any screen can tell the two apart afterwards.
+       `_composite.js` says the same thing in one line ("Trap 2: resp.ok alone
+       proves nothing") and `run-line-items/index.js` checks it too. This copy
+       was the one that drifted. Reproduced against a fake Salesforce answering
+       400 with a top-level error array, then re-run after the fix. */
     // allOrNone:true makes every innocent sub-request report PROCESSING_HALTED.
     // Reporting in array order therefore names a bystander and hides the real
     // cause. Same fix as _rework.js -- see the longer note there.
     const real = failures.find((f) => f.code !== "PROCESSING_HALTED") || failures[0];
-    return { ok: false, detail: `${real.referenceId}: ${real.code}: ${real.message}` };
+    // Nothing was logged here at all before, so a refused batch left no trace
+    // in the Pages log either -- the defect was silent in both directions.
+    console.error("run-results: composite failed", resp.status, JSON.stringify(data));
+    return {
+      ok: false,
+      detail: real
+        ? `${real.referenceId}: ${real.code}: ${real.message}`
+        : `composite refused: HTTP ${resp.status}`,
+    };
   }
   return { ok: true };
 }
