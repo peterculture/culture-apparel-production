@@ -111,6 +111,33 @@
   --danger-text:     #E8A89F;
   --danger-border:   #7A241C;
   --danger-bg:       #2A100D;
+  /* ── print method identity ────────────────────────────────────────────
+     One colour per method type, so a card says which press it belongs to
+     before anyone reads it. Anthony, 2026-09-08: screen print green,
+     embroidery purple, heat press orange.
+
+     ⚠️ DELIBERATELY NOT --ok AND --warn, even though those are already a green
+     and an orange. Those two carry MEANING on these boards -- --ok is "fine,
+     on schedule, counted clean" and --warn is "watch this one". A method chip
+     painted in the exact status green would read as a verdict on the job
+     rather than a label for the press, and the whole point of this project's
+     colour discipline is that a colour means one thing. These are neighbouring
+     hues, clearly the colours asked for, and never the status tokens:
+
+       --method-sp  a cooler emerald   vs --ok    #7FA644, a yellow-green
+       --method-hp  a true orange      vs --warn  #C9923A, an amber/gold
+
+     Embroidery takes --purple's value, which nothing status-related uses, and
+     promo inherits the teal embroidery vacated -- so all four stay distinct
+     from each other and from every status colour.
+
+     All four clear 4.5:1 on --surface-page and --surface-card (they are used
+     as text on the boards) and 3:1 on white, which is what the printed order
+     sheet needs -- there they are only ever a 9px dot beside dark text. */
+  --method-sp:       #4E9A6A;
+  --method-em:       #9878C0;
+  --method-hp:       #D2762F;
+  --method-promo:    #5E9B9A;
   --teal:            #5E9B9A;
   --purple:          #9878C0;
 }
