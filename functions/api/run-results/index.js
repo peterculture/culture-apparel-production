@@ -33,7 +33,7 @@
  * leaves the run in Draft, which is exactly the recoverable state: the counter
  * sees it still in the list and enters it again.
  */
-import { runQuery, sfFetch, apiVersion, jsonError, soqlQuote, soqlQuoteList } from "../_sf.js";
+import { runQuery, runChunkedIdQuery, sfFetch, apiVersion, jsonError, soqlQuote, soqlQuoteList } from "../_sf.js";
 import { requireCap } from "../_session.js";
 import { orderIdForMethod } from "../_print-date-rollup.js";
 import { createReworkIfNeeded } from "../_rework.js";
@@ -188,6 +188,59 @@ export async function onRequestGet({ request, env }) {
  * that run again, and a run that vanishes the instant it is submitted gives
  * them nowhere to go. The client splits the list into tabs.
  */
+/**
+ * How many GARMENTS the whole ORDER is, per order id (B20).
+ *
+ * The counting screen is the only board that did not already have this: a
+ * counter sees the run's own scheduled figure and had no way to tell a 40 out
+ * of 40 from a 40 out of 300 without leaving the screen.
+ *
+ * Deliberately a SEPARATE, FAIL-OPEN follow-up rather than a field added to
+ * the query this screen depends on -- B8's rule, and trap 1's: one FLS-hidden
+ * field turns the WHOLE select into a parse error and empties the board with
+ * an HTTP 200. A count is not worth that. Chunked through runChunkedIdQuery
+ * because an unbounded IN list is rejected at the HTTP level, not by SOQL
+ * (B12 is that bug live).
+ *
+ * `Size__c != null` is what makes this the SAME number the other boards show.
+ * A blank Size__c OrderItem is not a garment (order-sizes/index.js: "treated
+ * as a non-garment line on the front end") -- a setup fee is an OrderItem too.
+ * pivotItems() in ca-api.js skips those rows, so this must as well.
+ *
+ * Returns a Map of orderId -> positive integer. An order missing from the map
+ * is UNKNOWN, and the screen renders nothing for it. Never 0: blank means
+ * nobody knows, 0 would be a claim that the job has no garments.
+ */
+async function garmentCountByOrder(env, orderIds) {
+  const ids = [...new Set((orderIds || []).filter(Boolean))];
+  const byOrder = new Map();
+  if (!ids.length) return byOrder;
+  try {
+    const res = await runChunkedIdQuery(ids, (quotedIds) =>
+      runQuery(
+        env,
+        `SELECT OrderId, Quantity FROM OrderItem WHERE OrderId IN (${quotedIds}) AND Size__c != null`,
+      ),
+    );
+    if (!res.ok) {
+      console.error("run-results order garment count failed", res.status);
+      return byOrder;
+    }
+    const sums = new Map();
+    res.records.forEach((it) => {
+      const q = Number(it.Quantity);
+      if (!Number.isFinite(q)) return;
+      sums.set(it.OrderId, (sums.get(it.OrderId) || 0) + q);
+    });
+    sums.forEach((q, id) => {
+      if (Number.isFinite(q) && q > 0) byOrder.set(id, Math.round(q));
+    });
+  } catch (e) {
+    console.error("run-results order garment count error", e);
+  }
+  return byOrder;
+}
+
 async function getCountableRuns(env, url) {
   /* Print_Location__c rides along through runQueryOptionalField, NOT in
      RUN_RESULT_FIELDS. That group is all-or-nothing on purpose (see its
@@ -242,6 +295,7 @@ async function getCountableRuns(env, url) {
   if (!orders.ok) return jsonError("orders_query_failed", 502);
 
   const orderById = new Map(orders.records.map((o) => [o.Id, o]));
+  const qtyByOrder = await garmentCountByOrder(env, orderIds);
 
   const records = runs.records.map((r) => {
     const m = methodById.get(r.PrintMethod__c) || null;
@@ -261,6 +315,9 @@ async function getCountableRuns(env, url) {
       goaNumber: o ? o.GOA_Order_Number__c : null,
       orderName: o ? o.Customer_Order_Name__c : null,
       customer: o && o.Account ? o.Account.Name : null,
+      // B20. ABSENT, not 0, when the count could not be established -- see
+      // garmentCountByOrder. The card hides the line rather than claiming zero.
+      orderQty: (m && m.Order__c && qtyByOrder.has(m.Order__c)) ? qtyByOrder.get(m.Order__c) : null,
       dueDate: o ? o.Customer_Facing_Delivery_Date__c : null,
       pressName: r.Press__r ? r.Press__r.Name : null,
       /* B4. Null covers both "this org has no Print_Location__c" and "this run
@@ -326,6 +383,12 @@ async function getOneRun(env, runId) {
     }
   }
 
+  // B20, single-run path. Same fail-open helper the list uses, so the count on
+  // the open run's header is the same number its card showed a moment ago.
+  const oneQty = method && method.Order__c
+    ? (await garmentCountByOrder(env, [method.Order__c])).get(method.Order__c)
+    : undefined;
+
   return Response.json(
     {
       available: true,
@@ -340,6 +403,8 @@ async function getOneRun(env, runId) {
         goaNumber: order ? order.GOA_Order_Number__c : null,
         orderName: order ? order.Customer_Order_Name__c : null,
         customer: order && order.Account ? order.Account.Name : null,
+        // null = unknown; the header hides the line rather than showing 0.
+        orderQty: oneQty == null ? null : oneQty,
         pressName: r.Press__r ? r.Press__r.Name : null,
         scheduledStart: r.Scheduled_Start__c,
         scheduledQty: r[RUN_QTY_FIELD],
