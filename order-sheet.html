@@ -230,8 +230,8 @@ class Component extends DCLogic {
         notes:'Run heather first, black second — reclaim gold screen between. Customer approved bright red over PMS match. Fold + poly-bag by size; box in cartons of 50. Event pickup Fri AM — must ship Thursday.',
         specs:'160 mesh, waterbased ink, cure 320°F for 60s. Confirm placement against customer proof before pulling screens. Reclaim between colorways.',
         methods:[
-          { id:'demo-m1', type:'Screen Print', color:'#C6372B', placementLabel:'Full Front + Left Chest', status:'Ready for Print' },
-          { id:'demo-m2', type:'Screen Print', color:'#C6372B', placementLabel:'Back', status:'Ready for Print' },
+          { id:'demo-m1', type:'Screen Print', color:'var(--method-sp)', placementLabel:'Full Front + Left Chest', status:'Ready for Print' },
+          { id:'demo-m2', type:'Screen Print', color:'var(--method-sp)', placementLabel:'Back', status:'Ready for Print' },
         ],
         cols:['S','M','L','XL','2XL'],
         grids:[
@@ -348,8 +348,26 @@ class Component extends DCLogic {
   }
   renderVals(){
     const o = this.state.order;
-    const M = { sp:{label:'Screen Print',color:'#C6372B'}, em:{label:'Embroidery',color:'#5E9B9A'}, hp:{label:'Heat Press',color:'#C9923A'} };
-    const m = M[o.method] || M.sp;
+    const M = { sp:{label:'Screen Print',color:'var(--method-sp)'}, em:{label:'Embroidery',color:'var(--method-em)'}, hp:{label:'Heat Press',color:'var(--method-hp)'} };
+    /* Header Method chip. This used to be M[o.method] unconditionally, and
+       o.method is api.methodOf(rec) -- a GUESS off the press name that falls
+       back to Screen Print whenever it cannot tell (methodGuess, ca-api.js).
+       That was the only signal available before this sheet started listing the
+       order's real Production_Method__c records; it has them now (o.methods),
+       so the chip reads those and only falls back to the guess when the order
+       carries none. Colour is why this got fixed here: a green "Screen Print"
+       dot on an embroidery sheet is a wrong colour on paper, not just a wrong
+       word. An order printed more than one way gets the sheet's neutral ink
+       and "Multiple methods" -- every method is listed in full further down,
+       and one dot cannot honestly stand for two. */
+    const srcMethods = o.methods || [];
+    const distinct = [];
+    srcMethods.forEach(x => { if (x.type && distinct.indexOf(x.type) < 0) distinct.push(x.type); });
+    const guess = M[o.method] || M.sp;
+    const m = distinct.length === 1
+      ? { label: distinct[0], color: (srcMethods.filter(x => x.type === distinct[0])[0] || {}).color || guess.color }
+      : distinct.length > 1 ? { label: 'Multiple methods', color: '#6b645c' }
+      : guess;
     const grids = (o.grids||[]).map(g => ({
       colorLabel: g.colorLabel, garment: g.garment, total: String(g.total),
       tagBg: g.dark ? '#141210' : 'transparent', tagColor: g.dark ? '#fff' : '#141210',
