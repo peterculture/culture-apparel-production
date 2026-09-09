@@ -194,7 +194,7 @@ window.__resources = Object.assign({}, window.__resources, {
         </div>
         <sc-for list="{{timingRows}}" as="row" hint-placeholder-count="3">
           <div role="row" style="display:table-row">
-            <div role="cell" style="display:table-cell;text-align:left;vertical-align:middle;padding:7px 8px;color:var(--text-secondary)">{{row.label}}</div>
+            <div role="cell" style="display:table-cell;text-align:left;vertical-align:middle;padding:7px 8px;color:var(--text-secondary)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{{row.dotColor}};margin-right:7px"></span>{{row.label}}</div>
             <div role="cell" style="display:table-cell;text-align:right;vertical-align:middle;padding:7px 8px;color:var(--text-primary)">{{row.jobs}}</div>
             <div role="cell" style="display:table-cell;text-align:right;vertical-align:middle;padding:7px 8px;color:var(--text-primary)">{{row.planned}}</div>
             <div role="cell" style="display:table-cell;text-align:right;vertical-align:middle;padding:7px 8px;color:var(--text-primary)">{{row.actual}}</div>
@@ -612,9 +612,16 @@ class Component extends DCLogic {
          ' never timed, ' + t.noEstimate + ' with no scheduled duration. Untimed jobs are excluded, not counted as zero.');
 
     const METHOD_LABEL = { sp:'Screen Print', em:'Embroidery', hp:'Heat Press', promo:'Promotional' };
+    /* Same method colours as every board and the printed order sheet
+       (tokens.css --method-*, via METHOD_META in ca-api.js). row.key is the
+       short key the server already groups by, so it maps straight across. An
+       unrecognised key gets the muted text colour rather than a wrong one. */
+    const METHOD_COLOR = { sp:'var(--method-sp)', em:'var(--method-em)',
+                           hp:'var(--method-hp)', promo:'var(--method-promo)' };
     const timingRows = (t.byType||[]).map(row=>{
       const p = pctOf(row.plannedH, row.actualH);
-      return { key:row.key, label: METHOD_LABEL[row.key] || row.key, jobs:String(row.jobs),
+      return { key:row.key, label: METHOD_LABEL[row.key] || row.key,
+               dotColor: METHOD_COLOR[row.key] || 'var(--text-muted)', jobs:String(row.jobs),
                planned: hrs(row.plannedH), actual: hrs(row.actualH),
                variance: signed(p), varianceColor: varColor(p) };
     });
