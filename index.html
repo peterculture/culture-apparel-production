@@ -359,12 +359,24 @@ window.__resources = Object.assign({}, window.__resources, {
 
         <div>
           <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:11px">Production Methods</div>
+          <!-- B21: how many methods this ORDER has. Hidden entirely on a
+               single-method order (methodSiblings returns shown:false), so the
+               common case gains nothing to read. -->
+          <sc-if value="{{open.siblings.shown}}" hint-placeholder-val="{{ false }}">
+            <div style="margin:-4px 0 11px">
+              <div style="font:600 10px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:var(--text-secondary)">{{open.siblings.countLabel}}</div>
+              <sc-if value="{{open.siblings.hasNote}}" hint-placeholder-val="{{ false }}">
+                <div style="font:400 10px/1.4 'Archivo';color:var(--text-faint);margin-top:4px">{{open.siblings.note}}</div>
+              </sc-if>
+            </div>
+          </sc-if>
           <div style="display:flex;flex-direction:column;gap:7px">
             <sc-for list="{{open.methodsView}}" as="pm" hint-placeholder-count="1">
               <div style="display:flex;flex-direction:column;background:#121215;border:1px solid #232327;border-left:3px solid {{pm.color}};border-radius:8px;overflow:hidden">
                 <div style="display:flex;align-items:center;gap:10px;padding:11px 13px">
                   <span style="width:8px;height:8px;border-radius:50%;background:{{pm.color}};flex-shrink:0"></span>
                   <span style="font:500 12px/1 'Archivo';color:#ECEAE4">{{pm.label}}</span>
+                  <sc-if value="{{pm.isCurrent}}" hint-placeholder-val="{{ false }}"><span style="font:700 8px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#08080A;background:{{pm.color}};border-radius:6px;padding:4px 7px;flex-shrink:0">This card</span></sc-if>
                   <span style="font:600 8px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:var(--text-secondary);background:#1a1a1e;border-radius:6px;padding:4px 7px">{{pm.status}}</span>
                   <button onClick="{{ pm.onEdit }}" title="Edit method" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:transparent;border:1px solid #2a2a2f;color:var(--text-tertiary);cursor:pointer;flex-shrink:0"><i class="ti ti-pencil" style="font-size:12px"></i></button>
                   <button onClick="{{ pm.onRemove }}" title="Remove method" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:transparent;border:1px solid #2a2a2f;color:var(--text-tertiary);cursor:pointer;flex-shrink:0"><i class="ti ti-trash" style="font-size:12px"></i></button>
@@ -1277,6 +1289,10 @@ class Component extends DCLogic {
           const pmStatus = orderCompleted ? 'Completed' : pm.Status__c;
           cards.push({
             id:pm.Id, orderId:r.Id, stage, status:pmStatus, meth, placements:placements,
+            // B21. Order.Status = 'Complete' forces EVERY method onto this
+            // board (see the override above), so the drawer's sibling note
+            // must not then claim a Pre-Production sibling has no card.
+            orderCompleted,
             num:api.text(r.GOA_Order_Number__c)||r.OrderNumber||r.Id, customer:api.text(r.Customer_Order_Name__c)||api.text(r.Account&&r.Account.Name)||'—', account:api.text(r.Account&&r.Account.Name)||'',
             qty:piv.qty, garment:piv.garment, sizes:piv.sizes, dueLabel: stage==='done'?'Completed':due.label, urg: stage==='done'?'done':due.urg,
             worker:null, workerName:wn||null, workerInit: wn?api.initials(wn):'—', workerColor: wn?api.colorForName(wn):'#3a3a40',
@@ -1756,13 +1772,18 @@ class Component extends DCLogic {
   }
   // Builds one Production Methods row for the drawer, including its inline
   // edit form (pm.mf) when that row is the one currently being edited.
-  methodRowView(r, orderId){
+  methodRowView(r, orderId, currentMethodId){
     const api=this._api||window.CAApi;
     const meta=(api && api.METHOD_META && api.METHOD_META[r.Type__c]) || { color:'var(--text-tertiary)' };
     const placements=(r.Placements__c||'').split(';').map(s=>s.trim()).filter(Boolean);
     const editing = this.state.methodEditId===r.Id;
+    /* B21. The manager opened ONE method and is reading a list that contains
+       it; without this the row is a riddle. Matched on Id, never on Type__c --
+       under D11/B4 an order can carry two Screen Print methods on different
+       placements, and a type match would badge both of them. */
+    const isCurrent = !!(api && api.sameMethodId && api.sameMethodId(r.Id, currentMethodId));
     const view = {
-      id:r.Id, type:r.Type__c, placements, status:r.Status__c,
+      id:r.Id, type:r.Type__c, placements, status:r.Status__c, isCurrent,
       label: r.Type__c + (placements.length ? (' – '+placements.join(' + ')) : ''),
       color: meta.color,
       editing, onEdit:()=> editing ? this.closeMethodEdit() : this.openMethodEdit(r),
@@ -3255,7 +3276,23 @@ class Component extends DCLogic {
       // method, so a manager can see/edit/remove sibling methods (and jump to
       // Pre-Production's Management form to add another) from any card.
       const methodRecords = st.methodsByOrder[src.orderId] || [];
-      const methodsView = methodRecords.map(r=>this.methodRowView(r, src.orderId));
+      /* B21. Counted off methodRecords -- the per-order fetch, which returns
+         EVERY Production_Method__c on the order -- and never off
+         rec.ProductionMethods, which this board's own query filters to
+         BOARD_STATUSES and so cannot see a Pre-Production or Cancelled
+         sibling at all. While that fetch is still in flight methodRecords is
+         [] and methodSiblings returns shown:false, so the line appears once
+         rather than flashing a wrong count first. */
+      const _api = window.CAApi;   // renderVals here has no local `api`
+      const siblingSummary = (_api && _api.methodSiblings)
+        ? _api.methodSiblings(methodRecords, src.id,
+            { onBoard: (s)=> !!src.orderCompleted || !!_api.stageOfMethod(s) })
+        : { shown:false, countLabel:'', hasNote:false, note:'' };
+      /* Self-marking only matters when there is something to tell apart, so
+         it is gated on the summary being shown. A single-method order gets
+         literally nothing new in this drawer -- no count, no note, and no
+         "This card" badge on the one row it was never ambiguous about. */
+      const methodsView = methodRecords.map(r=>this.methodRowView(r, src.orderId, siblingSummary.shown ? src.id : null));
       const rc = (st.runCreateMethodId===src.id) ? (st.runCreateForm||{}) : null;
       const rcQtyHint = (rc && window.CAApi && window.CAApi.runQtyHint) ? window.CAApi.runQtyHint(rc.qty, src.qty, unallocated) : '';
       const runCreate = rc ? {
@@ -3273,7 +3310,7 @@ class Component extends DCLogic {
         submitLabel: st.runCreateSubmitting?'Creating…':'Create Run',
       } : null;
       open=Object.assign({}, d, {
-        methodsView, methodsEmpty:methodsView.length===0, addMethodUrl:'pre-production.html?addMethodForOrder='+encodeURIComponent(src.orderId),
+        methodsView, methodsEmpty:methodsView.length===0, siblings:siblingSummary, addMethodUrl:'pre-production.html?addMethodForOrder='+encodeURIComponent(src.orderId),
         // Pre-Production Management is admin/manager-only as of 2026-08-13
         // (see ca-api.js's canAccessManagement()) -- pre-production.html's
         // own openMgrForOrder() re-checks this live too (defense in depth
