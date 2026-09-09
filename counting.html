@@ -144,6 +144,7 @@ window.__resources = Object.assign({}, window.__resources, {
             <span style="display:inline-flex;align-items:center;gap:5px;color:{{c.methodColor}}"><span style="width:8px;height:8px;border-radius:50%;background:{{c.methodColor}};flex-shrink:0"></span>{{c.methodType}}</span>
             <sc-if value="{{c.hasPress}}" hint-placeholder-val="{{ false }}"><span>{{c.pressName}}</span></sc-if>
             <sc-if value="{{c.hasDate}}" hint-placeholder-val="{{ false }}"><span><i class="ti ti-calendar" style="font-size:12px;margin-right:5px"></i>{{c.printDate}}</span></sc-if>
+            <sc-if value="{{c.hasOrderQty}}" hint-placeholder-val="{{ false }}"><span>{{c.orderQtyLabel}}</span></sc-if>
           </div>
           <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid #1b1b1e;padding-top:10px">
             <span style="font:500 10px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)">{{c.qtyLabel}}</span>
@@ -187,6 +188,7 @@ window.__resources = Object.assign({}, window.__resources, {
             <span style="display:inline-flex;align-items:center;gap:5px;color:{{d.methodColor}}"><span style="width:8px;height:8px;border-radius:50%;background:{{d.methodColor}};flex-shrink:0"></span>{{d.methodType}}</span>
             <span>{{d.placements}}</span>
             <span>Planned {{d.plannedTotal}}</span>
+            <sc-if value="{{d.hasOrderQty}}" hint-placeholder-val="{{ false }}"><span>{{d.orderQtyLabel}}</span></sc-if>
             <sc-if value="{{d.hasDate}}" hint-placeholder-val="{{ false }}"><span><i class="ti ti-calendar" style="font-size:12px;margin-right:5px"></i>{{d.printDate}}</span></sc-if>
           </div>
           <sc-if value="{{d.wasCounted}}" hint-placeholder-val="{{ false }}">
@@ -424,8 +426,8 @@ class Component extends DCLogic {
       navOpen:false,
     };
     this._demoRuns = [
-      { id:'demo1', name:'PR-0070', orderNumber:'00013491', customer:'Northside FC', methodType:'Screen Print', pressName:'Press 2', scheduledQty:40, resultStatus:'Draft', totalMisprint:null, totalDamaged:null, totalIncomplete:null, needsReschedule:false },
-      { id:'demo2', name:'PR-0068', orderNumber:'00013488', customer:'Ridgeway HS', methodType:'Embroidery', pressName:'EMB 1', scheduledQty:24, resultStatus:'Submitted', totalMisprint:2, totalDamaged:0, totalIncomplete:6, needsReschedule:true },
+      { id:'demo1', name:'PR-0070', orderNumber:'00013491', customer:'Northside FC', methodType:'Screen Print', pressName:'Press 2', scheduledQty:40, orderQty:300, resultStatus:'Draft', totalMisprint:null, totalDamaged:null, totalIncomplete:null, needsReschedule:false },
+      { id:'demo2', name:'PR-0068', orderNumber:'00013488', customer:'Ridgeway HS', methodType:'Embroidery', pressName:'EMB 1', scheduledQty:24, orderQty:24, resultStatus:'Submitted', totalMisprint:2, totalDamaged:0, totalIncomplete:6, needsReschedule:true },
     ];
   }
   bg(fn){ const a=window.CAApi; return (a&&a.backgroundLoad) ? a.backgroundLoad(fn) : fn(); }
@@ -689,7 +691,22 @@ class Component extends DCLogic {
         statusBg: counted?'#18230D':'#241C0A',
         statusBorder: counted?'#3D5418':'#5E4A14',
         needsReschedule: !!r.needsReschedule,
-        qtyLabel: r.scheduledQty!=null ? (r.scheduledQty+' scheduled') : '—',
+        qtyLabel: r.scheduledQty!=null ? (r.scheduledQty+' scheduled') : '\u2014',
+        /* B20. The ORDER's garment count, next to -- and worded distinctly
+           from -- this RUN's own figure beside it ("40 scheduled"). Both are
+           real and they routinely differ: a job is split across runs, and
+           under D11 a Front+Back method's runs legitimately sum to twice the
+           order. So this deliberately makes NO subset claim and gets NO badge,
+           colour or warning; it reads "300 garments on this order" and stops.
+           runQtyHint is the same shared wording index.html, pre-production.html
+           and calendar.html already use, passing null for the run figure --
+           one formatter, per B10's lesson about copy-pasted vocabulary.
+           orderQty absent (server could not count it) -> '' -> the line is
+           hidden. Never "0 garments", which would be a claim. */
+        orderQtyLabel: (window.CAApi && window.CAApi.runQtyHint)
+          ? window.CAApi.runQtyHint(null, r.orderQty) : '',
+        hasOrderQty: !!((window.CAApi && window.CAApi.runQtyHint)
+          ? window.CAApi.runQtyHint(null, r.orderQty) : ''),
         hasLosses: counted && (loss>0||inc>0),
         lossLabel: [loss?loss+' ruined':null, inc?inc+' short':null].filter(Boolean).join(' · '),
         isClean: counted && loss===0 && inc===0,
@@ -1006,6 +1023,12 @@ class Component extends DCLogic {
         methodColor: methColor(d&&d.methodType),
         placements: d?(txt(d.placements)||'').split(';').join(' · '):'',
         plannedTotal: String(rowsSrc.reduce((a,r)=>a+(Number(r.plannedQty)||0),0)),
+        // B20, same rule as the card: the order's own count, no subset claim,
+        // hidden entirely when the server could not establish it.
+        orderQtyLabel: (window.CAApi && window.CAApi.runQtyHint)
+          ? window.CAApi.runQtyHint(null, d && d.orderQty) : '',
+        hasOrderQty: !!((window.CAApi && window.CAApi.runQtyHint)
+          ? window.CAApi.runQtyHint(null, d && d.orderQty) : ''),
         statusLabel: d&&d.resultStatus==='Submitted'?'Counted':'To Count',
         statusColor: d&&d.resultStatus==='Submitted'?'#BBD382':ACCENT,
         statusBg: d&&d.resultStatus==='Submitted'?'#18230D':'#241C0A',
