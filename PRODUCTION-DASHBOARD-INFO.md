@@ -213,6 +213,34 @@ Explain in plain language, not jargon — "branch", "merge" and "checked out" ha
 unpacking, and unpacking them was never wasted. Lead with what you actually verified and what you
 did not. He would rather hear "I was wrong about that" early than have it stand in a document.
 
+📌 **dev2 and staging hold TEST data. It does not need to be perfect, and records in them are not
+precious** (Anthony, 2026-09-09). Deleting a run, breaking an order, leaving a field stale to preserve
+a reproduction — all fine, and none of it needs asking about first. **What still needs care is
+BEHAVIOUR, not records:** an org-level change (a flow version, a picklist value, FLS, a field) travels
+to production with E7.4 and is a different thing entirely from a scratched-up test order.
+
+⚠️ **The cost of getting this backwards is real and it has now been paid once.** The E7.7 execute test
+was deferred for days as "that means destroying real data", then run with a deliberately chosen
+throwaway and a recycle-bin note — and it took one delete to find B19, a P0 that had been invisible.
+**When a test needs a record destroyed in a sandbox, destroy it.**
+
+🪤 **The reverse trap, and it is the one that would actually cost something.** A sweep of this file on
+2026-09-09 looking for "stale sandbox data we can drop" found that **almost every item that reads like
+housekeeping is metadata, and metadata travels to production with E7.4.** Do not bin these:
+
+| Reads like tidying | Actually |
+|---|---|
+| "the four staging-only fields… hand deletions" (§4 B4, §9) | **Custom fields.** `Actual_Good_Qty__c` is a *good quantity* field on the object whose whole model is *only problems are recorded* — the field **D1 says must not exist** |
+| "`Quantity_Completed__c` / `Reprint_Quantity__c` should be deleted" (§6) | Custom fields, same |
+| "`Credit/Refund` … a picklist cleanup" (§4 B9) | A **restricted picklist value**. Three of five overlap, and an AM will be choosing from that list |
+| "FLS on `Run_Print_Location__c`" (§4 B4) | Field-level security — **arrives off on every change set** |
+| "`Production_Calendar_Setting__c` has zero records" (E7.1) | A **config record the calendar cannot run without**, not throwaway data. Records never travel in a change set |
+| the rogue `IsSyncing` quote (§2) | The *quote* is disposable; the **diagnosis is a permanent recipe** — §2 says outright it will recur |
+| B9's orphaned template + Email Alert (§7) | Metadata, but genuinely inert — already marked *"delete them or leave them"* |
+
+📌 **The rule that separates them: does it exist in Setup, or in a record?** Setup travels and matters.
+Records in dev2 and staging do not.
+
 ---
 
 ## 2. The traps
@@ -771,7 +799,7 @@ estimated. Owner column: **CC** = Claude Code (repo change), **SF** = this Sales
 
 | Id | P | Owner | What |
 |---|---|---|---|
-| **B1** | ✅ DONE | CC | **Shipped and verified live 2026-09-02.** `adoptMockup()` in `_mockup-adopt.js`, called from `mockup-proxy`. Measured on the dev2 board before and after: **adopted (branch A, `068…`) went 0 → 39, blocked went 38 → 16**, and `ALLOWED_MOCKUP_HOSTS` is still in place for the paths that need it. The remaining 16 are orders nobody has opened yet plus any whose original link is now dead — the latter can never adopt and are the permanent floor. **Re-check the census in a few days: it should keep falling and must never rise.** Journey worth remembering: called a P0 defect, closed as not-a-defect on how the process was *documented* (D7), reopened when staging showed the same pasted links and zero Vault uploads in either sandbox, then fixed by adopting the data into the documented shape rather than widening an allowlist (D8). |
+| **B1** | ✅ DONE | CC | **Shipped and verified live 2026-09-02.** `adoptMockup()` in `_mockup-adopt.js`, called from `mockup-proxy`. Measured on the dev2 board before and after: **adopted (branch A, `068…`) went 0 → 39, blocked went 38 → 16**, and `ALLOWED_MOCKUP_HOSTS` is still in place for the paths that need it. The remaining 16 are orders nobody has opened yet plus any whose original link is now dead — the latter can never adopt and are the permanent floor. ✅ ~~**Re-check the census in a few days: it should keep falling and must never rise.**~~ **RUN 2026-09-09, and it closed this out — see B16.** dev2 now holds 10 designs with a mockup URL, 9 adopted and 1 not, and the hold-out is explained: its URL redirects, so adoption looks it up by the wrong string. 📌 **The "permanent floor" needed a third category this row did not have** — not just "nobody opened it" and "the link is dead", but **"the host redirects"**. Nothing further to count; B1 stays closed and B16 carries it. Journey worth remembering: called a P0 defect, closed as not-a-defect on how the process was *documented* (D7), reopened when staging showed the same pasted links and zero Vault uploads in either sandbox, then fixed by adopting the data into the documented shape rather than widening an allowlist (D8). |
 | **B2** | ✅ step 1 | CC (+SF) | **Step 1 DONE 2026-09-02**, branch `feat/b2-timer-persistence` (committed on `fix/b3-run-create-error`). ✅ **On `origin/main` and LIVE** — verified 2026-09-02 in the deployed `index.html`. localStorage keyed by method id; survives reload AND the 15s poll with the drawer closed (that second half was a live in-session bug, not just a reload one). Failed saves persist too, with their warning. Demo ids excluded. E2.4's ceiling verified against a rehydrated 14h timer — capped at 12h. **Step 2 still blocked on E2.3.** |
 | **B3** | ✅ | SF + CC | **DONE 2026-09-02**, branch `feat/b3-results-by-order`. ✅ **On `origin/main` and LIVE** — verified 2026-09-02: the deployed `counting.html` carries the sibling make-up panel, and the deployed `index.html` surfaces the real run-create reason via `errText(e)` instead of the old fixed sentence. Grouped by order (no endpoint change — orderId/goaNumber were already in the payload); headers describe the whole ORDER not the filtered tab, so a two-method job reads "1 of 2 runs · Screen Print · Heat Press" instead of "1 run". Sibling panel shows the make-up quantity ("20 screen print garments still to be made up") and the sibling's misprint/damaged **for reference only** — verified all six inputs still render empty, D5 intact. The swallowed `catch(_)` on run creation was fixed separately and first. |
 | **B4** | ✅ dev2 + staging | SF | **A second run on a method is created with NO line items, so there is nothing to count.** Verified live in dev2 2026-09-03 on order 00013503 (Walkthrough MPM), and the pattern holds across the org. The skeleton Flow allocates **per method**, so the first run takes the whole order quantity and every later run on that method gets zero rows. ✅ **DECIDED (D11): allocation becomes placement-aware.** ✅ **SHIPPED IN DEV2 2026-09-03** — new formula field `Run_Print_Location__c` plus one filter row in the Flow; both placements now get full rows. ✅ **Staging done and verified 2026-09-04** — the flow arrived as a DRAFT and needed activating by hand; production still has none of it (E7.4). The summed reprint is still unmeasured and same-placement second runs are still empty. Full detail below. |
@@ -787,11 +815,13 @@ estimated. Owner column: **CC** = Claude Code (repo change), **SF** = this Sales
 | **B13** | 🔴 P0 | CC | **A failed run query makes the calendar report the whole shop as unscheduled — and offer slots for all of it.** `calendar/index.js:360-435`: on failure `runsOk` goes false, the else-branch at `:430-432` logs, and **execution continues**. Every order then carries `ProductionRuns: []`, so `o.needsScheduling = o.ProductionRuns.length === 0` (`:456`) is true for everything, `busyByPress` is empty so a `suggestion` is computed for every order against **zero press occupancy**, and the response says `unscheduled: orders.length`. There is **no `runsUnavailable` flag anywhere in the response shape** (`:700-724`). 🚩 **This is not demo mode.** The board is live, the chip is green, and the data is fabricated by omission — a manager dragging those suggestions into place creates duplicate runs on top of work that already exists. The press fetch at `:315-333` has the same shape (`presses = []`, every order gets `noPresses:true`). 📌 **The convention already exists three times over** — `inbox/index.js:322` (`reprintsUnavailable`), `inbox/index.js:87` (`OrderItemsError`), `production-runs/index.js` (`locationAvailable`), and `production-orders/index.js:277-280` deliberately omits run counts rather than defaulting them to 0 *and says so*. The board with the highest stakes has the weakest convention. Full detail below. |
 | **B14** | 🔵 P1 | CC | **The counting screen's "could not load this run" message is structurally unreachable.** `counting.html:483` sets `err` and leaves `detail` null; `runReady` is `!!d && !st.runLoading && !st.result` (`:983`); and the `{{err}}` banner (`:293`) sits **inside** `<sc-if value="{{runReady}}">`, which opens at `:178` and closes at `:298` — verified by counting `sc-if` nesting, the banner is at depth 2 within it. So with `d` null, `runReady` is false, `runLoading` is false, `showResult` is false, and the press operator gets an "All Runs" back button over an **empty page**. ⚠️ The banner is fine for the other two `err` setters (submit failure `:604`, demo mode `:525`) because both have `detail` loaded — it is dead **only** for the load failure, which is the `?runId=` deep-link path, i.e. what a tablet does when it wakes up mid-count and what B5/E1.4 send people down. The catch also discards `e` entirely: no status, no `errText`, no `console.error`. Full detail below. |
 | **B15** | 🔵 P1 | CC | **Shipping's Complete is a phantom write in demo mode.** `shipping.html:820-828`: `if(!this._api \|\| this.state.connection!=='live'){ finish(); return; }` where `finish()` clears the poll and filters the order out of local state — so the manager confirms, the card disappears **exactly as it would on a successful write**, nothing reaches Salesforce and nothing is said. 📌 `canWriteNow()` / `reportBlockedWrite()` are defined in this very file at `:668-677` and used by `setLabelPrinted` nine lines below; the board's most consequential action does not use them. ⚠️ **Severity, stated honestly:** the orders in demo mode are demo orders, so no real order is harmed. The harm is that a board which has *silently fallen into demo mode* — the entire reason the amber chip exists — accepts Completes all afternoon that go nowhere. This is the E4.3 phantom-save pattern on the one path E4.3 did not sweep. `deleteShipmentEntry` (`:709-713`) has the same shape but touches only `_demoShipments`. Full detail below. |
-| **B16** | 🔵 P1 | CC | **Mockup adoption matches on the post-redirect URL, so a redirecting host can never adopt.** `mockup-proxy/index.js:220` sets `current = new URL(raw)` and `:246` reassigns it on every redirect hop; `:277` then passes `current.toString()` into `adoptMockup`, which finds the record by exact match — `WHERE Mockup_URL__c = '<final url>'` (`_mockup-adopt.js:113-116`). But `Design__c.Mockup_URL__c` holds **`raw`**, the URL a human pasted. Any host that 301s therefore returns `no_adoptable_design` forever and the proxy takes branch B on every single load — **the treadmill D8 was written to end.** Even with no redirect, `new URL(raw).toString()` normalizes (lowercased host, percent-encoding, trailing slash), so an exact match can still miss. `raw` is in scope at `:277`; passing it is the whole fix. ✅ **This does not contradict B1's measurement** (adopted 0 → 39) — most direct image URLs do not redirect. What it does is add a **third category to what B1 calls "the permanent floor"**: hosts that redirect. 🔧 **Testable prediction, and it is B1's own instruction:** the census stalls above 16 and stops falling. Full detail below. |
+| **B16** | 🔴 CONFIRMED | CC | **Mockup adoption matches on the post-redirect URL, so a redirecting host can never adopt.** `mockup-proxy/index.js:220` sets `current = new URL(raw)` and `:246` reassigns it on every redirect hop; `:277` then passes `current.toString()` into `adoptMockup`, which finds the record by exact match — `WHERE Mockup_URL__c = '<final url>'` (`_mockup-adopt.js:113-116`). But `Design__c.Mockup_URL__c` holds **`raw`**, the URL a human pasted. Any host that 301s therefore returns `no_adoptable_design` forever and the proxy takes branch B on every single load — **the treadmill D8 was written to end.** Even with no redirect, `new URL(raw).toString()` normalizes (lowercased host, percent-encoding, trailing slash), so an exact match can still miss. `raw` is in scope at `:277`; passing it is the whole fix. ✅ **This does not contradict B1's measurement** (adopted 0 → 39) — most direct image URLs do not redirect. What it does is add a **third category to what B1 calls "the permanent floor"**: hosts that redirect. ✅ **PROVEN AGAINST DEV2 2026-09-09 — this is no longer a reading.** dev2 now holds **10** `Design__c` records with a mockup URL: **9 adopted** (`/sfc/servlet.shepherd/version/download/068…`) and **1 not**, and the hold-out is `https://freepngimg.com/save/10811-calendar-png-picture/1024x1024` — a host on B1's own blocked list. **That URL redirects**, measured: it lands on `https://freepngimg.com/download/calendar/7-2-calendar-png-picture.png` (HTTP 200, `image/png` — the image is alive and fine). **End-to-end proof:** `GET /api/mockup-proxy?url=…` was called with it, the proxy served the bytes correctly, and eight seconds later the record was **unchanged** with `LastModifiedDate` **2026-08-19** — three weeks old and predating D8 adoption shipping on 09-02. So adoption ran, searched for the post-redirect URL, found no record, and gave up silently. Normalization was ruled out separately (`new URL(raw).toString()` is byte-identical for this URL), which isolates the redirect as the cause. Full detail below. |
 | **B17** | 🔵 P1 | CC | **The prep checklist rollup turns a failed query into "nothing to do", silently.** All four `runQuery` calls in `_ppi-checklist.js` destructure `{ records }` and **discard `ok`** (`:109`, `:144`, `:160`, `:177`), while `runQuery` (`_sf.js:282-312`) returns `{ok:false, records:<partial>}` on failure. At `:109` a failed lookup becomes `items.length === 0` → `continue`, **with no log at all** — the forward cascade is skipped and nothing anywhere records it. At `:144` a failed lookup is indistinguishable from "item not found". ⚠️ **Severity, stated honestly rather than inflated:** at `:160`/`:177` the concern is `every()` evaluated over a truncated page and written to `Production_Method__c` — but a method's `Pre_Production_Item__c` count will never approach 2000, so that half is **theoretical**. The **silent skip is the real one**, it is routine, and it lands on the fields that decide whether a job goes to the press (`Screens_Completed__c`, `Inks_Mixed__c`). This is the "failures must not look like success" rule, broken in the quietest possible way. Full detail below. |
 | **B18** | 🔵 P2 | CC | **`run-line-items` compares Salesforce Ids on the full string, so a 15-char Id breaks the endpoint.** `SF_ID` accepts 15 **or** 18 characters and SOQL `WHERE Id = '<15-char>'` matches happily, so a 15-char `runId` reaches `run-line-items/index.js:253` (`l.ProductionRun__c === runId`), `:344-346` and `:376` and fails every one. GET then returns `lines: []` while `allocatedElsewhere` **double-counts this run's own rows** — an allocation grid reading "nothing allocated here, everything allocated elsewhere". PATCH returns `line_not_found` for every row. 📌 **The convention exists and its sibling follows it:** `run-results/index.js:436` compares on the first 15 chars under the comment *"Salesforce returns 18-char Ids; a caller may hold the 15-char form."* Low priority only because every caller in this repo passes the 18-char form today; it is a trap for the next one. Full detail below. |
+| **B19** | 🔴 P0 | SF | **`Order.Print_Date__c` writes are silently reverted on most orders — and it defeats BOTH rollups.** Found 2026-09-09 while diagnosing E7.7. A plain `Database.update` setting the field returns **`isSuccess() = true`** and the field reads back as its **original value** in the same transaction. Not a rejected write — a rejected write returns `false` with an error. Something in the Order's own update path rewrites it before commit, and because the DML reports success **nothing anywhere logs a thing.** ⚠️ **Not universal, and that is the useful clue:** a self-restoring probe across the 4 most recently modified orders with a print date found **3 reverted, 1 accepted** — 00013467 ✗, 00013493 ✓, 00013511 ✗, 00013508 ✗. So it is conditional automation, not a locked field, and there is a discriminating condition to find. 🚩 **This is why E7.7 looks broken when its code is correct**, and it is bigger than E7.7: `functions/api/_print-date-rollup.js` writes the same field the same way from every run create/edit/delete on the dashboards, so **the app's own rollup has presumably been overwritten on those orders all along, silently.** Full detail below. |
+| **B20** | ⚠️ unpushed | CC | **DONE 2026-09-09**, branch `feat/b20-order-qty`, `calendar.html` + `counting.html` + `calendar/index.js` + `run-results/index.js`, +128/−6. **The ORDER's garment count on every method and run card.** **Most of this already existed and the audit is the deliverable:** `index.html:150` and `pre-production.html:136` already render `{{o.qty}} pcs` from `pivotItems()` over the order's own OrderItems — per ORDER, not per method, so both cards of a two-method job already agreed — and `runQtyHint()` in `ca-api.js` (2026-08-20) already puts *"50 of 300 garments on this order"* on the run rows of all three of those boards. Neither was touched. 🚩 **The real finding: there were TWO definitions of the order's garment count, and they disagreed.** `pivotItems()` and `sizeGrid()` skip any OrderItem with a blank `Size__c` — those are **non-garment lines** (setup fees, digitising), which `order-sizes/index.js` and `sizeGrid`'s own comment both state outright. `calendar/index.js`'s roll-up summed **every** OrderItem, so any job carrying a setup fee showed a higher count on the calendar than on the production board — and higher in the calendar drawer's Production Runs header (`TotalQuantity`) than in the Garments panel three inches below it (`sizeGrid.grand`). Fixed by adding `AND Size__c != null` to that one roll-up. **That, not the new rendering, is what makes B20's "one number, the same number" true.** **Added:** `counting.html` — the only board with no order count at all — now shows it on the run cards and the open run's header, from a **new fail-open chunked follow-up** in `run-results/index.js` (`garmentCountByOrder`), B8's pattern exactly: kept out of the SELECT the screen depends on (trap 1), chunked through `runChunkedIdQuery` (trap 2 / B12), **absent rather than 0** when it cannot be established. Wording comes from the existing `runQtyHint` with a null run figure — *"300 garments on this order"* — so no fifth copy of the vocabulary (B10's lesson). `calendar.html` grid blocks show it at the `roomy` tier and in the hover title at **every** tier, because those blocks are 30px tall and already ration three tiers of detail; the order number must always survive. ⚠️ **No reconciliation, by design.** A run's figure and the order's routinely differ — a job split across runs, and under D11 a Front+Back method's runs legitimately sum to TWICE the order. The two are labelled distinctly (*"300 scheduled"* vs *"300 garments on this order"*) and there is deliberately **no badge, colour or warning** on a mismatch. **Verified** in a wrangler rig: a Front+Back order whose two runs each read 300 against a 300-garment order, rendering with no error treatment; a second order whose count could not be established rendering **no line at all** rather than "0 garments"; and the calendar block/tooltip doing the same. ⚠️ **Not verified against dev2** — that pass is still owed, and it is the one that proves the counts match Salesforce. |
 
-📌 **B11–B18 added 2026-09-09, and how they were found is part of the record.** They came out of a
+📌 **B11–B19 added 2026-09-09, and how they were found is part of the record.** They came out of a
 full read of the API layer and all nine boards, not from a test pass on the floor, so **every one is
 a reading of the code and none was reproduced against a live org.** Rule 1 says record what was
 measured — this is the honest label for all eight. Two of them (B11, B18) are settled by the
@@ -1089,6 +1119,48 @@ field-creation URL, which read as a lost `Customize Application` on the System A
 profile — a plausible story, since that profile had been edited the day after `Method__c` was
 created. It was wrong: going through the Object Manager UI by hand worked first time. **The direct
 URL was the problem, not the profile.**
+
+##### ✅ BOTH OPEN CHECKS ANSWERED AGAINST DEV2 — 2026-09-09
+
+**1. The summed reprint: ✅ CONFIRMED, and the arithmetic is right.** Order **00013504**
+(`801ca00000TebvdAAB`), Screen Print method PM-00117 with `Placements__c` = `Back;Front`, misprints
+recorded on **both** passes. `GET /api/rework-check?orderNumber=00013504` returns
+**`totalReworkQty: 12`**, and the per-line detail it prints adds up by hand: Front (PR-0093) 2+3+1,
+Back (PR-0094) 2+1 damaged+2, Heat Press 1. 🔑 **The point of the test is the per-order-product
+column:** order product `802ca000009zpurAAA` carries **2 on Front and 2 on Back and is counted as
+4** — placements really are summed, not double-counted per method and not taken from one pass only.
+✅ **And incomplete is correctly excluded** — PRLI-0086 carries `incomplete: 150` and contributes
+`reworkQty: 0`, which is D1's "incomplete is not a loss" holding in live data.
+⚠️ **One honest caveat:** `rework-check.js` imports only `_sf.js` and `_placements.js` — it does
+**not** share `_rework.js`'s summing code, it re-implements it. So this measures the diagnostic's
+arithmetic, and the diagnostic exists to mirror the builder. A reprint was **not** actually built
+here, because the verdict was `runs_not_submitted -- PR-0096=Draft` (gate 2, working exactly as
+designed and naming the run). **To close this completely, submit PR-0096 and confirm the built
+reprint carries 12.**
+
+**2. A run with a blank `Print_Location__c`: ✅ NOT the original defect — and the answer is neither
+option this story predicted.** The question was whether blank runs share a bucket or match every
+placement. **Measured: they do neither.** Three post-fix blank runs (PR-0102, PR-0103, PR-0104,
+created 2026-09-04, each on a method that already had a placed run holding the full quantity) each
+received a **full set of 5 rows, one per size** — so the original defect (no rows, nothing
+countable, misprints unrecordable) does **not** return for blank runs.
+
+⚠️ **But the rows carry `Planned_Qty__c` = NULL, not 0.** Read directly off PR-0102's five rows:
+`Planned_Qty__c`, `Incomplete_Qty__c` and `Misprint_Qty__c` all blank, `Run_Print_Location__c` blank
+as the formula should give, `Method__c` populated. That is the `Blank Each Quantity` → `Create Blank
+Rows` fallback firing — 🚩 **which means this story's claim that the fallback "is dead code in the
+only situation it was written for" is WRONG, or at least not true for the blank-placement path.** It
+demonstrably produces rows there. 📌 It also means the Flow writes **null** where this story says
+"rows at 0 are free… and they keep the Flow's own guard satisfied". Null satisfies the guard and
+sums to nothing just as well, so nothing is broken — but the codebase's **"0, not null"** rule says
+blank means *nobody touched this* and a number means *someone decided*, and these rows say nobody
+decided. Which, for a run covering none of the remainder, is arguably the honest answer. **Decide
+whether to leave it; do not "fix" it to 0 without deciding.**
+
+📌 **Also measured in passing:** four methods created after the fix — PM `LLKnEAO`, `LLO1EAO`,
+`LLhNEAW`, `LLmDEAW` — each show Front and Back runs **both** carrying the order's full quantity
+(1000/1000, 100/100, 11/11, 100/100). **D11 is working in live data**, not just on the one order it
+was tested on.
 
 ⛔ **What is NOT verified, and must not be written up as if it were:**
 
@@ -2115,6 +2187,38 @@ Three duplicate/near-duplicate pairs found in this org in two days —
 and this. 📌 **Standing rule: an ambiguous field label in this org is a warning sign. Check
 the API name before binding anything — a flow, a formula, or a SELECT — to it.**
 
+##### 🪤 TRAP — `origin/main` is a LOCAL ref, and on this machine it is stale by days
+
+**Cost a wrong answer on 2026-09-09.** `git cat-file -p origin/main:<file>` works fine on this repo
+even while `git diff` bus-errors, so it is tempting as a way to ask "is this story deployed?" **It
+answers a different question.** `origin/main` is a remote-TRACKING ref: it says what `main` looked
+like at the last successful `git fetch`. `.git/FETCH_HEAD` here is dated **2026-09-03**, and Anthony
+pushes through the GitHub web UI from a browser — which never updates this clone. So the local
+`origin/main` sat days behind the real branch.
+
+🚩 **What that produced:** a session reported B10, E2.6 and the B9 reporting half as "not on main",
+and B8 as "half-landed — board half deployed, server half not, so the badge silently renders
+nothing." **All of it was wrong. Every one of those was live.** Measured against the deployed site
+minutes later: `tokens.css` serves `--method-sp`, `index.html` serves 10 `runsInOrder` call sites
+(the E2.6 fix), and `/api/production-orders` returns `RunsTotal`/`RunsRemaining` on **90** methods.
+
+📌 **This is §1's own rule — *verify against the deployed artifact, not the repo* — failing in a new
+disguise, because the repo answer LOOKED like a measurement.** `git cat-file` gave real bytes off a
+real object; they were simply the wrong week's bytes.
+
+**The reliable checks, in order of preference:**
+
+1. **Fetch the deployed asset.** `fetch('https://culture-apparel-preprod.pages.dev/<file>?cb=' + Date.now())`
+   and count a marker string. Cache-bust, and remember `ca-api.js` and `tokens.css` are served
+   straight from the repo root.
+2. **Hit the endpoint** and look at the shape of what comes back — that is the only way to check
+   server-side code at all.
+3. `git fetch` **first** if you are going to trust `origin/main`. On this mount that may bus-error,
+   in which case fall back to 1 and 2 rather than trusting the stale ref.
+
+⚠️ **`git cat-file -p origin/main:<path>` is still the best tool for reading a file's committed
+history when the network is unavailable — just never as evidence of what is DEPLOYED.**
+
 ##### 📌 iCloud eviction, and how to get out of it
 
 On 2026-09-08 this file became unreadable to every shell tool for ~30 minutes:
@@ -2611,6 +2715,83 @@ sites**, matching `run-results`.
 
 ---
 
+##### B19 · `Order.Print_Date__c` writes are silently reverted, and it defeats both rollups
+
+**Found 2026-09-09**, while diagnosing why E7.7 failed its execute test. E7.7 was the symptom; this is
+the cause, and it is the larger story of the two.
+
+**What was measured.** A plain `Database.update` — no trigger, no rollup class involved:
+
+```apex
+Database.SaveResult sr = Database.update(
+    new Order(Id='801ca00000SJ1xyAAD',
+              Print_Date__c=Datetime.newInstanceGmt(2026,7,31,18,15,0)), false);
+// sr.isSuccess()                        -> true
+// [SELECT Print_Date__c ...] same txn   -> 2026-07-31 17:30:00   (the ORIGINAL)
+```
+
+🔑 **`isSuccess()` is TRUE and the stored value is the old one.** A write the platform rejects comes
+back `false` with a `Database.Error`. This one committed and was then rewritten. **That is why nothing
+is logged anywhere** — there is no error to log, so `Database.update(…, false)` has nothing to report
+and neither does the rollup class.
+
+⚠️ **NOT universal — corrected in the same session, before it was written up.** The first read of this
+was "the field cannot be written at all." A self-restoring probe over the 4 most recently modified
+orders carrying a print date (nudge +1h, read back, put the original back only if the nudge stuck)
+says otherwise:
+
+| Order | wrote | read back | stuck? |
+|---|---|---|---|
+| 00013467 | 18:30 | **17:30** | ❌ reverted |
+| **00013493** | 14:15 | **14:15** | ✅ **accepted** |
+| 00013511 | 18:00 | **17:00** | ❌ reverted |
+| 00013508 | 13:30 | **12:30** | ❌ reverted |
+
+**3 of 4 reverted, all reporting success.** So it is **conditional automation, not a locked field**,
+and 00013493 is the control that makes the condition findable. 📌 It is also **not specific to the
+E7.7 order** — three different orders behave the same way, which is what makes this a real defect
+rather than one bad record.
+
+##### 🚩 Why this is bigger than E7.7
+
+`functions/api/_print-date-rollup.js` writes **this same field, the same way**, and it is called from
+every run create, edit and delete on the dashboards. Its own header explains at length why the rollup
+belongs server-side. **If those writes are being reverted on the same orders, the app's print-date
+rollup has been quietly not working — and nothing would ever have surfaced it**, because the endpoint
+gets a 204, the helper reports `changed: true`, and the board re-reads the same stale value it had.
+
+⛔ **UNVERIFIED and the first thing to check:** whether the app's writes are reverted too. The Apex and
+the JS write the same field with the same shape, so the expectation is yes — but that is a reading,
+not a measurement. **The test is cheap:** edit a run's scheduled start from `index.html` on one of the
+three reverting orders, then read `Order.Print_Date__c` off the record. **Check the record, not the
+board.**
+
+##### What to look at, in order
+
+1. **Setup → Object Manager → Order → Fields → `Print_Date__c` → *Where is this used?*** Cheapest, and
+   it is the move that caught the `Misprint_Outcome__c` hazard in B9.
+2. **The Order-update automation.** §4 counts **19 flows on Order update in dev2** (20 in staging).
+   A **before-save** flow produces exactly this signature: DML succeeds, stored value is not what was
+   written, nothing logged.
+3. **Compare 00013493 against the other three.** It accepted the write. Whatever differs — record
+   type, `Order_Substatus__c`, whether it has `Proposed_Run__c` rows, whether it came through *Close
+   and Create Order* — is the entry condition of the thing doing the rewriting.
+4. **Where does the replacement value come from?** On 00013467 the field reverts to **17:30, the start
+   of the run that was deleted**. So the writer is reading a stored copy of the schedule that the
+   delete never touched — a `Proposed_Run__c` row and the Opportunity's committed date are the obvious
+   candidates.
+
+📌 **Do not "fix" this by editing `OrderPrintDateRollup` or `ProductionRunTrigger`.** Both were read
+in full and both are correct — see E7.7. Adding retries or a second write there would just lose the
+same race more loudly.
+
+⚠️ **Whatever is found, weigh it against D13 before changing anything.** D13 fixed the *policy* for
+this field (never blank it when the last run goes). If the reverting automation is itself an
+intentional rollup written by someone else, then this org has **two** writers for one field and the
+answer is which one wins — a product decision, not a bug fix.
+
+---
+
 ##### Closed. Do not re-open, do not re-audit.
 
 Week 1 — **E6.1** SOQL injection in production-methods · **E5.1** method edit / order stage ·
@@ -2855,14 +3036,138 @@ week numbers.
 | **E7.6** | ✅ CLOSED | Salesforce + App | **INVESTIGATED 2026-09-02. The original premise is wrong, and what is actually happening is worse.** The formula in dev2 reads, verbatim: `IF( ISBLANK(Duration__c), Print_Date__c +(2/24), Print_Date__c +(Duration__c/24))` — so a 2-hour fallback **does** exist, and `Duration__c` **does** reach the formula: of 20 scheduled orders, the 5 with a duration set (1, 3, 4, **4.5**) have `Print_End_Date_Time__c − Print_Date__c` **exactly equal** to it. 4.5 surviving also settles the decimal-places worry — **not the problem here.** ⚠️ **But the other 15 orders (75%) have `Duration__c` null and an end time EXACTLY equal to their start time — a zero-hour gap, where the formula says +2h.** Both boards prefill run Scheduled End from this field, so for three orders in four the New Run form opens with **Scheduled End == Scheduled Start**. Worse, `runDurationHours()` in `_priority.js` assumes **2 hours** in exactly this case (its comment claims that is "the same default `Print_End_Date_Time__c` already uses" — **that comment is wrong**), so the scheduling suggestion reserves 2h while the form prefills 0h, for 75% of orders. ✅ **ROOT CAUSE FOUND.** The SOQL was run against order `801ca00000T4m0aAAB`: `Duration__c` is **blank** and `Print_End_Date_Time__c` returns `2026-08-19T12:15:00Z` — **identical to `Print_Date__c`**, not +2h. The mechanism is Salesforce's **blank-field handling**: the "treat blank fields as zeroes / as blanks" option is only offered for formulas returning Number, Currency or Percent. This formula returns **Date/Time**, so the option is not shown — confirmed by opening the formula editor, where no such radio group exists — and Salesforce defaults to **treating blank number fields as zeroes**. `Duration__c` is therefore coerced to `0` *before* `ISBLANK` sees it, `ISBLANK(0)` is **false**, and evaluation always takes the second branch: `Print_Date__c + (0/24)` = `Print_Date__c`. 🚩 **The 2-hour fallback is dead code. It has never once executed since the field was created on 12 Jan 2023.** ✅ **FIXED IN DEV2 2026-09-02 by Anthony**, and independently verified. The formula is now `IF( Duration__c > 0, Print_Date__c + (Duration__c/24), Print_Date__c + (2/24) )` — testing the value rather than asking `ISBLANK` about one that has already been coerced, so blank and zero both fall to the 2-hour branch and a real duration still wins. **Verified twice over two different connections:** Anthony's Query Editor as himself, and the app's own read as the integration user over OAuth. Across the 20 orders on the calendar, **zero-hour gaps went 15 → 0**; the distribution is now 2h×15, 1h×2, 3h×1, 4h×1, 4.5h×1. Control checks: order `00013478` (blank duration) moved 12:15 → **14:15**, while `00013499` (4.5h) and `00013501` (4h) are **byte-identical to before** — the orders that already worked were not disturbed. All eight read endpoints still return JSON with real rows. **Staging: the same edit was applied by Anthony 2026-09-02.** ⚠️ Recorded on his word — staging is not reachable from browser automation, so unlike dev2 it has **not** been independently verified. E7.1 is the precedent for why that matters (dev2 done, staging assumed, story sat half-finished). **To make it airtight:** run the same two queries in staging — one blank-duration order should now show a 2-hour gap, one order with a real duration should be unchanged — and log the date and result in `VALIDATION-INTEGRATIONS.md`. **App half also DONE and LIVE.** `runFormWindow()` in `ca-api.js` floors the end at start + `RUN_FALLBACK_HOURS` (= 2, per D6) whenever `Print_End_Date_Time__c` is missing, unparseable, or not strictly after the start; `index.html` uses it in place of two bare `splitDT()` calls, and the false comment in `_priority.js` is gone. Verified on `origin/main` **and on the deployed site** — `runFormWindow` is present in the live `ca-api.js` and referenced by the live `index.html`. **Production is the only org left, and it belongs to E7.4** — it has none of this metadata yet, so the formula travels with that promotion rather than as a change of its own. ✅ **FORMULA FIXED BY ANTHONY 2026-09-02.** ✅ **APP HALF DONE 2026-09-02**, branch `feat/e7.6-run-end-floor`, unpushed — `runFormWindow()` in `ca-api.js` floors the New Run end at start + 2h whenever `Print_End_Date_Time__c` is missing, equal to or before the start; used by `openRunCreate()` (index) and `defaultRunForm()` (pre-production), and `runDurationHours()`'s false comment is corrected. Verified in a browser on both pages: the zero-gap order prefills 07:15→09:15, a healthy 4.5h order passes through 07:15→11:45 untouched, and feeding the guard's own output back in changes nothing. **Original note, kept for the record — an app-side story for Claude Code:** `openRunCreate()` prefills Scheduled End straight from this field, so it must never seed an end equal to or before the start; and `runDurationHours()` in `_priority.js` carries a comment claiming 2 hours is "the same default `Print_End_Date_Time__c` already uses", which is **false** and should be corrected whichever way the formula lands. |
 | **E7.4** | P0 | Peter Larson | Promote the full metadata set to production. Production has **none** of it — no Apex, no `Proposed_Run__c`, no calendar setting, no priority fields, no `Print_Location__c`, no flows. Promote from staging. **After deployment, by hand:** FLS for every new field (change sets deploy fields with FLS off) and permission-set assignments (assignments never travel). A clean "Deployment succeeded" is **not** evidence of either. The `Planned` value must exist in the restricted `Auto_Scheduling_Status__c` picklist before the app is pointed at production. 📌 **Carry E7.6's corrected formula with this promotion.** `Order.Print_End_Date_Time__c` must read `IF( Duration__c > 0, Print_Date__c + (Duration__c/24), Print_Date__c + (2/24) )` — **not** the original `ISBLANK` version, whose 2-hour branch can never execute because a Date/Time formula gets no blank-field-handling option and Salesforce coerces blank numbers to zero. If production is built from an old change set, this regresses silently and every order without a duration gets a zero-length print window again. |
 | **E7.5** | ⚠️ partly done | Ops | **The three `SF_ENV_PRODUCTION_*` secrets now EXIST** — verified 2026-09-02 in Pages → Settings → Variables and secrets (CLIENT_ID, CLIENT_SECRET, LOGIN_URL, all encrypted), and `/api/admin/sf-env` now reports production as `configured: true`. **Anthony did not set them.** The Cloudflare account is Peter's, so ask him to confirm before assuming. 🚨 **This is now ahead of E7.4, which is the dangerous order:** production has none of the metadata — no Apex, no `Proposed_Run__c`, no `Print_Location__c`, no calendar setting, no flows — yet the env switcher will offer it as a destination and the switch is global and instant. The only thing standing in the way is `SF_ENV_SWITCH_PIN`, which `admin/sf-env.js` checks with `safeEqual` and enforces **regardless of `ACCESS_ENFORCE`** (`requireCap` there is still report-only, so the PIN is the real gate). **Until E7.4 lands, treat production as configured-but-not-ready** and keep that PIN closely held. | Configure the production environment in Cloudflare. `SF_ENV_PRODUCTION_LOGIN_URL` / `_CLIENT_ID` / `_CLIENT_SECRET` from a production Connected App, with the Client Credentials run-as user chosen deliberately and its FLS reviewed. `SF_ZK_ORDER_FIELD_ID_PRODUCTION` is a per-org metadata Id that does **not** migrate with a change set. Verify the switch *back* to staging too — that is the rollback. |
-| **E7.7** | P2 | Salesforce | `ProductionRunTrigger` is after insert/update only, so deleting a run inside Salesforce skips `OrderPrintDateRollup` and leaves `Print_Date__c` stale. The app's delete path handles it; the Salesforce UI path does not. ✅ **INVESTIGATED 2026-09-09 — the premise is confirmed, and there is a SECOND gap the story does not mention.** **Confirmed in dev2 AND staging, identical:** `ProductionRunTrigger` is `Active`, `UsageAfterInsert` **true**, `UsageAfterUpdate` **true**, `UsageBeforeInsert` / `UsageBeforeUpdate` / `UsageBeforeDelete` / `UsageAfterDelete` / `UsageAfterUndelete` all **false**. Body: `trigger ProductionRunTrigger on Production_Run__c (after insert, after update)` -> `ProductionRunTriggerHelper.afterInsert/afterUpdate`, each of which calls `ProductionAutoSchedulerService.scheduleFromRuns` -> `ProductionEventPublisher.sync` -> `OrderPrintDateRollup.syncFromRuns`, in that order (the helper's own header explains why the order matters). ✅ **The fix is small, because the entry point already exists.** `OrderPrintDateRollup` exposes **two** public methods: `syncFromRuns(List<Production_Run__c>)` and **`syncOrders(Set<Id> orderIds)`**. Its three queries are `SELECT Order__c FROM Production_Method__c WHERE Id IN :methodIds`, then `SELECT Scheduled_Start__c, Actual_Start__c, PrintMethod__r.Order__c FROM Production_Run__c WHERE PrintMethod__r.Order__c IN :orderIds`, then `SELECT Id, Print_Date__c FROM Order WHERE Id IN :earliest.keySet()`. It **recomputes from scratch**, so `after delete` is the correct timing — the deleted rows are already gone from query 2, and `Trigger.old` still carries `PrintMethod__c` to resolve the order. Adding `after delete` to the trigger and an `afterDelete(Trigger.old)` to the helper is the whole change. ✅ **BUILT AND READ BACK 2026-09-09 in dev2 AND staging.** Two edits per org, helper first (the trigger will not compile against a method that does not exist yet):
+| **E7.7** | ⛔ BLOCKED on B19 | Salesforce | `ProductionRunTrigger` is after insert/update only, so deleting a run inside Salesforce skips `OrderPrintDateRollup` and leaves `Print_Date__c` stale. The app's delete path handles it; the Salesforce UI path does not. ✅ **INVESTIGATED 2026-09-09 — the premise is confirmed, and there is a SECOND gap the story does not mention.** **Confirmed in dev2 AND staging, identical:** `ProductionRunTrigger` is `Active`, `UsageAfterInsert` **true**, `UsageAfterUpdate` **true**, `UsageBeforeInsert` / `UsageBeforeUpdate` / `UsageBeforeDelete` / `UsageAfterDelete` / `UsageAfterUndelete` all **false**. Body: `trigger ProductionRunTrigger on Production_Run__c (after insert, after update)` -> `ProductionRunTriggerHelper.afterInsert/afterUpdate`, each of which calls `ProductionAutoSchedulerService.scheduleFromRuns` -> `ProductionEventPublisher.sync` -> `OrderPrintDateRollup.syncFromRuns`, in that order (the helper's own header explains why the order matters). ✅ **The fix is small, because the entry point already exists.** `OrderPrintDateRollup` exposes **two** public methods: `syncFromRuns(List<Production_Run__c>)` and **`syncOrders(Set<Id> orderIds)`**. Its three queries are `SELECT Order__c FROM Production_Method__c WHERE Id IN :methodIds`, then `SELECT Scheduled_Start__c, Actual_Start__c, PrintMethod__r.Order__c FROM Production_Run__c WHERE PrintMethod__r.Order__c IN :orderIds`, then `SELECT Id, Print_Date__c FROM Order WHERE Id IN :earliest.keySet()`. It **recomputes from scratch**, so `after delete` is the correct timing — the deleted rows are already gone from query 2, and `Trigger.old` still carries `PrintMethod__c` to resolve the order. Adding `after delete` to the trigger and an `afterDelete(Trigger.old)` to the helper is the whole change. ✅ **BUILT AND READ BACK 2026-09-09 in dev2 AND staging.** Two edits per org, helper first (the trigger will not compile against a method that does not exist yet):
 
 - `ProductionRunTriggerHelper` — new `public static void afterDelete(List<Production_Run__c> oldRuns)` calling `OrderPrintDateRollup.syncFromRuns(oldRuns)`, with a header explaining why AFTER delete, why only the rollup, and the D13 empty-order behaviour. dev2 class `01pca000002mKEfAAM` · staging `01pca000002n7vJAAQ`.
 - `ProductionRunTrigger` — signature now `(after insert, after update, after delete)` plus an `if (Trigger.isDelete) { ProductionRunTriggerHelper.afterDelete(Trigger.old); }` branch inside the existing `Trigger.isAfter` block. dev2 trigger `01qca000004l6Z8AAI` · staging `01qca000004nFhyAAE`.
 
 **Read back through the Tooling API, not off the page that saved it:** both orgs now report `Status Active`, `UsageAfterInsert true`, `UsageAfterUpdate true`, **`UsageAfterDelete true`**, `UsageBeforeDelete false`, and `LengthWithoutComments` **467 in both** — byte-identical, which is the parity check.
 
-⚠️ **IT COMPILES AND IT IS ACTIVE. IT HAS NOT BEEN EXECUTED.** No run was deleted to prove the rollup actually fires, because that means destroying real data. **Before trusting this, delete one run from a multi-run order in dev2 and confirm `Order.Print_Date__c` moves to the next earliest run.** A green save is not a passing test.
+🔴 **EXECUTED 2026-09-09 IN DEV2 — AND IT DOES NOT WORK. E7.7 IS NOT DONE.**
+
+This entry used to say "it compiles and it is active, it has not been executed… a green save is not
+a passing test." **The test has now been run, and the green save was indeed not a passing test.**
+
+| Step | Result |
+|---|---|
+| Order **00013467** (`801ca00000SJ1xyAAD`), 5 runs, `Print_Date__c` = **2026-07-31T17:30** — exactly PR-0033's start, so the rollup was correct going in | baseline ✅ |
+| Deleted **PR-0033** (`a3Xca000000GtjhEAC`) — the earliest run, sched 17:30 / actual 17:30, 0 line items, 1 calendar Event | deleted ✅, confirmed by `SELECT COUNT(Id)` going **5 → 4** |
+| Expected `Print_Date__c` to move to PR-0034 (actual 18:15, scheduled 18:30) | 🔴 **STILL 2026-07-31T17:30** — pointing at a run that no longer exists |
+| Trigger read back through the Tooling API **after** the delete | `Active`, `UsageAfterInsert` true, `UsageAfterUpdate` true, **`UsageAfterDelete` true**, `UsageBeforeDelete` false, `LengthWithoutComments` **467** — identical to what this story recorded when it was built |
+| Called the rollup **directly**: `OrderPrintDateRollup.syncOrders(new Set<Id>{'801ca00000SJ1xyAAD'})` | 🔴 **also failed to move it.** The Order's `LastModifiedDate` advanced (19:15:52 → 19:23:20), so the class ran and wrote — the value simply did not change |
+
+🔑 **What that last row rules out, and it is the useful part.** The deployment is not the problem: the
+trigger is active with `after delete` exactly as documented. And the trigger's delete path is not the
+only problem either, because **calling `syncOrders` by hand on a known-stale order also fails to
+correct it.** So the defect is inside `OrderPrintDateRollup`'s own recompute, on the path where the
+correct answer is *later* than the stored one.
+
+⛔ **NOT diagnosed — read the class, do not guess.** The obvious hypothesis is that it only ever moves
+`Print_Date__c` **earlier** (a monotonic guard), which would make this story's premise — deleting the
+earliest run pushes the date forward — unreachable without changing that rule. ⚠️ **That is a
+hypothesis and it was NOT confirmed:** the experiment written to test it (set the date far in the
+future, re-run `syncOrders`, see whether it pulls back to 18:15) never executed — `LastModifiedDate`
+did not move, which is how that was caught rather than assumed. **Next step: read
+`OrderPrintDateRollup`'s body**, specifically whether the final update is conditional on direction and
+whether `earliest.keySet()` is populated at all when the recomputed value is later than the stored one.
+
+📌 **The app side does not have this defect.** `_print-date-rollup.js` recomputes unconditionally —
+*"`Actual_Start__c` if it exists, else `Scheduled_Start__c`"*, earliest wins — and writes whenever the
+value differs. **So Apex and the app do NOT agree**, which is an assumption D13 leans on. D13's
+*decision* (never blank when the last run goes) is unaffected and still stands; what is now in
+question is the broader claim that the two implementations behave identically on every other path.
+
+📌 **A standing reproduction case, deliberately left in place.** Order **00013467** carries
+`Print_Date__c = 2026-07-31T17:30` pointing at a **deleted** run, while its earliest real run is at
+18:15. **Use it** — it is the defect, on demand, with no setup. Do not "tidy" it back; the point of it
+is that it is wrong. (It also cannot be tidied — that is B19.) ⚠️ **This is dev2 test data and it does
+not need repairing** — see §1, *Working with Anthony*.
+
+
+##### ✅ DIAGNOSED 2026-09-09 — it is NOT the trigger, and it is NOT `OrderPrintDateRollup`
+
+**Something in the Order's own update automation overwrites `Print_Date__c` inside the same
+transaction, and reports success while doing it. E7.7's code is correct and is simply inert.**
+📌 **The cause is now its own story — see B19**, which measures how widespread this is (3 of 4 sampled
+orders revert; one accepts) and carries the investigation. ⚠️ An earlier draft of this section said the
+field "cannot be written at all" — that was measured on **one** order and was too strong.
+
+**The proof, in one Execute Anonymous block** — no rollup, no trigger, just a plain DML:
+
+```apex
+Database.SaveResult sr = Database.update(
+    new Order(Id='801ca00000SJ1xyAAD',
+              Print_Date__c=Datetime.newInstanceGmt(2026,7,31,18,15,0)), false);
+System.debug(sr.isSuccess());                                   // -> true
+System.debug([SELECT Print_Date__c FROM Order WHERE Id=:oid]);  // -> 2026-07-31 17:30:00
+```
+
+```
+SET success=true
+SET readback=2026-07-31 17:30:00
+```
+
+🔑 **`isSuccess()` is TRUE and the value is the OLD one.** That is not a rejected write — a rejected
+write returns `isSuccess() = false` with an error. This is a write that committed and was then
+rewritten by something else before the transaction ended.
+
+**Everything else was ruled out first, in this order:**
+
+| Ruled out | Evidence |
+|---|---|
+| The trigger is not deployed | Tooling API: `Active`, `UsageAfterDelete` **true**, `LengthWithoutComments` **467** |
+| The class is disabled | Log: `OrderPrintDateRollup.disabled = false` |
+| The class computes the wrong answer | Its computation replicated line-for-line: `earliest = {801ca00000SJ1xyAAD=2026-07-31 18:15:00}` |
+| The class decides not to write | Same probe: `stored=17:30 want=18:15 differs=true` — so `toUpdate` is non-empty and line 112 runs |
+| A **monotonic guard** (only ever moves the date earlier) | ⚠️ **This was the leading hypothesis and it is WRONG.** Line 104 is a bare `if (o.Print_Date__c != want)` with no direction test |
+| The class's DML failed and was swallowed by `allOrNone=false` | No `OrderPrintDateRollup: Order … update failed` line anywhere in the log |
+| `ProductionAutoSchedulerService` re-packed the runs into the old slot | All four surviving runs still carry `LastModifiedDate` **2026-08-27** — untouched |
+
+📌 **The class is well-written and is not at fault.** Its recompute matches
+`functions/api/_print-date-rollup.js` exactly — *effective start = `Actual_Start__c` if present, else
+`Scheduled_Start__c`; earliest wins* — verified by reading the source, lines 79-94.
+
+🚩 **A stale claim inside the class's own header, worth fixing while you are there.** Lines 32-34
+still read: *"KNOWN GAP: run DELETE. ProductionRunTrigger is after insert/update only, so deleting a
+run directly in Salesforce does not recompute… Closing that needs a change to Uros's trigger itself
+-- deliberately not done here."* E7.7 made that change; the header was never updated. Anyone reading
+this class first will conclude the gap is still open by design.
+
+⛔ **WHAT IS STILL UNKNOWN — the next question, and it is a different investigation.** *Which* Order
+automation rewrites `Print_Date__c`, and where it gets **17:30** from. Note what that value is: the
+start time of the run that was **deleted**. So the writer is reading a stored copy of it from
+somewhere that the delete did not touch — a `Proposed_Run__c` row, an Opportunity field, or a
+scheduling screen's saved value are the obvious candidates.
+
+**Where to look, in order:**
+
+1. **Setup → Object Manager → Order → Fields → `Print_Date__c` → *Where is this used?*** This is the
+   same move that caught the `Misprint_Outcome__c` hazard in B9, and it is the cheapest.
+2. **The Order-update flows.** §4 already counts **19 flows on Order update in dev2** (20 in
+   staging). One of them is the writer. A before-save flow would produce exactly this symptom —
+   success reported, old value stored.
+3. **Re-entrancy is visible in the log and is a clue:** during a single `syncOrders` call,
+   `syncFromRuns` was re-entered **twice** (log lines `[33]` / `[63]`). Something in the Order's
+   update path reaches back into `Production_Run__c`, which re-fires `ProductionRunTrigger`. Whatever
+   does that is likely the same automation.
+
+📌 **What this means for the story.** E7.7's code change is **correct and can stay**. It is simply
+inert, because nothing can move this field while that other automation is in place. **Do not "fix"
+E7.7 by editing the trigger or the rollup again** — both were checked and both are right. And note
+the app has the same exposure: `_print-date-rollup.js` writes the same field the same way, so the
+dashboards' own rollup is presumably being overwritten too, silently, and has been all along.
+
+📌 **Two smaller findings from the same session, both worth keeping:**
+
+1. 🪤 **Delete is not on the Production Run Lightning page layout.** The record page's action menu
+   offers only *Submit for Approval*. So the "somebody deletes a run in the Salesforce UI" scenario
+   this story guards may not be reachable from the record page at all — it took Execute Anonymous.
+   Worth checking the list view and the method's related list before deciding how urgent this is.
+2. 🪤 **The Developer Console Query Grid's "Delete Row" silently does nothing.** Selecting the row,
+   clicking *Delete Row* and confirming *"Delete 1 rows from Production_Run__c?"* removed the row
+   from the grid and **left the record intact**, with no error anywhere — SOQL still returned it
+   afterwards. `delete [SELECT …]` in Execute Anonymous worked first time. **Never trust the grid's
+   delete as evidence that anything was deleted.**
 
 🚩 **Code coverage is 0% on both the trigger (0/7) and the helper (0/10) in both orgs.** That is pre-existing, not caused by this change, but it is now **E7.4's problem**: production deployment needs 75% org-wide, and this change adds uncovered lines to both. Do not discover that during the promotion.
 
@@ -3764,8 +4069,13 @@ Listed so nothing is picked up twice.
   decision — including the open one on cleared allocation rows.
 - **Peter Larson:** E7.2 (Apex test classes — the long pole on the whole project, start now),
   E7.4 (metadata promotion).
-- **This Claude project, via Salesforce in Chrome:** E7.1 staging half, E7.3, E7.6, E7.7, E7.8,
+- **This Claude project, via Salesforce in Chrome:** E7.1 staging half, E7.3, E7.6, E7.8,
   E2.3 field + FLS verification, and running the E8 checklists against a real org.
+  🔴 **B19 (new, 2026-09-09) belongs here and is P0** — find which Order automation reverts
+  `Print_Date__c`. Start with *Where is this used?* on the field, then the 19 Order-update flows,
+  then diff order **00013493** (which accepts the write) against **00013467 / 00013511 / 00013508**
+  (which revert it). ⛔ **E7.7 is blocked on it** — E7.7's code is correct and already deployed; it
+  cannot work until B19 is answered, so do not re-open the trigger or the rollup class.
 - **Anthony + shop floor:** E9.1, E9.2, E9.3, E9.6, E9.7, E9.8 — tablets, connectivity, soak,
   guides, pilot.
 
@@ -5076,6 +5386,14 @@ Newest first. One line per change; link to the story that carries the detail.
 
 | Date | What | Where |
 |---|---|---|
+| 2026-09-09 | **The order's garment count on every method and run card (B20)** — mostly an audit: index, pre-production and all three boards' run rows already had it via `pivotItems()` and `runQtyHint()`. 🚩 **Found two disagreeing definitions of the count** — `calendar/index.js` summed every OrderItem while `pivotItems`/`sizeGrid` skip blank-`Size__c` non-garment lines (setup fees, digitising), so a job with a setup fee read higher on the calendar than on the board. One `AND Size__c != null` fixes it. Added the count to `counting.html` (the only board without it) from a new fail-open chunked follow-up, and to the calendar grid blocks. Unknown renders nothing, never 0; no warning on a run/order mismatch, which D11 makes legitimate. Branch `feat/b20-order-qty`, unpushed. **Not yet verified against dev2** | §4 B20 |
+| 2026-09-09 | 🔴 **B19 OPENED — `Order.Print_Date__c` writes are silently reverted, and it defeats BOTH rollups.** A plain `Database.update` returns **`isSuccess() = true`** and the field reads back as its **original** value in the same transaction — a committed write, rewritten before commit, with nothing logged because there is no error to log. ⚠️ **Not universal:** a self-restoring probe over the 4 most recently modified orders with a print date found **3 reverted, 1 accepted** (00013467 ✗, **00013493 ✓**, 00013511 ✗, 00013508 ✗) — so it is conditional automation, not a locked field, and 00013493 is the control that makes the condition findable. It is also **not specific to the E7.7 order**. 🚩 **Bigger than E7.7:** `_print-date-rollup.js` writes the same field the same way from every run create/edit/delete, so **the app's own rollup is presumably being overwritten on those orders too, and always has been** — the endpoint gets a 204 and the board re-reads the stale value. **That half is UNVERIFIED and is the first thing to check.** 📌 **E7.7 is reclassified ⛔ BLOCKED on B19**, not "not done" — its code is correct and deployed | §4 B19, §4 E7.7, §7 |
+| 2026-09-09 | ⚠️ **CORRECTION to my own write-up an hour old:** the E7.7 diagnosis first said `Print_Date__c` "cannot be written at all". That was measured on **one** order and was too strong; the 4-order probe found one that accepts the write. Corrected in §4 before it could be relied on. 📌 Rule 1 applies to conclusions as much as to statuses — *one* measurement is a measurement of *one thing* | §4 E7.7, §4 B19 |
+| 2026-09-09 | ✅ **E7.7 DIAGNOSED — and it is neither the trigger nor `OrderPrintDateRollup`. `Order.Print_Date__c` cannot be written at all.** A plain `Database.update` setting it to 18:15, with no rollup and no trigger involved, returned **`isSuccess() = true`** and read back **17:30** in the same transaction. A rejected write returns false with an error; this one committed and was rewritten by other Order-side automation. **Everything else was ruled out first:** trigger `Active` with `UsageAfterDelete` true (Tooling API); `disabled = false`; the class's computation replicated line-for-line gives `earliest = 18:15` and `differs = true`, so it does reach its DML; no `update failed` in the log; the runs were never touched (`LastModifiedDate` still 08-27). ⚠️ **The monotonic-guard hypothesis was WRONG** — line 104 is a bare `if (o.Print_Date__c != want)` with no direction test. 📌 **The class is correct and its change can stay**; it is inert. ⛔ **Open: WHICH Order automation rewrites the field, and where it gets 17:30 — the deleted run's start — from.** Start with *Where is this used?* on `Print_Date__c`, then the 19 Order-update flows. 🚩 **The app has the same exposure** — `_print-date-rollup.js` writes the same field the same way, so the dashboards' rollup is presumably being overwritten too, and always has been | §4 E7.7 |
+| 2026-09-09 | 🔴 **E7.7 EXECUTED IN DEV2 AND IT FAILED — the story is NOT done.** Deleted PR-0033, the earliest of 5 runs on order 00013467 (count confirmed 5 → 4). `Order.Print_Date__c` **did not move**: still `2026-07-31T17:30`, pointing at a deleted run, while the earliest surviving run is 18:15. **Deployment ruled out** — Tooling API read back `Active`, `UsageAfterDelete` **true**, `LengthWithoutComments` **467**, identical to when it was built. **The trigger's delete path ruled out too** — calling `OrderPrintDateRollup.syncOrders()` directly also failed to correct it, though `LastModifiedDate` advanced, so the class ran and wrote without changing the value. The defect is inside the class's recompute, on the path where the right answer is *later* than the stored one. ⛔ **Not diagnosed** — the monotonic-guard hypothesis was NOT confirmed; its test never executed. **Apex and `_print-date-rollup.js` therefore do NOT agree**, which D13 assumes; D13's own decision is unaffected. 🚩 Order 00013467 is left holding the stale date — the defect, reproducible on demand | §4 E7.7 |
+| 2026-09-09 | 🪤 **Two Salesforce UI traps found while running that test.** **Delete is not on the Production Run Lightning page layout** — the record page offers only *Submit for Approval*, so the "user deletes a run in the UI" scenario E7.7 guards may not be reachable there at all; it took Execute Anonymous. And **the Developer Console Query Grid's "Delete Row" silently does nothing** — row vanishes, confirm dialog accepted, record still returned by SOQL afterwards, no error anywhere. `delete [SELECT …]` in Execute Anonymous worked first time | §4 E7.7 |
+| 2026-09-09 | ✅ **DEV2 PASS, part 1 — three checks run against the live org, two of them long-outstanding.** **B16 PROVEN**, not inferred: dev2 holds 10 designs with a mockup URL, 9 adopted and 1 not, and the hold-out (`freepngimg.com/save/…`) **redirects** to `/download/calendar/7-2-…png`. The proxy was called with it, served the image correctly, and the record was untouched eight seconds later — `LastModifiedDate` still **2026-08-19**, predating D8. Normalization ruled out separately. **B4's summed reprint CONFIRMED** on order 00013504: `rework-check` returns `totalReworkQty: 12`, and one order product carrying 2 on Front and 2 on Back is counted as 4 — placements really are summed — while a line with `incomplete: 150` contributes 0. **B4's blank-placement question ANSWERED, and it is neither predicted outcome**: blank runs get a full 5 rows (so the original defect does not return) but with `Planned_Qty__c` **null, not 0**, via the fallback this file calls dead code | §4 B16, §4 B4 |
+| 2026-09-09 | 🪤 **NEW TRAP, and it produced four wrong claims before it was caught: `origin/main` in this clone is a STALE remote-tracking ref.** `.git/FETCH_HEAD` is dated 2026-09-03 and Anthony pushes from the GitHub web UI, which never updates this clone — so `git cat-file -p origin/main:<file>` answers "what did main look like last Thursday", in real bytes, looking exactly like a measurement. On that basis a session reported B10, E2.6 and B9's reporting half as unshipped and **B8 as half-landed and silently invisible**. All four were **live**. Corrected by fetching the deployed assets: `tokens.css` serves `--method-sp`, `index.html` serves 10 `runsInOrder` sites, `/api/production-orders` returns run counts on **90** methods. 📌 §1's *verify against the deployed artifact* rule, defeated by an artifact that looked deployed | §2 |
 | 2026-09-09 | ✅ **B11 FIXED — a refused composite no longer reads as a successful submit.** `run-results`' private `composite()` now checks `!resp.ok` alongside the sub-request list, and `console.error`s the status and body (that path logged nothing at all before). Branch `fix/b11-composite-status`, commit `81b67ec`, **unpushed**. **Reproduced before fixing**, against a fake Salesforce driving the real handler: batch refused → was 200 with the run stamped `Submitted`, now 502 with the run left `Draft`; both controls (happy path, single sub-request failure) unchanged. 🪤 **The first harness was a false pass** — it sent `misprint` where `COUNT_FIELDS` wants `misprintQty`, so `/composite` was never called and all three scenarios agreed on nothing; it now asserts the batch call happened. **A green board is not a passing test, harnesses included.** ⛔ dev2 pass still owed | §4 B11, §7 |
 | 2026-09-09 | 📌 **Everything from the 2026-09-09 code read now lives in THIS file and nowhere else.** The working notes it was written from have been deleted, per rule 3 — two documents on one subject is the drift this project keeps paying for, and a backup `.md` sitting in the repo is still a second `.md` in the repo. Folded in with the defects: the `.git` eviction measurement and the evicted-ref trap (§2), the `_priority-rollup.js` header trap (§4, beside E5.8), and a **traps-re-verified-clean table** (§4) so the defect list has a denominator | §2, §4, §7, §11 |
 | 2026-09-09 | 🔴 **Eight defects logged as B11–B18 from a full read of the API layer and all nine boards.** Two are the same class of bug the project keeps paying for — a failure that reaches the caller looking like success. **B11:** `run-results`' private `composite()` never reads `resp.ok`, so a wholly rejected write returns `{ok:true}` and the run is stamped `Submitted` — manufacturing the one piece of evidence D1's model depends on. **B12:** the production board builds an unbounded `IN` list out of the query its own comment calls unbounded; dev2 is nowhere near it, **staging is ~10x past it**. **B13:** a failed run query makes the calendar report the whole shop unscheduled and offer slots for all of it, at HTTP 200 with a green chip. Then B14 (counting's load-failure banner is unreachable), B15 (shipping's Complete is a phantom write in demo mode), B16 (mockup adoption matches the post-redirect URL, so a redirecting host never adopts), B17 (`_ppi-checklist` reads a failed query as "nothing to do"), B18 (`run-line-items` compares Ids on 18 chars). ⚠️ **All eight are readings of the code; none was reproduced against a live org** — each entry names the check that would settle it | §4 B11–B18, §7 |
