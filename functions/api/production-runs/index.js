@@ -375,15 +375,21 @@ export async function onRequestPost({ env, request }) {
     // is how an unscheduled order gets scheduled at all. Resolved from the
     // method because that is what the caller gave us. See _print-date-rollup.js.
     const orderId = (rewind && rewind.orderId) || (await orderIdForMethod(env, printMethodId));
-    if (orderId) await rollupPrintDateToOrder(env, orderId);
+    const pdNew = orderId ? await rollupPrintDateToOrder(env, orderId) : null;
 
     // `published` is reported, never thrown. The run EXISTS -- refusing the
     // whole request because the second write failed would leave the caller
     // believing nothing was created while a Planned run sits in Salesforce,
     // and there is no Confirm button left anywhere to rescue it with. The
     // dashboards surface this as a warning on the run instead.
+    // printDateReverted rides alongside `published` for the same reason it does:
+    // the run EXISTS, so this is a warning about a second write, not a failure
+    // of the first. See the read-back in ../_print-date-rollup.js (B19).
     return Response.json(
-      { ok: true, id: data.id, published, rewind },
+      Object.assign(
+        { ok: true, id: data.id, published, rewind },
+        pdNew && pdNew.reverted ? { printDateReverted: true, printDate: pdNew.printDate } : null,
+      ),
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (err) {
