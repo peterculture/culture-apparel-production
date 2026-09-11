@@ -476,6 +476,13 @@ lets the request through. Wiring it into a new endpoint therefore can't break th
 three that don't are `worker-login`, `worker-logout` and `station-login` — requiring a session to
 create a session is circular, and they are deliberately left open.
 
+📌 **Re-measured 2026-09-09 against `origin/main`: 22 of 23, and only `worker-logout` is ungated.**
+`worker-login`'s single `requireCap` hit is a comment, so it is ungated too — deliberately, per the
+rule above. ⚠️ **`station-login` no longer exists** (no `functions/api/station-login/` on
+`origin/main`), so listing it as one of the three is stale: `_station.js`'s own header records that
+the whole per-station auth system was removed because no page ever called it. Two deliberately-open
+routes now, not three.
+
 **Workers now derive capabilities.** `capsFor()` used to return `[]` for anyone who was not an admin
 or a manager, which meant enforcement would have locked every worker out of every station — count-in,
 item sub-status, ink and screen stock, and the counting screen. `DEFAULT_WORKER_CAPS` in
@@ -821,6 +828,7 @@ estimated. Owner column: **CC** = Claude Code (repo change), **SF** = this Sales
 | **B19** | 🔴 P0 | SF | **`Order.Print_Date__c` writes are silently reverted on most orders — and it defeats BOTH rollups.** Found 2026-09-09 while diagnosing E7.7. A plain `Database.update` setting the field returns **`isSuccess() = true`** and the field reads back as its **original value** in the same transaction. Not a rejected write — a rejected write returns `false` with an error. Something in the Order's own update path rewrites it before commit, and because the DML reports success **nothing anywhere logs a thing.** ⚠️ **Not universal, and that is the useful clue:** a self-restoring probe across the 4 most recently modified orders with a print date found **3 reverted, 1 accepted** — 00013467 ✗, 00013493 ✓, 00013511 ✗, 00013508 ✗. So it is conditional automation, not a locked field, and there is a discriminating condition to find. 🚩 **This is why E7.7 looks broken when its code is correct**, and it is bigger than E7.7: `functions/api/_print-date-rollup.js` writes the same field the same way from every run create/edit/delete on the dashboards, so **the app's own rollup has presumably been overwritten on those orders all along, silently.** Full detail below. |
 | **B20** | ⚠️ unpushed | CC | **DONE 2026-09-09**, branch `feat/b20-order-qty`, `calendar.html` + `counting.html` + `calendar/index.js` + `run-results/index.js`, +128/−6. **The ORDER's garment count on every method and run card.** **Most of this already existed and the audit is the deliverable:** `index.html:150` and `pre-production.html:136` already render `{{o.qty}} pcs` from `pivotItems()` over the order's own OrderItems — per ORDER, not per method, so both cards of a two-method job already agreed — and `runQtyHint()` in `ca-api.js` (2026-08-20) already puts *"50 of 300 garments on this order"* on the run rows of all three of those boards. Neither was touched. 🚩 **The real finding: there were TWO definitions of the order's garment count, and they disagreed.** `pivotItems()` and `sizeGrid()` skip any OrderItem with a blank `Size__c` — those are **non-garment lines** (setup fees, digitising), which `order-sizes/index.js` and `sizeGrid`'s own comment both state outright. `calendar/index.js`'s roll-up summed **every** OrderItem, so any job carrying a setup fee showed a higher count on the calendar than on the production board — and higher in the calendar drawer's Production Runs header (`TotalQuantity`) than in the Garments panel three inches below it (`sizeGrid.grand`). Fixed by adding `AND Size__c != null` to that one roll-up. **That, not the new rendering, is what makes B20's "one number, the same number" true.** **Added:** `counting.html` — the only board with no order count at all — now shows it on the run cards and the open run's header, from a **new fail-open chunked follow-up** in `run-results/index.js` (`garmentCountByOrder`), B8's pattern exactly: kept out of the SELECT the screen depends on (trap 1), chunked through `runChunkedIdQuery` (trap 2 / B12), **absent rather than 0** when it cannot be established. Wording comes from the existing `runQtyHint` with a null run figure — *"300 garments on this order"* — so no fifth copy of the vocabulary (B10's lesson). `calendar.html` grid blocks show it at the `roomy` tier and in the hover title at **every** tier, because those blocks are 30px tall and already ration three tiers of detail; the order number must always survive. ⚠️ **No reconciliation, by design.** A run's figure and the order's routinely differ — a job split across runs, and under D11 a Front+Back method's runs legitimately sum to TWICE the order. The two are labelled distinctly (*"300 scheduled"* vs *"300 garments on this order"*) and there is deliberately **no badge, colour or warning** on a mismatch. **Verified** in a wrangler rig: a Front+Back order whose two runs each read 300 against a 300-garment order, rendering with no error treatment; a second order whose count could not be established rendering **no line at all** rather than "0 garments"; and the calendar block/tooltip doing the same. ⚠️ **Not verified against dev2** — that pass is still owed, and it is the one that proves the counts match Salesforce. |
 | **B21** | ⚠️ unpushed | CC | **DONE 2026-09-09**, branch `feat/b21-sibling-methods`, `ca-api.js` + `index.html` + `pre-production.html`, +169/−8. **Inside a method card, how many methods the ORDER has and which one you are looking at.** **Audit first:** both drawers ALREADY listed every method on the order — same markup on both boards, fed by the per-order `/api/production-methods?orderId=` fetch — with type, placements, status and colour. What neither had was a **count**, a **self-marker**, or any reconciliation of count against visible cards. No new endpoint and no new field: the network tab shows the same requests before and after. 🚩 **The story's suggested data source would have been wrong.** It proposed counting `rec.ProductionMethods` via `methodsList()`, but this board's own query is rooted on `Production_Method__c` filtered to BOARD_STATUSES (`production-orders/index.js`), so that array **cannot contain a Pre-Production, On Hold or Cancelled sibling at all** — a two-method job whose second method is still in prep would have reported "1 method", which is the exact question this story exists to answer. Counted off the per-order fetch instead, which is unfiltered. **New shared helper `methodSiblings()` in `ca-api.js`** (plus `sameMethodId()`): excludes Cancelled from the count (the house convention — gate 3 of `createReworkIfNeeded`), returns `shown:false` for 0 or 1 so a **single-method order gets nothing at all — no count, no note, and no "This card" badge on the one row it was never ambiguous about**, and composes a note that reconciles BOTH discrepancies a manager can see: methods counted but with no card on this board, and cancelled methods visible in the list but left out of the count. ⚠️ **`onBoard` is a caller-supplied predicate, not `stageOfMethod()`.** Which statuses get a card is a property of the BOARD: index.html passes `stageOfMethod()` plus its `Order.Status = 'Complete'` override; pre-production.html shows exactly Pre-Production, so a sibling In Production is off ITS board while being perfectly visible on the other. The default would have made every pre-production card report itself as off-board. **Matched by Id (first 15 chars), never by `Type__c`** — under D11/B4 an order can carry two Screen Print methods on different placements and a type match would badge both. **Verified in a browser across all four cases from the story, reading the network tab for which method each drawer actually loaded:** single-method → nothing new; two-method → both cards say "2 methods on this order" and each marks itself; a 3-method order with one Pre-Production and one Cancelled → "2 methods on this order · One has no card on this board (Pre-Production) · one more is cancelled and not counted" against 1 visible card; and a Front+Back pair of Screen Print methods → told apart by placement, each marking the right one (confirmed by `methodId=mD1` vs `mD2` in the network tab, not by the screen). ⚠️ **Not verified against dev2** — that pass is still owed; 00013504 is the two-method order to use. 📌 Caught in the browser and not by smoke: the first cut referenced a local `api` in index.html's `renderVals`, which has none — the drawer died with a red `Root.renderVals(): api is not defined` overlay while the board itself looked perfect.  🚩 **Found while landing this: `pre-production.html` is CRLF on `origin/main` and LF on the entire unpushed stack** (`b47c233`, `25a2a15`, `0c96dda`, `81b67ec` all read 0 CRLF / 2935 LF). Some earlier commit rewrote the whole file's line endings, which is invisible in a normal diff but makes **any cherry-pick between the two lineages a whole-file conflict** — `<<<<<<<` at line 1, `>>>>>>>` at the last line. It did exactly that here. ⚠️ **And resolving it by taking the origin/main-based side silently reverted B10 in that file** (the tinted drawer chip, the 3px method stripe, and the `var(--method-*)` tokens) — caught by grepping for B10's own markers after the merge, not by smoke, which passed throughout. Anthony will hit the same conflict when he merges; the fix is to normalise `pre-production.html` back to CRLF on one side before merging, and to check B10's markers survive.|
+| **B22** | ⚠️ unpushed | CC | **DONE 2026-09-11**, branch `fix/b22-formula-html-in-name`, commit **`19b21e1`** (on top of `fix/b11-composite-status`), `functions/api/_sf.js` + `shipments/combine.js` + `shipments/split.js`. **Unpushed.** 🔴 **A HYPERLINK() formula field was being written straight into a Salesforce text field, and it broke COMBINE outright in every org.** Found by actually running §8 surface 3 item **3.6** against dev2 (2026-09-11), not by reading code. `combine.js` built `Name__c = "Combined w/ ${primaryLabel} - ${label}"` where both labels came from `GOA_Order_Number__c` — which is a **HYPERLINK() formula** and arrives as `<a href="/801ca00000PzawG" target="_self">20460-4</a>`: **53 characters carrying 7 characters of meaning**. The value sent was **121 characters** into a field that holds **80**, and Salesforce refused `leg0` with **`STRING_TOO_LONG`**. 📌 **Three things make this worse than a formatting slip.** **(1) It failed at TWO orders**, not at the 25 the composite ceiling talks about — so combine had never worked at any size, and **E5.10's raised 12→25 ceiling had therefore never been exercised against an org at all**, which is precisely what 3.6 existed to test. **(2) It travels.** A formula's definition ships with the metadata, so this is not dev2 data. Confirmed **read-only against staging** the same day: same anchor, 51–53 characters, same 121-character result. It would have broken combine in **production** on day one (E7.4). **(3) The codebase already knew.** `ca-api.js`'s `text()` has flattened these for the BOARDS since trap 6 was first written down — the client has been careful about this for months. The **server** simply never got an equivalent, and these were the only two places a formula value was written back rather than passed through (audited: `Customer_Order_Name__c`, the other HYPERLINK formula, is read-only everywhere server-side). **The fix:** new **`plainText()`** in `_sf.js` — tag-strip + entity decode + the same whitespace collapse `text()` does, so a written name reads like the board label. **Not DOMParser** (Workers have no DOM), and `&amp;` decodes **last** so `&amp;lt;` stays literal. Plus **`SF_NAME_MAX = 80`**, established empirically rather than guessed: a **61**-character split leg name was accepted by dev2 and a **121**-character combine one was not. Both call sites now budget against it — combine's template contributes 15 fixed characters so each label is clamped to 32, split's longest suffix is `" - Leg 25"` so its label is clamped to 71. Real GOA numbers are 5–8 characters, so **the clamp never bites on live data**; it is there so no order number can ever take a leg down again. 🚩 **`split.js` had the same bug and it was silent.** Its name is only 61 characters, so it FIT — split never failed, it just wrote an `<a href=…>` tag into every leg's `Name__c`, which is what a human reads in Salesforce. Fixed in the same commit; **this is the half nobody would have found by watching for errors.** **Verified** by `~/tmpwork/namefix.mjs`, which drives the real `onRequestPost` of both endpoints against a stubbed Salesforce and asserts on the `Name__c` in the actual `/composite` body: `Combined w/ 20460-4 - 20461-2` = **29 chars** (was 121), `20460-4 - Leg 1` = **15** (was 61), the `OrderNumber` fallback still fires when GOA is null or empty, and a **300-character** GOA clamps to **79**. 🚩 **Negative control run, per B11's lesson** — the labels were reverted to the pre-fix expressions and the harness was re-run: it reported **121 characters, html=YES**, the exact value dev2 rejected. The test can fail, so its passing means something. The harness also hard-exits if `/composite` was never called. ⚠️ **Not yet verified against an org** — that needs a deploy. **The moment it is live, re-run 3.6 and then 3.9**, both of which have been blocked on this. |
 
 📌 **B11–B19 added 2026-09-09, and how they were found is part of the record.** They came out of a
 full read of the API layer and all nine boards, not from a test pass on the floor, so **every one is
@@ -2251,6 +2259,40 @@ collecting the failures. Two things follow, and the second one is the useful one
   📌 **On this mount, read `ignoring broken ref` as *evicted*, not *lost*. Hydrate before concluding
   anything about it.**
 
+🎯 **2026-09-11 — THE ORDER TO HYDRATE IN. Stage `.git/objects/pack/*` FIRST; it is worth more than
+every other file combined.** Committing B22 hit the bus errors above, and this time the cause was
+pinned down rather than worked around. **Git mmaps every pack `.idx` on essentially any object
+lookup, so ONE dataless pack file makes almost every git command SIGBUS** — including commands that
+have nothing to do with the packed objects. `git hash-object -w` on a single working-tree file
+crashed. After staging the **six** files in `.git/objects/pack/` it worked immediately, and so did
+`git add`, `git write-tree`, `git commit-tree` and `git update-ref`. **Six files, not 688.**
+
+Working order, cheapest first — stop as soon as the command you need works:
+
+1. `.git/objects/pack/*` — **all of them** (.idx, .pack, .rev). This is the big one.
+2. `.git/HEAD`, `.git/config`, `.git/index`, `.git/packed-refs`, `.git/info/exclude`.
+   🚩 A dataless `.git/info/exclude` fails with a *different* message —
+   `fatal: cannot use .git/info/exclude as an exclude file` — which reads like a config problem and
+   is not one.
+3. The one ref in `.git/HEAD`, e.g. `.git/refs/heads/<branch>`, plus `.git/logs/HEAD` if you want
+   reflog writes to stop erroring.
+4. The specific commit object you are parenting onto (`.git/objects/<2>/<38>`). `commit-tree` reads
+   its parent, so this is the last thing that blocks a commit.
+
+⚠️ **`git status`, `git diff` and `git ls-tree -r` may STILL crash after all that, and it does not
+matter.** They walk into old blobs and trees that are still evicted. **Do not read a crash in those
+as the commit having failed** — verify instead with the cheap check that only touches new objects:
+`git rev-parse HEAD:<path>` against `git hash-object <path>` for each file you changed. All three
+matched for B22 and the commit was sound.
+
+🚩 **This mount also forbids `unlink`, which git does not expect.** Every `git add` /
+`write-tree` leaves a `.git/objects/**/tmp_obj_*` behind (`warning: unable to unlink … Operation not
+permitted`), and a crashed git leaves an `index.lock` that **cannot be removed** — the next git
+command then refuses with *"Another git process seems to be running"*. **`mv` works where `rm` does
+not**, so rename the lock aside (`mv .git/index.lock .git/index.lock.stale-$(date +%s)`) rather than
+hunting for a process that does not exist. The session that committed B22 left **4** stale locks and
+**25** `tmp_obj_*` files this way; they are inert, and `git gc --prune=now` clears them.
+
 📌 **The hydration trick is the same one that works on a document: get the file staged/copied through
 macOS rather than read through the shell.** And the permanent fix is still the one §1 names — move
 the repo out of the iCloud-synced Desktop folder. Every symptom in this subsection stops at that
@@ -2856,16 +2898,20 @@ delete a field.
 ⚠️ **Three ✅ stories are deliberately NOT in the closed list, and must not be added without a fresh
 check:**
 
-- **E4.8** and **E6.5** — unverified. Reads of `stats.html` and `run-results/index.js` from
-  `origin/main` came back empty on 2026-09-03, which was the folder erroring rather than the code
-  being absent, and a failed read is not evidence. Re-check both.
+- ~~**E4.8** and **E6.5** — unverified.~~ ✅ **BOTH RE-CHECKED AND CONFIRMED 2026-09-09.** The
+  2026-09-03 empty reads were indeed the folder erroring: `stats.html` on `origin/main` is 49,201
+  bytes and carries the fix at `:688` — `onSwitchAccount:()=>{ if(api.clearIdentity)
+  api.clearIdentity(); window.location.href='login.html'; }` — and `run-results/index.js:393` carries
+  `requireCap(request, env, "results.submit")`. E4.8 was also **re-verified end to end in a browser**,
+  not just read; see its story entry for the evidence table.
 - **E5.10** — landed, but its own entry says the Salesforce-touching paths are untested and need a
   real split and combine on staging. Code done, validation not.
 
-📌 **Still to confirm alongside E6.5:** the `orders.receive` gate on
-`functions/api/update-order-receiving/index.js`. The 2026-09-02 audit found it missing from `main`
-and recorded the fix as an **uncommitted working-tree change**. If that was never committed, a
-mutating route is ungated on the day `ACCESS_ENFORCE=1` goes on.
+~~📌 **Still to confirm alongside E6.5:** the `orders.receive` gate on
+`functions/api/update-order-receiving/index.js`.~~ ✅ **CONFIRMED COMMITTED 2026-09-09** — it is on
+`origin/main`: `import { requireCap }` at `:38` and `await requireCap(request, env, "orders.receive")`
+at `:70`. The 2026-09-02 worry that the fix lived only in the working tree does not apply; that route
+is gated for the day `ACCESS_ENFORCE=1` goes on.
 
 **Three of those shipped against a different design than the Asana text**, and the difference
 matters:
@@ -3184,7 +3230,7 @@ dashboards' own rollup is presumably being overwritten too, silently, and has be
 | **E8.1** | 📝 | **CHECKLIST WRITTEN 2026-09-02 — `VALIDATION-INTEGRATIONS.md`. Not yet run: writing it is the artifact, running it is the validation.** 40 items over **eight** surfaces, not seven — access and identity is the one that tends not to get counted, and it is the seam that is currently open. Every item names the expected Salesforce record state, and the stored picklist values in its appendix were read from live dev2 data and dev2 Setup rather than copied from the code, so no item asserts a value that does not exist. Carries the run log. **Next: run it in full against staging, with date, org and result recorded.** |
 | **E8.2** | 📝 | **SCENARIOS WRITTEN 2026-09-02 — `VALIDATION-SCENARIOS.md`. Not yet run.** All eight scripted, each naming the record state expected at every checkpoint **and its false pass** — the specific way it can look right while being wrong, drawn from bugs that have already shipped here (the Heat Press mis-classification reaching the order sheet; `combine.js` breaking only past twelve orders; a reprint failure wearing the "nothing to do" shape). S6 proves the reprint loop all the way round and records D5's reference-only rule as a check. ⚠️ **S6 is expected to FAIL at the make-up run step until B3's error-surfacing fix lands** — that is known, not a surprise. **Next: run S1–S8 against staging.** |
 | **E8.3** | P1 | Prove coexistence with the auto-scheduler. A `Planned` run's times survive a scheduler run; a Confirmed run publishes and un-confirming deletes; a Proposal-status run is still moved, as intended; press occupancy accounts for `Planned` runs so it doesn't double-book. Partially evidenced by the PR-0085 test — finish it. |
-| **E8.4** | P1 | Shipping and Zenkraft validation. Least-exercised board, no manual retry, polls every 6s for up to four minutes, carries E5.6 and E5.10. |
+| **E8.4** | 🔴 **P1 → treat as P0** | Shipping and Zenkraft validation. Least-exercised board, no manual retry, polls every 6s for up to four minutes, carries E5.6 and E5.10. ⚠️ **RE-RATED AND EXPANDED 2026-09-09 — it was thinner than the board deserves.** Its checklist (§8 surface 3) had **four** items, all about the label flow, and **tested neither split nor combine** despite this row claiming to carry E5.10 — the one story whose own entry says *"the Salesforce-touching paths are untested and need a real split and combine on staging."* **Six items added (3.5–3.10)**, each carrying the false pass that would otherwise make it green for nothing: split sized past the 25-subrequest ceiling (a 20-line order in two boxes is already **26** — an ordinary order, not a large one); combine past twelve orders; **Complete actually reaching Salesforce — B15, a CONFIRMED defect**, since `shipping.html:823` drops the card and writes nothing whenever the board is not live, and looks identical to success; `Complete` vs `Completed` read off the record (trap 5 — the confusion that sent B9's flow to the wrong trigger); Ship Now refused on a secondary order in a combined shipment (a banner is not a guard, and the server side is **unchecked**); and the board's own unbounded `IN` list tested against **staging**, not dev2 (B12 — dev2's ~73 board orders can never reach the limit, so testing there proves nothing). 📌 **Why the re-rate:** every other board has been driven hard in a rig this week; this one has not been touched, and it now carries one confirmed defect, an untested composite path that breaks on an ordinary order, and a live unbounded query. |
 | **E8.5** | ✅ | **DONE 2026-09-01**, branch `fix/e8.5-smoke-script`, unpushed. `node tools/smoke.mjs` — **2.4 seconds**, no network. Seven checks, every one an incident that really happened: an asset referenced but not committed (`tokens.css`, twice), an extensionless route file (S1), an import that does not resolve or is untracked (`_placements.js`'s near-miss), server modules that do not parse, board logic that does not parse (caught a real break during E4.5), plus `check-dc-templates.mjs` and `contrast.mjs` folded in. **Verified by replaying all eight failure modes in a throwaway worktree — 8 caught, 0 missed, and the clean tree passes.** Untracked files with broken imports warn rather than fail, which surfaces the `_to_delete` import that silently breaks `wrangler pages dev` without blocking a push. Install as a pre-push hook; hooks are not tracked, so each clone opts in. |
 | **E5.12** | ✅ | **DONE 2026-09-01**, branch `fix/e5.12-calendar-in-lists`, unpushed. Both halves done. **Four** unbounded IN lists, not one — runs by method, OrderItem, `Proposed_Run__c` and `Pre_Production_Item__c` — all now go through a new shared `runChunkedIdQuery` in `_sf.js` (200 Ids/chunk). The runs one needed *splitting* rather than chunking: it was `(date range) OR PrintMethod__c IN (...)`, and chunking that in place re-runs the range half per chunk, so it is now one range query plus chunked method queries merged through a Map keyed on run Id. **And it would have failed invisibly** — an over-long URL is an HTTP rejection, not a SOQL error, so the whole block fell into its `catch` and the calendar rendered with no runs and no explanation. Window span capped at `MAX_RANGE_DAYS = 366` (clamped, reported in `window.clamped`; the client never asks for more than 6 days), and `to` before `from` now returns `to_before_from` instead of reading as an empty shop. `inbox/index.js` converted off its own E3.4 chunk loop onto the shared helper — its 18 tests re-run green. 13 calendar + 10 helper tests. |
 | **E5.13** | ✅ | **DONE 2026-09-01**, branch `fix/e5.13-stale-comments`. Only one of the three cited comments was actually stale (`production-runs/index.js`); `orders/[id].js` was accurate and left alone, and `calendar/index.js:327` was the wrong location. `SELECTOR-CHANGE.md` rewritten — its Apex steps are still needed for staging and production, but its verification pressed buttons removed on 2026-08-21. |
@@ -3494,6 +3540,26 @@ Verified in a browser against a local `wrangler pages dev`:
 
 Swept all nine pages: `stats.html` was the only broken one. `calendar.html` looked missing to a grep
 for `onSwitchAccount` but is fine — it binds `onSwitchUser` and clears correctly at :1141.
+
+✅ **RE-VERIFIED 2026-09-09, and this time the flag in §4 can come off.** The 2026-09-03 read that
+came back empty was the folder erroring; `stats.html` on `origin/main` is 49,201 bytes and the fix is
+at `:688`. Re-run in a browser against a `wrangler pages dev` rig whose stub **records every request
+server-side**, because the one claim a code read cannot settle is whether a `keepalive:true` fetch
+fired during a navigation actually arrives:
+
+| | Result |
+|---|---|
+| Reproduced the trap first | with an identity seeded, `login.html` showed *"Welcome, Gian · MANAGER"* and the board list — **no PIN pad** |
+| `localStorage` after tapping Switch Account | `caShopWorkerName`, `caStationWorkerName`, `caShopRole` all **`null`** |
+| `POST /api/worker-logout` | **received by the server, once** — confirmed in the stub's own log, not in the network panel |
+| `login.html` on arrival | **"Enter your PIN to continue"** |
+
+Sweep re-run across all seven boards that have a Switch Account: every one reaches
+`clearIdentity()` — five via their own `switchUser()`, `calendar.html` via `onSwitchUser()` (`:1223`),
+`stats.html` inline (`:695`). `order-sheet.html` and `login.html` have no switch, correctly.
+📌 Worth knowing: **`stats.html` is the only board that navigates to `login.html`** to switch; the
+other six clear and re-open their own PIN gate in place (`nameOk:false`). Both end at a PIN prompt,
+so this is a difference in feel, not in safety.
 
 ##### E6.7 · `text()` strips HTML by assigning `innerHTML` — ✅ DONE 2026-09-01
 **File:** `ca-api.js:1702`
@@ -4621,6 +4687,324 @@ Least-exercised board. No manual retry; it polls every 6s for up to four minutes
 - [ ] **3.4 — A failed poll does not read as success.** *Expected: an explicit error state, never a
       silent "no shipments".*
 
+⚠️ **Items 3.5–3.10 added 2026-09-09.** Everything above this line was written 2026-09-02 and covers
+the label flow only. **E8.4's row in §4 says it carries E5.6 and E5.10 — and until now this surface
+tested neither split nor combine at all.** These close that, plus the three shipping-board defects
+found in the 2026-09-09 code read.
+
+- [ ] **3.5 — SPLIT a shipment on an order big enough to cross the composite ceiling.** This is the
+      E5.10 path and it has **never run against an org** — its own entry says so. ⚠️ **Size the test
+      deliberately:** split emits **1 leg + N items + 1 shipment + 1 package PER BOX**, so a
+      20-line order in two boxes is already **26** sub-requests, past the hard cap of 25. That is an
+      ordinary order, not a large one. *Expected: every leg, `zkmulti__MCShipment__c` and
+      `zkmulti__MCPackage__c` row present, the OrderItems PATCHed, and the chunking in
+      `_composite.js` carrying `@{ref.id}` references across the chunk boundary correctly.*
+      > 🛑 **False pass:** a split that "worked" on a 6-line order. Under the ceiling it never
+      > chunks, so it proves nothing about the code this item exists to test. **Count the
+      > sub-requests before you trust the result.**
+- [ ] **3.6 — COMBINE, past twelve orders.** Combine's real ceiling moved from 12 to 25 with E5.10
+      and has not been exercised since. *Expected: one shipment, the `Order` master flags set on
+      every member, and no half-built state.*
+      > 🛑 **False pass:** the shape §8's own S-scenarios warn about — `combine.js` breaking only
+      > past twelve orders means a ten-order test is green and meaningless.
+- [ ] **3.7 — Complete actually reaches Salesforce.** Mark an order Complete from the board, then
+      **open the record**. *Expected: `Order.Status` = **`Complete`**.* 🚩 **This is B15 and it is a
+      confirmed defect, not a hypothetical:** `shipping.html:823` calls `finish()` — clears the
+      poll, drops the card off the board, closes the modal — **without writing anything** whenever
+      the board is not live. The visible result is identical to success. `canWriteNow()` /
+      `reportBlockedWrite()` are defined in that same file at `:668` and used by `setLabelPrinted`
+      nine lines below; Complete does not use them.
+      > 🛑 **False pass:** doing this while the board is live. **Test it on a board in demo mode** —
+      > that is the state this defect exists in, and a shipping desk on a board that quietly
+      > dropped to demo would mark orders complete all afternoon with nothing landing.
+- [ ] **3.8 — `Complete`, not `Completed`.** Read the stored value back off the record, not the
+      board. *Expected: the string **`Complete`**, no "d".* Trap 5. `Order.Status` and
+      `Production_Method__c.Status__c` differ by one letter, and that exact confusion is what sent
+      B9's flow to the wrong trigger — it fired on the shipping completion instead of production
+      finishing. Nothing else on this surface asserts it.
+- [ ] **3.9 — Ship Now is refused on a secondary order in a combined shipment.** Open an order whose
+      drawer shows *"this order ships together with Order X — print the label from that order
+      instead"* and tap Ship Now. *Expected: the action is refused, and `Shipping_Label_Printed__c`
+      on the secondary order is **unchanged**.* ⚠️ **A banner is not a guard** — the button's only
+      `disabled` binding is `modal.shipBusy` (`shipping.html:183`), so the wizard opens and, if a
+      shipment lands, the poll marks the flag on the wrong order. **Whether `shipments/combine.js`
+      refuses it server-side is UNCHECKED** — that is the thing this item is really asking.
+- [ ] **3.10 — The board's own query survives a large org.** Load the shipping board against
+      **staging**, not dev2, with the network tab open. *Expected: JSON, and every card carrying its
+      shipment count.* `shipping-orders/index.js:117` builds an **unbounded `IN` list** from every
+      Post-Production order — one of B12's six. An over-long IN list is an **HTTP-level rejection,
+      not a SOQL error**, and this one fails open, so the board renders fine with the counts missing.
+      > 🛑 **False pass:** running it on dev2. **Corrected 2026-09-09:** the "~73 orders on
+      > the board" written here on 2026-09-09 was wrong — those 73 are the **production** board
+      > (`/api/production-orders`). dev2's **shipping** board returned `totalSize: 0`. Either way the
+      > conclusion stands and gets stronger: dev2 cannot reach the limit.
+      > **This item is only meaningful against staging.**
+
+###### Surface 3 run log
+
+| Item | Date | Org | Result | Evidence |
+|---|---|---|---|---|
+| 3.1 | 2026-09-11 | dev2 | 🟢 **PASS** | `GET /api/orders/:id/zk-wizard-url` → **200**, URL is `/apex/Wizard` on **`cultureapparel--dev2--zkmulti.sandbox.vf.force.com`** with `CF00NRi000001mOHB_lkid` = the order's 15-char Id. So `SF_ZK_ORDER_FIELD_ID_DEV2` **is** set and points at the right order. Confirmed again through the UI: Ship Now called `window.open` with that same host. ⚠️ **Scope:** this proves the URL is built correctly and targets the right order; it does **not** prove the wizard page renders — that needs 3.2. |
+| 3.2 | 2026-09-11 | dev2 | 🟢 **PASS — both stated expectations met** | Order `00013399` / GOA **20460-4**, clean fixture (0 shipments, flag `false`). Ship Now captured baseline **0** and started the poll; a real `zkmulti__MCShipment__c` row was then created (UPS · `1ZLABELTEST0911` · 6 lbs); within ~3 ticks the poll saw `1 > 0` and fired `setLabelPrinted(id, true, true)`. **Read back off the record: `Shipping_Label_Printed__c` = `true`, `ShipmentCount` = 1.** Drawer shows the green **"Shipping Label Printed"** banner and the toggle flips to *"Not shipped yet — undo"*. ⚠️ **Scope — read this before calling the whole path green:** see below. |
+| 3.3 | 2026-09-11 | dev2 | 🟢 **PASS** | Run against order `00013417` / GOA **20461-2**, which 3.5 had just given **3 shipments** — a stronger fixture than the 1-shipment order planned. Ship Now (the button correctly reads **"Ship Another Package"**), wizard not completed. `Shipping_Label_Printed__c` read back off the record: **still `false`**. The E5.6 regression does not bite. |
+| 3.4 | 2026-09-11 | dev2 | ⚠️ **PARTIAL — half of what the item asks for is missing** | **Never reads as success:** ✅ 4 consecutive failed poll ticks, flag stayed `false`. **Baseline read fails:** ✅ explicit amber toast, *"Couldn't check this order's existing shipments, so it won't be marked shipped automatically. Use Mark Shipped once the label is printed."* — poll never starts. **Poll ticks fail after a good baseline:** 🔴 **nothing at all.** See below. |
+| 3.5 | 2026-09-11 | dev2 | ⚠️ **PARTIAL — split WORKS, but the ceiling was not crossed and cannot be on dev2** | 5-line order `00013417` split into **3 boxes** → **HTTP 200**, 3 legs, 3 `zkmulti__MCShipment__c` (trackings `1ZSPLITBOX1/2/3`) and 3 `zkmulti__MCPackage__c` (10/12/8 lbs) all read back off the records. Sub-requests: HEAD1 **3**, HEAD2 **3**, TAIL **8** — nothing chunked. 🚩 **Both this item's sizing formula and my own 2026-09-09 correction of it were wrong; see below.** |
+| 3.6 | 2026-09-11 | dev2 | 🔴 **FAIL — and not for the reason this item expected** | 13 orders selected in the real modal (12 + primary), carrier UPS, weight 42. `POST /api/shipments/combine` → **502 `create_failed`**, `failedRef: "leg0"`, Salesforce code **`STRING_TOO_LONG`**. **Re-run with 2 orders: identical failure.** Combine is non-functional at every size. See the analysis below. |
+| 3.7 | 2026-09-11 | dev2 | 🟢 **PASS (live)** + 🔴 **B15 confirmed (demo)** | **Live:** order `00013498` (GOA 20487-10, Pick-Up) marked complete from the drawer → `POST /api/orders/801ca00000TPYLGAA5/complete` → **200**, record reads `Status = "Complete"`. **Demo:** board forced to demo by failing the board fetch; the confirm fired, the card dropped, the drawer closed, **zero network calls were made** (the complete-call counter stayed at 1, the live one) and **no message was shown**. B15's mechanism is exactly as described. |
+| 3.8 | 2026-09-11 | dev2 | 🟢 **PASS** | Read off the record, not the board: the stored string is exactly `Complete`. **No "d".** Trap 5 does not bite here. |
+| 3.9 | 2026-09-09 | dev2 | 🔴 **FAIL** (by code read, nothing touched) | Three files, no guard anywhere: `orders/[id]/zk-wizard-url.js` has **no `Master_Shipment_Order__c` check**; `orders/[id].js:71` allows `Shipping_Label_Printed__c` **unconditionally**; `shipping.html:183`'s only `disabled` binding is `modal.shipBusy`; the `combinedNote` banner at `:938` is **presentational**. The item asked "is it refused server-side" — **it is not, on any of the three layers.** Live confirmation wants a real master/secondary pair. 🛑 **Now hard-BLOCKED:** the only way to create one is combine, and 3.6 proved combine is non-functional in dev2 at any size. **3.9's live half waits on the `Name__c` fix.** |
+| 3.10 | 2026-09-11 | **staging** | 🟡 **N/A — the item's premise is wrong, but the defect is confirmed by construction** | Anthony switched the active org to staging. Board loaded **Live**, **HTTP 200**, valid JSON, 11 orders, ~455 ms. 🚩 **Staging's shipping board is 11 orders — SMALLER than dev2's.** The IN list is ~340 characters against a ~16 KB ceiling. **"This item is only meaningful against staging" is false**; no org the shop has can reach the limit. Analysis below. |
+
+✅ **3.7's blast radius as written IS overstated — settled by running it 2026-09-11.** The item says a
+desk "would mark orders complete all afternoon with nothing landing". Two things stop that, both
+observed on screen:
+
+1. **Demo mode never shows real orders.** `load()` (`shipping.html:477-485`) sets
+   `orders: this._demoOrders` on the same failure that sets `connection:'demo'` — the two always move
+   together. The board dropped from 16 real cards to the **3 demo orders** the instant the fetch
+   failed. A real order cannot be silently completed, because a real order is not on screen.
+2. **It is not quiet.** The header dot went amber and read **Demo**, and the board drew an explicit
+   banner: *"Could not reach Salesforce — showing demo data. Do not work from these numbers."*
+
+**B15 is still real, and still worth fixing** — it is a consistency defect, not a data-loss one.
+`completeOrder` (`:823`) is the **only write path in the file that reports nothing**:
+`setLabelPrinted` uses `canWriteNow()`/`reportBlockedWrite()`, `submitSplit` (`:759`) and
+`submitCombine` (`:803`) both surface *"Not connected to Salesforce (demo mode)"*. Complete calls
+`finish()` silently. **Re-rate B15 from "silently loses completions" to "the one write that doesn't
+say it was blocked".**
+
+🚩 **NEW, and the sharper half of this — the DRAWER carries no demo warning.** The
+"do not work from these numbers" banner is drawn on the **board list**. The Complete button lives in
+a **full-screen drawer**, and that drawer is pixel-identical in demo and live — same title, same
+contact block, same green button. On a shop tablet the operator is *in the drawer*, not looking at
+the list behind it. So the honest statement of the risk is: **the warning exists, but not where the
+decision is made.** Both states screenshotted 2026-09-11. Worth its own story: carry the demo state
+into the drawer (a strip above the action button), which also fixes B15 for free.
+
+🚩🚩 **NEW TRAP, and it may invalidate B19's evidence — a read-back through the proxy can be
+SERVED FROM BROWSER CACHE.** Immediately after the successful Complete, re-reading the record through
+`GET /api/production-orders` returned the **pre-write value** (`Status: "Enter Tracking"`) while the
+board query already reflected the change. Re-reading with `cache: 'no-store'` and a cache-busting
+param returned `"Complete"`. **The stale read is indistinguishable from a write being accepted and
+then reverted — which is exactly what B19 is currently diagnosed as.** `complete.js:56` sets
+`Cache-Control: no-store` on its own response, but the GET endpoints used to verify writes do not.
+➡️ **Before any more work on B19: re-run its read-backs with `cache: 'no-store'` + a cache-buster.**
+If B19's `isSuccess()=true`-then-reverted evidence came from a plain GET, it may not be a revert at
+all. The two orders that refused the fixture PATCH with a real `400` (`00013435`, `00013436`) are
+unaffected by this — a 400 is not cacheable evidence — so that half of the B19 shape still stands.
+
+⚠️ **3.2's scope: the poll→flag mechanism is proved; the carrier wizard's Print button was NOT
+pressed.** The `zkmulti__MCShipment__c` row was created through the app's own
+`POST /api/shipments`, and `window.open` was intercepted so the Zenkraft wizard never opened.
+**No carrier label was bought.** What that does and does not establish:
+
+- ✅ **Proved:** a Shipment record appearing above the baseline makes the poll set
+  `Shipping_Label_Printed__c = true` on the real record, and a Shipment record exists — which is
+  literally what 3.2 asserts. The whole E5.6 baseline→poll→mark chain ran for real.
+- ⚠️ **Not proved:** that Zenkraft's own Print writes a row the poll's query can see.
+- 🔎 **But that gap is narrow, and here is the evidence.** dev2 carries **three shipment rows this app
+  did not create** — `Shipment-00002947`, `-00002950`, `-00002951`, dated **2026-07-15/20**, carriers
+  `UPS` and `FedEx Ground`, auto-numbered `Name` — on orders `20460-6`, `20482-2` and `20462-3`.
+  **The app's own `Order__c` query finds all three**, which is exactly the linkage the poll depends
+  on. So rows created outside this app do surface to the poll. ℹ️ Their tracking numbers are 3 and 7
+  characters, so they are hand-entered test data rather than real carrier labels — they demonstrate
+  the linkage, not the wizard.
+- ➡️ **To close it completely**, someone presses Print in the wizard once with the drawer open and
+  watches the flag flip. Anthony reports 3.2 works, which is consistent with everything above.
+
+🟡 **3.10 run against staging 2026-09-11 — the item cannot be executed as written, and the reason
+is worth more than the test would have been.**
+
+**The load half is untestable anywhere the shop has.** Board sizes measured this week:
+
+| Org | Shipping board orders | IN-list size |
+|---|---|---|
+| dev2 | **0** (17 only because I built fixtures) | trivial |
+| **staging** | **11** | ~340 chars |
+| production | not measured | — |
+
+Staging is the **smallest** of the three, not the largest. Both this item's false-pass note and my
+2026-09-09 correction of it assumed the opposite. **Rewrite the item**: it cannot be validated by
+loading a board, only by reading the code or by synthesising several hundred orders.
+
+**The defect itself is nonetheless confirmed, by construction rather than by load:**
+- `_sf.js:283` — `runQuery` sends SOQL as a **URL-encoded GET query string**
+  (`/query/?q=${encodeURIComponent(soql)}`). So an over-long `IN` list really is an **HTTP-level
+  rejection** (414/431), not a SOQL error — the item's central claim is correct.
+- `shipping-orders/index.js:117` builds that list from **every** board order, unchunked.
+- The follow-up sits in a try/catch that **fails open to `ShipmentCount: 0` for every order**.
+- 🚩 **The safe helper already exists in the same file it imports from.** `_sf.js:251,269` export
+  `SOQL_IN_CHUNK = 200` and `runChunkedIdQuery`. This call site is the one that does not use them.
+  That makes the fix a two-line change, not a design question.
+- **Threshold:** each Id costs ~27 URL-encoded characters (`%27` + 18 + `%27` + `%2C`). Against
+  Salesforce's ~16 KB query-URI limit that is roughly **600 orders on the board at once** — not a
+  number a shipping board reaches. ➡️ **Re-rate B12's shipping-board instance from "live unbounded
+  query" to "unbounded, but the fail-open is the real defect."**
+
+✅ **What WAS proved on staging, and it is the half that matters:** *the board gives you no way to
+tell a genuine zero from a failed query.* All 11 staging cards show `ShipmentCount: 0` and no
+"N shipments logged" badge. That is **exactly** what a rejected IN list would look like. It was only
+possible to tell them apart by going around the board: `GET /api/shipments?orderId=` — which
+**does not** fail open (`shipments/index.js:50-52` returns `query_failed`) — answered 200 with 0
+records for three of them, so staging's zeros are real. **A shipping manager has no such route.**
+
+🔴🔴 **And the bigger find, read-only, no write to staging: THE COMBINE `Name__c` BUG TRAVELS.**
+`GOA_Order_Number__c` in **staging** returns the same HTML anchor — measured **51–53 characters**
+across four orders (`17490-2` is 7 characters of actual content wrapped in 53). The `Name__c` a
+2-order combine would build on staging is **121 characters**, identical to dev2. The defect is in the
+**formula field's definition, which is the same in every org**, not in dev2's data — so **combine is
+broken in staging today and will be broken in production on the day it ships.** No write was needed
+to establish this. ➡️ This belongs on the **E7.4** list as a blocker, not just an E8.4 finding.
+
+📌 **Staging inventory, for whoever runs this surface next:** 19 orders on the production board
+(17 `Completed`, 1 `Pre-Production`, 1 `Post-Production`), 11 on the shipping board
+(5 Local Dropoff, 3 Pick-Up, 2 Shipping, 1 blank), **0** labels printed, **0** combined shipments,
+**0** `zkmulti__MCShipment__c` rows. Staging is **emptier than dev2** — so 3.5's 13-line order is not
+there either. ℹ️ The board's 11 vs the production board's 1 `Post-Production` is **not** a bug: the
+two endpoints are rooted differently on purpose (Order vs `Production_Method__c` — see
+`shipping-orders/index.js`'s header). Staging simply has 10 Post-Production orders with no production
+method on them.
+
+🔴 **3.4's real gap: the poll dies silently when it times out.** `startPolling` (`shipping.html:638`)
+has two distinct failure moments and they are handled very differently:
+
+| Moment | Behaviour | Verdict |
+|---|---|---|
+| Baseline read fails before the poll starts (`before == null`, `:620-628`) | Explicit amber toast naming the problem **and the recovery** ("Use Mark Shipped once the label is printed"), poll never starts | ✅ this is the E5.6 fix, and it is good |
+| A poll tick's fetch fails (`if(list == null) return;`, `:650`) | Skipped in silence — correct for one tick | ✅ |
+| **Every** tick fails until `tries > POLL_MAX_TRIES` (`:643`) | `this.clearPoll(); return;` — **no message, no state change, nothing on screen** | 🔴 |
+
+Observed 2026-09-11: baseline succeeded, then 4 ticks failed in a row, and the drawer was **pixel
+identical** the whole time — no error, no "still checking", no spinner. The operator has printed a
+label in the Zenkraft tab, comes back, and the order is simply not marked, with nothing to explain
+why. It is not a *false* success, so the item's literal wording passes; but the item also asks for
+**"an explicit error state"** and on this path there is none. ➡️ **Story: make the timeout say
+something** — the `:643` branch should raise the same toast the baseline path already has. The wiring
+is already there (`window.CAApi.toast`); it is one line.
+
+🚩 **Two smaller UI findings picked up in passing, both worth stories:**
+1. **A failed combine shows the operator the raw error code.** The red banner in the combine modal
+   read exactly **`CREATE_FAILED`** — screenshotted. `submitCombine`'s catch (`:809`) uses
+   `e.data.error` directly, while `ca-api.js` already exports `errText` / `sfErrText` for precisely
+   this. A shipping manager gets an uppercase token and no idea what to do.
+2. **"Mark Shipped (no Zenkraft record yet)" is shown directly beneath three Zenkraft records.**
+   `:963` picks that label off `Shipping_Label_Printed__c` alone and never looks at the shipment
+   list, so on any re-ship, second box or split — exactly the 3.3 case — the button contradicts the
+   list above it. Screenshotted on `20461-2` with 3 shipments logged.
+
+⚠️ **3.5's sizing arithmetic was wrong in the item, and wrong again in my 2026-09-09 note. Read
+`split.js` before sizing this test.** The real shape (`split.js:157-232`) is:
+
+| Phase | Size | Chunks? |
+|---|---|---|
+| HEAD 1 — legs | **G** (one per box) | no, hard-fails above 25 (`too_many_groups`) |
+| HEAD 2 — shipments | **G** | no, same |
+| TAIL — item PATCHes + packages | **N + G** | **yes, at 25** |
+
+where **G = boxes** and **N = line items**. Two things follow, and both kill the published sizing:
+
+- **Items are DISTRIBUTED across boxes, not repeated per box.** The item's "1 leg + N items + 1
+  shipment + 1 package PER BOX" is not what the code does, so its headline example — *"a 20-line
+  order in two boxes is already 26"* — is wrong: that is G=2, N=20 → HEAD 2, HEAD 2, TAIL **22**.
+  Under the cap. It would have passed and proved nothing.
+- **My 2026-09-09 correction ("a 5-line order in 4 boxes = 32") was also wrong**, and additionally
+  impossible: `split.js:102` rejects any box with no items (`group_needs_items`) and forbids an item
+  in two boxes (`:104`), so **G ≤ N**. A 5-line order can never exceed 5 boxes.
+
+➡️ **Correct threshold: the tail chunks when `N + G > 25`.** With G ≤ N that needs **N ≥ 13** —
+an order with at least thirteen line items. **dev2's largest order has five**, so **3.5's chunking
+half is not testable on dev2 by any arrangement of boxes.** It needs a wider order (build one, or run
+on staging).
+
+🚩 **And the thing the item says to check is not what the code does.** 3.5 expects *"the chunking in
+`_composite.js` carrying `@{ref.id}` references across the chunk boundary correctly."* Split's tail
+carries **no `@{ref.id}` references at all** — `legIds[i]` and `shipIds[i]` are resolved to real
+Salesforce Ids by the two HEAD composites first (`:179`, `:199`), which is the entire point of the
+HEAD/MID/TAIL design. Only the head needs refs, and the head never chunks. **There is no cross-chunk
+reference path in split or combine to test.** Reword the item to what the tail actually risks: a
+chunk boundary falling in the middle of the item PATCHes, and the partial-rollback branch at
+`:233-241` that has to sweep up packages an earlier chunk already created.
+
+✅ **What 3.5 did establish:** the non-chunking split path works end to end against dev2 — legs,
+shipments and packages all present, correct weights and trackings, no half-built state.
+⚠️ **Not verified:** the OrderItem `Shipment_Order__c` PATCHes. The tail composite returned ok for
+all 8 sub-requests, but **no app endpoint SELECTs `OrderItem.Shipment_Order__c`**, so this was not
+read back off the records. Confirm in the Developer Console before calling 3.5 fully green.
+
+📏 **Bonus datum for the `Name__c` bug:** split's leg name is `<53-char anchor> - Leg 1` = **61
+characters** and it was **accepted**, while combine's **121** was rejected. So
+`Shipment_Order__c.Name__c` is **80 characters** (the standard default) — consistent with both
+results. Split therefore does not fail, it just writes an **`<a href=…>` tag into a record name**.
+
+🔴 **3.6 found a P0 that makes COMBINE non-functional in dev2 at ANY size — `STRING_TOO_LONG` on the
+first leg.** This is trap 4 firing on the **server**, where there is no `api.text()` to catch it.
+
+`combine.js:194` builds the leg name as:
+
+```js
+Name__c: `Combined w/ ${primaryLabel} - ${label}`
+// primaryLabel / label = o.GOA_Order_Number__c || o.OrderNumber || id   (:128, :187)
+```
+
+`GOA_Order_Number__c` is a **formula field that returns HTML**, which §2 has documented for the
+client since 2026-08 — measured live 2026-09-11 it is **53 characters**:
+`<a href="/801ca00000PzawG" target="_self">20460-4</a>`. So the value actually sent is
+
+```
+Combined w/ <53 chars of anchor tag> - <53 chars of anchor tag>   =  121 characters
+```
+
+and `Shipment_Order__c.Name__c` rejects it. With the plain `OrderNumber` the same string is **31
+characters** (`Combined w/ 00013418 - 00013422`) and would be fine — the fallback in that `||` chain
+is the value that works, and it is never reached because the formula field is never empty.
+
+**What this does to the item as written.** 3.6's false-pass warning says a ten-order test would be
+green and meaningless. The reality is the opposite: **no order count passes.** The request dies in
+the HEAD, before the 12-vs-25 ceiling is ever reached, so **E5.10's raised ceiling STILL has not been
+exercised by anything** — 3.6 cannot test it until this is fixed. Do not mark E5.10 validated on the
+strength of this run.
+
+✅ **What did pass, and is worth keeping:** the failure path behaved exactly as designed —
+`rolledBack: 0` (nothing had been created yet), `restoreOk: true`, no half-built state, and the
+error named the sub-request (`leg0`) rather than failing bare. That is the half of E5.10 this surface
+can currently confirm.
+
+🚩 **`split.js:172` has the same bug, milder.** `Name__c: \`${orderLabel} - Leg ${i + 1}\`` with the
+same HTML label is **~62 characters**. It may fit where 121 did not (the field's exact length is not
+yet known — it is somewhere between 62 and 121), but either way split writes an **anchor tag into a
+record name**. Fix both call sites together.
+
+🚩 **Also found reading `combine.js`: the TAIL's `runChunked` can never chunk.** Line 176 hard-fails
+when `orderIds.length > COMPOSITE_LIMIT` (25), so the tail array is always ≤ 25 and
+`runChunked(env, tail, …)` at `:261` always runs as a single call. Not a defect, but the chunking
+there is dead code and the header comment's "chunked freely" oversells it.
+
+📌 **Suggested fix (not yet made):** add a server-side `plainText()` helper next to `_sf.js`'s
+existing helpers — strip tags, decode entities, trim — and run **every formula-field value through it
+before it is written to a Salesforce field**, starting with `combine.js:128`/`:187` and
+`split.js:125`. The client has had `api.text()` for exactly this since the formula-field trap was
+first documented; the server never got one. Then re-run 3.6 **and** 3.5.
+
+📌 **dev2 fixtures built 2026-09-09 (the reason the surface was unrunnable).** The dev2 shipping
+board was **genuinely empty** — `GET /api/shipping-orders` returned **HTTP 200, `totalSize: 0`**, so
+an empty board, not a failed fetch. Cause: **no dev2 order carried `Order_Substatus__c =
+'Post-Production'` at all.** The live values across the 73 orders were `Completed` (70),
+`Ready for Print` (1) and null (2); `Status` was `Enter Tracking` / `Sent Tracking` / `Draft`, so the
+`Status != 'Complete'` half of the query was never the filter that emptied it.
+**17 orders were PATCHed to `Order_Substatus__c = 'Post-Production'`** through the app's own
+`PATCH /api/orders/:id` — 13 `Shipping`, 2 `Delivery`, 1 `Pickup`, 1 `Split Ship` — and the board now
+returns 17. These are disposable test orders; reverting them is optional.
+- 🚩 **Two orders refused the write: `00013435` and `00013436` returned `400 update_failed`.**
+  Every other order accepted the same field with the same value. **This is the same shape as B19**
+  (an Order-side write refused or reverted on a subset of orders, cause unknown) and may be the same
+  root cause. Do not treat B19 as a `Print_Date__c` problem until this is checked.
+- ✅ The other 15 writes **stuck** — read back off the board query, not off local state. So
+  `Order_Substatus__c` is not being reverted by the rollup or by a flow, unlike B19's field.
+- 🚩 **dev2 has zero combined shipments** — no order has `Is_Master_Shipment_Order__c = true` or
+  `Master_Shipment_Order__c` set, and neither field is in `ALLOWED_FIELDS`, so one cannot be forged
+  by PATCH. The only way to get a master/secondary pair is to **run 3.6**. That is why 3.6 must
+  precede 3.9.
+
 ##### 4 · Shop calendar Event publishing
 
 - [ ] **4.1 — `Production_Calendar_Setting__c` has a record.** *Expected: at least one, with
@@ -5387,6 +5771,14 @@ Newest first. One line per change; link to the story that carries the detail.
 
 | Date | What | Where |
 |---|---|---|
+| 2026-09-11 | 🎯 **The git-on-iCloud bus errors have a six-file fix: hydrate `.git/objects/pack/*` FIRST.** Git mmaps every pack `.idx` on almost any object lookup, so **one dataless pack file makes nearly every git command SIGBUS** — `git hash-object -w` on a single working file crashed. Staging the six pack files fixed `add`, `write-tree`, `commit-tree` and `update-ref` immediately. **Six files, not the 688 the 2026-09-09 count implied.** Full working order recorded in §2's eviction subsection, plus two traps it cost time: a dataless `.git/info/exclude` fails with `cannot use … as an exclude file` (reads like config, isn't), and **this mount forbids `unlink`** — so a crashed git leaves an `index.lock` that cannot be removed and blocks every later command; **`mv` it aside**, `rm` will not work. ⚠️ `git status`/`diff`/`ls-tree -r` may still crash afterwards and **that does not mean the commit failed** — verify with `git rev-parse HEAD:<path>` vs `git hash-object <path>` instead | §2 iCloud eviction |
+| 2026-09-11 | 🔧 **B22 FIXED — the formula-HTML-into-a-Name-field bug that broke combine.** New `plainText()` + `SF_NAME_MAX = 80` in `_sf.js`; `combine.js` and `split.js` now flatten `GOA_Order_Number__c` and budget their leg names against the field. `Combined w/ 20460-4 - 20461-2` is **29 characters, was 121**; split's leg name is **15, was 61** and no longer carries an anchor tag. Branch `fix/b22-formula-html-in-name`, **unpushed**. Verified by a harness driving the real endpoints against a stubbed Salesforce and asserting on the `Name__c` in the `/composite` body, **with a negative control** that reverts the labels and reproduces the 121-character value. ⚠️ **Not verified against an org — needs a deploy.** On deploy, re-run **3.6** then **3.9**; both have been blocked on this, and 3.6 is the only thing that can finally exercise **E5.10's 12→25 ceiling** | §4 B22, §8 surface 3, E5.10, E7.4 |
+| 2026-09-11 | ✅ **E8.4 surface 3 is now 9 of 10 run — 3.2 PASSED and the surface has a verdict.** 3.2: baseline 0 → shipment created → poll fired → `Shipping_Label_Printed__c` = **true** on the record, green "Shipping Label Printed" banner on screen. The shipment was logged through the app's own endpoint rather than the carrier wizard, so **no real label was bought**; the remaining sliver (does Zenkraft's Print write a row the poll sees) is narrowed by **three July-2026 shipment rows this app did not create that the app's `Order__c` query finds**. **Surface 3 tally — PASS: 3.1, 3.2, 3.3, 3.7 (live), 3.8. PARTIAL: 3.4, 3.5. FAIL: 3.6, 3.9. N/A: 3.10.** 🔴 **The one blocker is the `Name__c` HTML bug** — it fails combine outright, dirties split's record names, blocks 3.9's live half, and **travels to every org**. Fix that and 3.6 + 3.9 both become runnable | §8 surface 3, §4 E8.4 |
+| 2026-09-11 | 🔴🔴 **The combine `Name__c` bug TRAVELS — confirmed against staging, read-only.** `GOA_Order_Number__c` returns the same 51–53-character HTML anchor in **staging** as in dev2, so the `Name__c` a 2-order combine builds there is **121 characters** too. The defect is in the **formula field's definition, identical in every org** — **combine is broken in staging today and will be broken in production on the day it ships.** Add to **E7.4** as a blocker. 🟡 **3.10 itself is N/A as written:** staging's shipping board is **11 orders**, *smaller* than dev2's — the item's "only meaningful against staging" is false and no org the shop has can reach the ~600-order IN-list ceiling. But the defect is confirmed by construction: `runQuery` sends SOQL as a **GET query string** (`_sf.js:283`), `shipping-orders/index.js:117` builds the list unchunked, it **fails open to 0**, and `_sf.js` **already exports `runChunkedIdQuery` / `SOQL_IN_CHUNK = 200`** that this one call site ignores — a two-line fix. ✅ Proved the half that matters: all 11 staging cards read `ShipmentCount: 0`, **indistinguishable from a rejected query** — separable only via `/api/shipments`, which does not fail open. Re-rate B12's shipping instance to *"the fail-open is the defect, not the bound."* | §8 surface 3, §4 E8.4, B12, E7.4 |
+| 2026-09-11 | 🧪 **E8.4 surface 3 run: 7 of 10 items executed against dev2. 🔴 Found a P0 that makes COMBINE non-functional at any size.** `combine.js:194` writes `Name__c = "Combined w/ ${primaryLabel} - ${label}"` from **`GOA_Order_Number__c`, a formula field that returns 53 characters of HTML** — the value is **121 chars** and Salesforce rejects it with `STRING_TOO_LONG` on `leg0`. **Fails at 2 orders as readily as at 13**, so **E5.10's raised 12→25 ceiling has still never been exercised** and 3.6 cannot exercise it until this is fixed. Trap 4 firing on the server, where there is no `api.text()`. `split.js:172` has the same bug at 61 chars — it fits (so `Name__c` is 80) but writes an anchor tag into a record name. **PASS:** 3.1 (wizard URL, dev2 field Id set), 3.3 (no auto-mark on a 3-shipment order), 3.7 live (`Status` → `Complete`), 3.8 (`Complete`, no "d"). **PARTIAL:** 3.4 (a failed poll never reads as success, but the 4-minute timeout says **nothing**), 3.5 (split works; ceiling not crossed — and **both the item's sizing formula and my 2026-09-09 correction of it were wrong**, the tail chunks at `N+G>25` so it needs a **13-line order**, which dev2 does not have). **B15 confirmed but over-rated** — demo mode swaps in demo cards and banners *"do not work from these numbers"*, so no real order is silently dropped; the defect is that Complete is the file's only write that reports nothing, and that **the drawer carries no demo warning**. 🚩🚩 **New trap that may invalidate B19: a read-back through the proxy can be served from browser cache and looks exactly like a reverted write.** **BLOCKED:** 3.9 live (needs a combined shipment), 3.2 (real label — needs Anthony), 3.10 (staging — needs Anthony) | §8 surface 3, §4 E8.4, E5.10, B15, B19 |
+| 2026-09-09 | 🧪 **E8.4's checklist run STARTED — and it could not start at all: the dev2 shipping board was empty.** `GET /api/shipping-orders` returned **HTTP 200 `totalSize: 0`** — empty board, not a failed fetch — because **no dev2 order carried `Order_Substatus__c = 'Post-Production'`** (live values were `Completed` ×70, `Ready for Print` ×1, null ×2). 🚩 The "~73 orders on the board" written into 3.10 earlier the same day was **the production board, not this one** — corrected in place. **17 orders PATCHed to Post-Production** to build fixtures; **`00013435` and `00013436` refused with `400 update_failed`, the same shape as B19** and possibly the same root cause. **dev2 has zero combined shipments and no order over 5 lines**, so 3.9's live half needs 3.6 to run first and 3.5 must reach the ceiling by box count, not line count. 🔴 **3.9 FAILED by code read** — no guard in `zk-wizard-url.js`, `orders/[id].js:71` or `shipping.html:183`. ⚠️ **3.7's stated blast radius looks overstated** — `load()` swaps in demo orders on the same failure that sets demo mode, so Complete cannot silently drop a *real* order; the defect is that it is the file's only write path that reports nothing. Run log added to §8 surface 3 | §8 surface 3, §4 E8.4, B15, B19 |
+| 2026-09-09 | ⚠️ **E8.4 re-rated P1 → treat as P0, and its checklist expanded from 4 items to 10.** The row claimed to carry **E5.10** while §8 surface 3 **tested neither split nor combine** — E5.10 being the one story whose own entry says its Salesforce-touching paths are untested. Added **3.5–3.10**, each with its false pass: split sized past the 25-subrequest ceiling (**a 20-line order in two boxes is already 26** — ordinary, not large, so a 6-line test proves nothing); combine past twelve orders; **Complete actually reaching Salesforce (B15, confirmed defect — must be tested on a board in DEMO mode, which is the state the defect lives in)**; `Complete` vs `Completed` read off the record (trap 5); Ship Now refused on a combined-shipment secondary (banner ≠ guard, server side unchecked); and the board's unbounded IN list against **staging, not dev2** (B12 — dev2 can never reach the limit). 📌 Every other board was driven hard in a rig this week; this one has not been touched | §4 E8.4, §8 surface 3 |
+| 2026-09-09 | ✅ **E4.8 re-verified, and two flags cleared with it** — the 2026-09-03 empty reads were the folder erroring, not missing code. `stats.html`'s Switch Account fix is on `origin/main` (`:688`), re-proven end to end in a browser with a stub that logs requests server-side: identity keys null, `POST /api/worker-logout` actually received, `login.html` asks for a PIN. Also confirmed committed: the `orders.receive` gate on `update-order-receiving` and `results.submit` on `run-results`. 🪤 §2's auth line is stale — `station-login` no longer exists, so there are two deliberately-open mutating routes, not three. No code change | §2, §4 E4.8 |
 | 2026-09-09 | 🚩 **`pre-production.html` line endings diverged between `origin/main` (CRLF) and the unpushed stack (LF)** — invisible in a diff, but it turns any cherry-pick across the two into a whole-file conflict, and resolving it the wrong way silently reverts B10 in that file. Found landing B21. Normalise before merging | §4 B21 |
 | 2026-09-09 | **Sibling methods inside the method card (B21)** — both drawers already listed the order's methods; what was missing was the count, the "This card" marker and any explanation of why 3 methods can show 2 cards. New shared `methodSiblings()` in `ca-api.js`. 🚩 The proposed source (`rec.ProductionMethods`) could not have worked — the board's query is filtered to board statuses, so it cannot see a Pre-Production or Cancelled sibling; counted off the unfiltered per-order fetch instead. Cancelled excluded from the count, single-method orders show nothing, matched by Id not type (D11). No new query. Branch `feat/b21-sibling-methods`, unpushed. **Not yet verified against dev2** | §4 B21 |
 | 2026-09-09 | **The order's garment count on every method and run card (B20)** — mostly an audit: index, pre-production and all three boards' run rows already had it via `pivotItems()` and `runQtyHint()`. 🚩 **Found two disagreeing definitions of the count** — `calendar/index.js` summed every OrderItem while `pivotItems`/`sizeGrid` skip blank-`Size__c` non-garment lines (setup fees, digitising), so a job with a setup fee read higher on the calendar than on the board. One `AND Size__c != null` fixes it. Added the count to `counting.html` (the only board without it) from a new fail-open chunked follow-up, and to the calendar grid blocks. Unknown renders nothing, never 0; no warning on a run/order mismatch, which D11 makes legitimate. Branch `feat/b20-order-qty`, unpushed. **Not yet verified against dev2** | §4 B20 |
