@@ -68,7 +68,7 @@
  *     carrier, serviceType, tracking, weight
  *   }
  */
-import { apiVersion, jsonError, runQuery } from "../_sf.js";
+import { apiVersion, jsonError, runQuery, plainText, SF_NAME_MAX } from "../_sf.js";
 import { runComposite, runChunked, rollbackCreated, COMPOSITE_LIMIT } from "../_composite.js";
 import { requireCap } from "../_session.js";
 
@@ -125,7 +125,27 @@ export async function onRequestPost({ env, request }) {
     }
     const orderById = new Map(orderResult.records.map((o) => [o.Id, o]));
     const primary = orderById.get(primaryOrderId);
-    const primaryLabel = primary.GOA_Order_Number__c || primary.OrderNumber || primaryOrderId;
+
+    /* Leg names, budgeted against the field rather than hoped at.
+     *
+     * GOA_Order_Number__c is a HYPERLINK() formula -- `20460-4` arrives as 53
+     * characters of `<a href=...>` (see plainText() in ../_sf.js). Interpolating
+     * it raw made this Name__c 121 characters against a field that holds 80, and
+     * Salesforce refused leg0 with STRING_TOO_LONG. That failed at TWO orders, in
+     * every org, and it is why the 12 -> 25 ceiling this file's header describes
+     * had never actually been exercised against an org.
+     *
+     * plainText() fixes the real problem (31 characters, not 121). The clamp
+     * below is the belt: the template contributes "Combined w/ " + " - " = 15
+     * fixed characters and the two labels share the remaining 65, so neither can
+     * take a leg down no matter what a customer's order number grows into. Real
+     * GOA numbers are 5-8 characters, so it never bites on live data. */
+    const NAME_FIXED = "Combined w/  - ".length;
+    const LABEL_MAX = Math.floor((SF_NAME_MAX - NAME_FIXED) / 2);
+    const legLabel = (o, id) =>
+      (plainText(o && o.GOA_Order_Number__c) || (o && o.OrderNumber) || id || "").slice(0, LABEL_MAX);
+
+    const primaryLabel = legLabel(primary, primaryOrderId);
     const addr = primary.ShippingAddress || {};
 
     const v = apiVersion(env);
@@ -184,7 +204,7 @@ export async function onRequestPost({ env, request }) {
 
     const legReq = orderIds.map((orderId, i) => {
       const o = orderById.get(orderId);
-      const label = o.GOA_Order_Number__c || o.OrderNumber || orderId;
+      const label = legLabel(o, orderId);
       const isPrimary = orderId === primaryOrderId;
       return {
         method: "POST",
