@@ -866,6 +866,10 @@ class Component extends DCLogic {
       ] : [],
       Proposals: num==='20877' ? [{
         id:'p1', name:'PROP-0001', machineGroup:'Screen Print', printLocation:'Left Chest',
+        // 'p2' is a real id in _demo.presses above, so the prefill guard
+        // passes and demo mode exercises the carry-through rather than the
+        // fallback. Mirrors what proposed-runs/index.js now returns.
+        pressId:'p2', pressName:'Press 2',
         proposedStart:this._demoIso(1,'09:00'), proposedHours:2, quantity:180,
         notes:'Customer asked for these before the rest of the order.',
         proposedBy:'Chief AM',
@@ -1351,6 +1355,17 @@ class Component extends DCLogic {
       const allowed=(api&&api.locationsForMethod)?api.locationsForMethod(m&&m.Placements):[];
       if(allowed.indexOf(p.printLocation)!==-1) patch.printLocation=p.printLocation;
     }
+    /* Carry the AM's press the same way, and under the same rule. The press
+       select is built from this.presses() -- the org's real Account rows of
+       Type='Press' -- so a proposal naming a press that has since been
+       deleted, or any proposal at all in an org with no presses configured,
+       must leave the select on "Pick a press..." rather than selecting an
+       option that does not exist. A <select> handed a value with no matching
+       <option> renders BLANK while reading as filled in, and POST
+       /api/production-runs requires pressId, so that blank is a form that
+       looks ready and 400s on submit. Prefill only what the picker can show;
+       otherwise say nothing and let the manager choose. */
+    if(p.pressId && this.presses().some(pr=>pr && pr.Id===p.pressId)) patch.pressId=p.pressId;
     this.setRunField('new', patch);
     // Expand the form as part of filling it in. "Use this" silently writing
     // into a panel the manager cannot see would look like the button did
@@ -2009,9 +2024,13 @@ class Component extends DCLogic {
         id:p.id, name:p.name,
         machine:t(p.machineGroup)||'—',
         when: p.proposedStart ? dayHM(p.proposedStart) : 'no date given',
-        // Print location leads -- it is the first thing a manager checks when
-        // deciding whether a suggestion is usable as-is.
-        meta: [t(p.printLocation)||null,
+        // Press leads, then print location -- the two things a manager checks
+        // to decide whether a suggestion is usable as-is. The press is shown
+        // whether or not it survives the prefill guard above: "the AM asked
+        // for Press 2" is worth reading even when Press 2 is gone from the
+        // org, and seeing it here is what explains an empty press select.
+        meta: [t(p.pressName)||null,
+               t(p.printLocation)||null,
                p.proposedHours ? p.proposedHours+(Number(p.proposedHours)===1?' hr':' hrs') : null,
                p.quantity ? p.quantity+' pcs' : null,
                t(p.proposedBy)||null].filter(Boolean).join(' · ') || '—',
