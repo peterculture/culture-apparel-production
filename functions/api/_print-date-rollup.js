@@ -109,7 +109,47 @@ export async function rollupPrintDateToOrder(env, orderId) {
       return null;
     }
 
-    return { printDate: earliest, changed: true };
+    /* VERIFY THE WRITE. A 204 here does NOT mean the value is stored. (B19)
+     *
+     * Measured in dev2 2026-09-11: on 3 of 4 sampled orders, a write to
+     * Order.Print_Date__c is accepted and then silently rewritten back to its
+     * prior value by the org's own automation. In Apex the same thing reports
+     * `Database.SaveResult.isSuccess() == true`; over REST it reports 204. Both
+     * are "success" for a value that is not there a moment later.
+     *
+     * Without this read-back that is INVISIBLE end to end: the endpoint returns
+     * 200, this function returns changed:true, and the board re-reads the same
+     * stale date it already had. A scan on 2026-09-11 found 52% of dev2 orders
+     * with runs, and 64% of staging's, carrying a Print_Date__c that disagrees
+     * with their own runs -- drift that accumulated with nothing ever logged.
+     * This is the same class as B11: a failure reported as a success.
+     *
+     * COST is one query, and only on the path that actually PATCHed -- the
+     * read-before-write above already returns early for the common no-op case.
+     *
+     * This does NOT retry, and must not. The write is being reverted by
+     * something upstream; writing again just loses the same race more loudly.
+     * The job here is to tell the truth about what happened, not to win. */
+    const back = await runQuery(
+      env,
+      `SELECT Print_Date__c FROM Order WHERE Id = '${orderId}'`,
+    );
+    if (!back.ok || !back.records[0]) {
+      // Could not confirm either way. Say so rather than claiming success.
+      console.error("rollupPrintDateToOrder: write not verifiable", orderId, back.status);
+      return { printDate: earliest, changed: true, verified: false };
+    }
+    const stored = back.records[0].Print_Date__c;
+    if (Date.parse(stored) !== Date.parse(earliest)) {
+      console.error(
+        "rollupPrintDateToOrder: WRITE ACCEPTED BUT NOT STORED (B19)", orderId,
+        "wrote", earliest, "-- record now holds", stored,
+        "-- Order automation is reverting this field; the print date on this order is STALE",
+      );
+      return { printDate: stored, changed: false, verified: true, reverted: true, attempted: earliest };
+    }
+
+    return { printDate: earliest, changed: true, verified: true };
   } catch (e) {
     console.error("rollupPrintDateToOrder failed", orderId, e);
     return null;
