@@ -281,10 +281,18 @@ export async function onRequestPatch({ params, request, env }) {
     // actual start overrides scheduled. Awaited so the caller's next read sees
     // the new date, but best-effort inside -- it can never fail this write.
     // See _print-date-rollup.js.
-    await rollupPrintDateFromRun(env, id);
+    const pd = await rollupPrintDateFromRun(env, id);
 
+    /* printDateReverted is ADDITIVE and only appears when the rollup's own
+     * read-back caught the org silently undoing its write (B19). Nothing
+     * renders it yet; it is here so the information reaches the client at all,
+     * because today a manager who drags a job to a new slot on an affected
+     * order gets a clean 200 and no hint that the date did not move. */
     return Response.json(
-      { ok: true, id, updated: Object.keys(payload) },
+      Object.assign(
+        { ok: true, id, updated: Object.keys(payload) },
+        pd && pd.reverted ? { printDateReverted: true, printDate: pd.printDate } : null,
+      ),
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (err) {
@@ -317,9 +325,15 @@ export async function onRequestDelete({ params, env, request }) {
     // Removing a run can move the order's print date back to a later run, or
     // leave no runs at all -- in which case the rollup deliberately leaves the
     // Account Manager's original date standing rather than blanking it.
-    if (orderId) await rollupPrintDateToOrder(env, orderId);
+    const pdDel = orderId ? await rollupPrintDateToOrder(env, orderId) : null;
 
-    return Response.json({ ok: true, id }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json(
+      Object.assign(
+        { ok: true, id },
+        pdDel && pdDel.reverted ? { printDateReverted: true, printDate: pdDel.printDate } : null,
+      ),
+      { headers: { "Cache-Control": "no-store" } },
+    );
   } catch (err) {
     console.error(err);
     return jsonError("internal_error", 500);
