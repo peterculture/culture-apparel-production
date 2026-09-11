@@ -200,9 +200,14 @@ check each against `main`'s copy of that file. The script is in `CLAUDE-CODE-QUE
 
 - **Push, commit reliably, or change security settings.** Cloudflare Access applications, account
   settings and secrets are Anthony's to click; the right role is to prepare, instruct and verify.
-- **Reach staging from browser automation.** The Chrome extension needs permission on
-  `cultureapparel--staging.sandbox.lightning.force.com`, `...my.salesforce-setup.com` and
-  `...my.salesforce.com`. dev2 works today; staging does not. This blocks running E8.1/E8.2.
+- ~~**Reach staging from browser automation.**~~ **CORRECTED 2026-09-11 — it can.** The Chrome
+  extension has permission on all three staging hosts
+  (`cultureapparel--staging.sandbox.lightning.force.com`, `...my.salesforce-setup.com` and
+  `...my.salesforce.com`), and classic Setup on `...my.salesforce.com` is as scriptable there as in
+  dev2 — two fields and a flow version were built and verified in staging that day. Two quirks:
+  Lightning record pages are forced, so classic edit forms need `/<id>/e?nooverride=1&isdtp=vw`;
+  and `my.salesforce-setup.com` allows screenshots but not JavaScript, so the Lightning Flows list
+  is click-and-scroll only. This no longer blocks E8.1/E8.2.
 - **Test from outside the shop network.** Access now has a Bypass on the shop's public IP, so a
   browser there proves the bypass, not the block. The decisive external test is a phone with Wi-Fi
   off — that is why E6.4 says *prove a request from outside the policy is blocked*.
@@ -829,6 +834,7 @@ estimated. Owner column: **CC** = Claude Code (repo change), **SF** = this Sales
 | **B20** | ⚠️ unpushed | CC | **DONE 2026-09-09**, branch `feat/b20-order-qty`, `calendar.html` + `counting.html` + `calendar/index.js` + `run-results/index.js`, +128/−6. **The ORDER's garment count on every method and run card.** **Most of this already existed and the audit is the deliverable:** `index.html:150` and `pre-production.html:136` already render `{{o.qty}} pcs` from `pivotItems()` over the order's own OrderItems — per ORDER, not per method, so both cards of a two-method job already agreed — and `runQtyHint()` in `ca-api.js` (2026-08-20) already puts *"50 of 300 garments on this order"* on the run rows of all three of those boards. Neither was touched. 🚩 **The real finding: there were TWO definitions of the order's garment count, and they disagreed.** `pivotItems()` and `sizeGrid()` skip any OrderItem with a blank `Size__c` — those are **non-garment lines** (setup fees, digitising), which `order-sizes/index.js` and `sizeGrid`'s own comment both state outright. `calendar/index.js`'s roll-up summed **every** OrderItem, so any job carrying a setup fee showed a higher count on the calendar than on the production board — and higher in the calendar drawer's Production Runs header (`TotalQuantity`) than in the Garments panel three inches below it (`sizeGrid.grand`). Fixed by adding `AND Size__c != null` to that one roll-up. **That, not the new rendering, is what makes B20's "one number, the same number" true.** **Added:** `counting.html` — the only board with no order count at all — now shows it on the run cards and the open run's header, from a **new fail-open chunked follow-up** in `run-results/index.js` (`garmentCountByOrder`), B8's pattern exactly: kept out of the SELECT the screen depends on (trap 1), chunked through `runChunkedIdQuery` (trap 2 / B12), **absent rather than 0** when it cannot be established. Wording comes from the existing `runQtyHint` with a null run figure — *"300 garments on this order"* — so no fifth copy of the vocabulary (B10's lesson). `calendar.html` grid blocks show it at the `roomy` tier and in the hover title at **every** tier, because those blocks are 30px tall and already ration three tiers of detail; the order number must always survive. ⚠️ **No reconciliation, by design.** A run's figure and the order's routinely differ — a job split across runs, and under D11 a Front+Back method's runs legitimately sum to TWICE the order. The two are labelled distinctly (*"300 scheduled"* vs *"300 garments on this order"*) and there is deliberately **no badge, colour or warning** on a mismatch. **Verified** in a wrangler rig: a Front+Back order whose two runs each read 300 against a 300-garment order, rendering with no error treatment; a second order whose count could not be established rendering **no line at all** rather than "0 garments"; and the calendar block/tooltip doing the same. ⚠️ **Not verified against dev2** — that pass is still owed, and it is the one that proves the counts match Salesforce. |
 | **B21** | ⚠️ unpushed | CC | **DONE 2026-09-09**, branch `feat/b21-sibling-methods`, `ca-api.js` + `index.html` + `pre-production.html`, +169/−8. **Inside a method card, how many methods the ORDER has and which one you are looking at.** **Audit first:** both drawers ALREADY listed every method on the order — same markup on both boards, fed by the per-order `/api/production-methods?orderId=` fetch — with type, placements, status and colour. What neither had was a **count**, a **self-marker**, or any reconciliation of count against visible cards. No new endpoint and no new field: the network tab shows the same requests before and after. 🚩 **The story's suggested data source would have been wrong.** It proposed counting `rec.ProductionMethods` via `methodsList()`, but this board's own query is rooted on `Production_Method__c` filtered to BOARD_STATUSES (`production-orders/index.js`), so that array **cannot contain a Pre-Production, On Hold or Cancelled sibling at all** — a two-method job whose second method is still in prep would have reported "1 method", which is the exact question this story exists to answer. Counted off the per-order fetch instead, which is unfiltered. **New shared helper `methodSiblings()` in `ca-api.js`** (plus `sameMethodId()`): excludes Cancelled from the count (the house convention — gate 3 of `createReworkIfNeeded`), returns `shown:false` for 0 or 1 so a **single-method order gets nothing at all — no count, no note, and no "This card" badge on the one row it was never ambiguous about**, and composes a note that reconciles BOTH discrepancies a manager can see: methods counted but with no card on this board, and cancelled methods visible in the list but left out of the count. ⚠️ **`onBoard` is a caller-supplied predicate, not `stageOfMethod()`.** Which statuses get a card is a property of the BOARD: index.html passes `stageOfMethod()` plus its `Order.Status = 'Complete'` override; pre-production.html shows exactly Pre-Production, so a sibling In Production is off ITS board while being perfectly visible on the other. The default would have made every pre-production card report itself as off-board. **Matched by Id (first 15 chars), never by `Type__c`** — under D11/B4 an order can carry two Screen Print methods on different placements and a type match would badge both. **Verified in a browser across all four cases from the story, reading the network tab for which method each drawer actually loaded:** single-method → nothing new; two-method → both cards say "2 methods on this order" and each marks itself; a 3-method order with one Pre-Production and one Cancelled → "2 methods on this order · One has no card on this board (Pre-Production) · one more is cancelled and not counted" against 1 visible card; and a Front+Back pair of Screen Print methods → told apart by placement, each marking the right one (confirmed by `methodId=mD1` vs `mD2` in the network tab, not by the screen). ⚠️ **Not verified against dev2** — that pass is still owed; 00013504 is the two-method order to use. 📌 Caught in the browser and not by smoke: the first cut referenced a local `api` in index.html's `renderVals`, which has none — the drawer died with a red `Root.renderVals(): api is not defined` overlay while the board itself looked perfect.  🚩 **Found while landing this: `pre-production.html` is CRLF on `origin/main` and LF on the entire unpushed stack** (`b47c233`, `25a2a15`, `0c96dda`, `81b67ec` all read 0 CRLF / 2935 LF). Some earlier commit rewrote the whole file's line endings, which is invisible in a normal diff but makes **any cherry-pick between the two lineages a whole-file conflict** — `<<<<<<<` at line 1, `>>>>>>>` at the last line. It did exactly that here. ⚠️ **And resolving it by taking the origin/main-based side silently reverted B10 in that file** (the tinted drawer chip, the 3px method stripe, and the `var(--method-*)` tokens) — caught by grepping for B10's own markers after the merge, not by smoke, which passed throughout. Anthony will hit the same conflict when he merges; the fix is to normalise `pre-production.html` back to CRLF on one side before merging, and to check B10's markers survive.|
 | **B22** | ⚠️ unpushed | CC | **DONE 2026-09-11**, branch `fix/b22-formula-html-in-name`, commit **`19b21e1`** (on top of `fix/b11-composite-status`), `functions/api/_sf.js` + `shipments/combine.js` + `shipments/split.js`. **Unpushed.** 🔴 **A HYPERLINK() formula field was being written straight into a Salesforce text field, and it broke COMBINE outright in every org.** Found by actually running §8 surface 3 item **3.6** against dev2 (2026-09-11), not by reading code. `combine.js` built `Name__c = "Combined w/ ${primaryLabel} - ${label}"` where both labels came from `GOA_Order_Number__c` — which is a **HYPERLINK() formula** and arrives as `<a href="/801ca00000PzawG" target="_self">20460-4</a>`: **53 characters carrying 7 characters of meaning**. The value sent was **121 characters** into a field that holds **80**, and Salesforce refused `leg0` with **`STRING_TOO_LONG`**. 📌 **Three things make this worse than a formatting slip.** **(1) It failed at TWO orders**, not at the 25 the composite ceiling talks about — so combine had never worked at any size, and **E5.10's raised 12→25 ceiling had therefore never been exercised against an org at all**, which is precisely what 3.6 existed to test. **(2) It travels.** A formula's definition ships with the metadata, so this is not dev2 data. Confirmed **read-only against staging** the same day: same anchor, 51–53 characters, same 121-character result. It would have broken combine in **production** on day one (E7.4). **(3) The codebase already knew.** `ca-api.js`'s `text()` has flattened these for the BOARDS since trap 6 was first written down — the client has been careful about this for months. The **server** simply never got an equivalent, and these were the only two places a formula value was written back rather than passed through (audited: `Customer_Order_Name__c`, the other HYPERLINK formula, is read-only everywhere server-side). **The fix:** new **`plainText()`** in `_sf.js` — tag-strip + entity decode + the same whitespace collapse `text()` does, so a written name reads like the board label. **Not DOMParser** (Workers have no DOM), and `&amp;` decodes **last** so `&amp;lt;` stays literal. Plus **`SF_NAME_MAX = 80`**, established empirically rather than guessed: a **61**-character split leg name was accepted by dev2 and a **121**-character combine one was not. Both call sites now budget against it — combine's template contributes 15 fixed characters so each label is clamped to 32, split's longest suffix is `" - Leg 25"` so its label is clamped to 71. Real GOA numbers are 5–8 characters, so **the clamp never bites on live data**; it is there so no order number can ever take a leg down again. 🚩 **`split.js` had the same bug and it was silent.** Its name is only 61 characters, so it FIT — split never failed, it just wrote an `<a href=…>` tag into every leg's `Name__c`, which is what a human reads in Salesforce. Fixed in the same commit; **this is the half nobody would have found by watching for errors.** **Verified** by `~/tmpwork/namefix.mjs`, which drives the real `onRequestPost` of both endpoints against a stubbed Salesforce and asserts on the `Name__c` in the actual `/composite` body: `Combined w/ 20460-4 - 20461-2` = **29 chars** (was 121), `20460-4 - Leg 1` = **15** (was 61), the `OrderNumber` fallback still fires when GOA is null or empty, and a **300-character** GOA clamps to **79**. 🚩 **Negative control run, per B11's lesson** — the labels were reverted to the pre-fix expressions and the harness was re-run: it reported **121 characters, html=YES**, the exact value dev2 rejected. The test can fail, so its passing means something. The harness also hard-exits if `/composite` was never called. ⚠️ **Not yet verified against an org** — that needs a deploy. **The moment it is live, re-run 3.6 and then 3.9**, both of which have been blocked on this. |
+| **B23** | ⚠️ unpushed | CC | **DONE 2026-09-11**, branch `fix/b19-verify-print-date-write`, commit **`11b457e`** (on top of B22), `functions/api/_print-date-rollup.js` + `production-runs/[id].js` + `production-runs/index.js`. **Unpushed.** **The print-date rollup now verifies its own write instead of trusting the 204.** This is the *visibility* half of **B19** — it does **not** fix the revert, and is worth having even if B19 is never solved, because the silence is what let 52% of dev2 drift with nothing logged anywhere. `rollupPrintDateToOrder` PATCHed, got a 204 and returned `changed: true` **without ever checking the value was still there** — so end to end the endpoint returned 200, the helper reported success, and the board re-read the same stale date. **Same class as B11: a failure reported as a success.** **Now:** it reads the field back, and on a mismatch logs loudly naming B19 and returns `{changed:false, reverted:true, attempted:<what it wrote>}` so a caller can tell *wrote it* from *thought it wrote it*; a read-back that cannot be performed returns **`verified:false`** rather than claiming success. The three run endpoints (create/update/delete) pass an **additive `printDateReverted`** flag into their JSON — **nothing renders it yet**, it is there so the information reaches the client at all. 📌 **Cost is one query, and only on the path that actually PATCHed** — the existing read-before-write returns early for the common no-op case, which the harness asserts (2 queries, not 3). ⛔ **Deliberately NOT done: no retry** (the write is reverted upstream; retrying just loses the same race more loudly) and **no change to `OrderPrintDateRollup` or `ProductionRunTrigger`** — both read in full, both correct, see E7.7. **Verified** by `~/tmpwork/b19verify.mjs` driving the real rollup *and* the real `PATCH /api/production-runs/:id` against a Salesforce stub that accepts the write then serves the old value back: reverting org → flag + log + `printDateReverted` in the JSON; honest org → `changed:true, verified:true`, no flag, no log; unverifiable → `verified:false`; no-op → no PATCH at all. 🚩 **Negative control:** with the read-back removed, **9 assertions fail** and the reverting-org response is a bare `{"ok":true,…}` with no warning — **exactly the silence this defect has been hiding behind.** |
 
 📌 **B11–B19 added 2026-09-09, and how they were found is part of the record.** They came out of a
 full read of the API layer and all nine boards, not from a test pass on the floor, so **every one is
@@ -2809,6 +2815,189 @@ not a measurement. **The test is cheap:** edit a run's scheduled start from `ind
 three reverting orders, then read `Order.Print_Date__c` off the record. **Check the record, not the
 board.**
 
+##### ✅ MEASURED 2026-09-11 — the app's rollup IS defeated, it is NOT a permission, and the
+##### replacement value is the field's own PRIOR value
+
+The "UNVERIFIED and the first thing to check" above is now checked. All reads below were
+**cache-busted** (`cache: 'no-store'` + a buster), because the same day established that a plain GET
+through the proxy can be served stale and imitate exactly this symptom.
+
+**1. The app's own write is reverted, on the same orders.** On `00013467`, `PATCH
+/api/production-runs/a3Xca000000HNoDEAW` (a scheduled-start move, the calendar-drag path) returned
+**200 `{ok:true}`**, and `rollupPrintDateFromRun` ran inside it. The rollup's own arithmetic over that
+order's four runs gives **2026-07-31T18:15** (PR-0034's actual start); the order stored
+**17:30**; they differ, so `rollupPrintDateToOrder`'s read-before-write **did** reach its PATCH.
+Afterwards the order still read **17:30**. The run move itself landed (PR-0075 14:00 → 15:00), so the
+endpoint and the auto-scheduler pin both worked — only the Order write vanished.
+
+**2. It is NOT FLS and NOT a permission — positive control.** The obvious rival explanation is the one
+`_print-date-rollup.js:104` warns about ("check the integration user has Edit on
+Order.Print_Date__c"), because a rejected PATCH is logged and swallowed and looks identical from
+outside. Ruled out: on **`00013493`** the *same code path* moved `Print_Date__c` **13:15 → 14:15 and
+it stuck**, then **back to 13:15** when the run was restored. The integration user can write the
+field, in both directions. **So the app and the Apex probe agree on which orders are affected** — this
+is one conditional defect, not two.
+
+**3. 🔑 NEW — the value it comes back as is the field's OWN PRIOR VALUE, not a recomputation.** This is
+the most useful thing found today, and it changes what to hunt for.
+
+| Order | | stored `Print_Date__c` | earliest **scheduled** | earliest **actual-or-scheduled** (what the rollup computes) |
+|---|---|---|---|---|
+| 00013467 | ❌ reverts | 07-31 **17:30** | 07-31 18:30 | 07-31 18:15 |
+| **00013493** | ✅ **works** | 09-04 **13:15** | 09-28 13:45 | 09-04 **13:15** ✅ |
+| 00013508 | ❌ reverts | 09-10 **12:30** | 09-04 19:00 | 09-04 15:15 |
+| 00013511 | ❌ reverts | 09-21 **17:00** | 09-21 **17:00** | 09-08 20:00 |
+
+**No single formula reproduces the three stored values.** "Earliest scheduled" fits 00013511 and
+neither of the others; 00013508 holds PR-0105's scheduled start, which is not even its earliest; and
+00013467 holds 17:30, which matches **no current run at all** — it is the start of a run that was
+deleted. What all three DO have in common is that each is a perfectly plausible value the field
+**used to hold**. ➡️ **Read the B19 signature literally: "reads back as its ORIGINAL value" means the
+prior value is being restored, not that a rival scheduler is computing a different one.** That points
+at a **before-save flow using `PRIORVALUE()`** or an `ISCHANGED`-guarded revert — not at a competing
+rollup, and not at `OrderPrintDateRollup`, which recomputes and could not produce these.
+
+**4. ❌ `Proposed_Run__c` is ruled out** as the source of the replacement value — one of the two
+candidates named above. **All four orders have zero proposed-run rows**, including the three that
+revert.
+
+**5. 🔑 The drift is a fingerprint, and it costs nothing to scan for.** Every reverting order has
+`Print_Date__c` out of step with what its own runs say; the control is **exactly** in step. So the
+full blast radius can be measured **without writing to a single record**: compare `Order.Print_Date__c`
+against `MIN(Actual_Start__c || Scheduled_Start__c)` over that order's runs, org-wide. Do that before
+anything else — it turns "3 of 4 sampled" into a real number.
+
+**6. ❌ The discriminating condition is still not found, but six candidates are eliminated.** Across
+the works/reverts split these are all mixed and none of them separates 00013493 from the other three:
+`Order_Substatus__c` (Completed appears on both sides), `Status`, method count (1 appears on both
+sides), `Account`, `Receiving_Status__c`, and whether the order has an Opportunity (all four do).
+➡️ **The remaining work is in Setup, not in the app**, and the app's API has nothing further to say.
+
+⚠️ **Blast radius, now that (1) is confirmed.** `Print_Date__c` drives card order on **both** boards,
+`prepBufferStats()`'s Prep Time KPI, and the urgency term of the priority score. So on an affected
+order, a manager dragging a job to a new slot on the calendar changes nothing that anyone downstream
+can see — the endpoint returns 200, the helper reports `changed: true`, and every board keeps ranking
+the job by the old date. **That is a live, daily, user-facing feature silently doing nothing**, and it
+is the reason to treat B19 as the top of the list rather than an E7.7 footnote.
+
+📌 **dev2 was left as found:** both probe writes were restored (PR-0075 back to 14:00, PR-0100's actual
+back to 13:15) and re-read to confirm.
+
+##### 📊 SCANNED 2026-09-11 — dev2 **52%** drifted, staging **64%**, production not yet run
+
+The drift scan proposed above was built and run. It is **read-only** — a SELECT-only Execute
+Anonymous script, no DML, no org switch — so it can be run against any org at any time, including
+production during a shift.
+
+```apex
+Map<Id,Order> os = new Map<Id,Order>([SELECT Id, OrderNumber, Print_Date__c FROM Order WHERE Print_Date__c != null]);
+Map<Id,Datetime> e = new Map<Id,Datetime>();
+for (Production_Run__c r : [SELECT PrintMethod__r.Order__c, Scheduled_Start__c, Actual_Start__c
+                            FROM Production_Run__c WHERE PrintMethod__r.Order__c IN :os.keySet()]) {
+    Datetime d = r.Actual_Start__c != null ? r.Actual_Start__c : r.Scheduled_Start__c;
+    if (d == null) continue;
+    Id o = r.PrintMethod__r.Order__c;
+    if (!e.containsKey(o) || d < e.get(o)) e.put(o, d);
+}
+Integer sync=0, later=0, earlier=0, norun=0;
+for (Id k : os.keySet()) {
+    if (!e.containsKey(k)) { norun++; continue; }
+    Long diff = os.get(k).Print_Date__c.getTime() - e.get(k).getTime();
+    if (diff == 0) sync++; else if (diff > 0) later++; else earlier++;
+}
+System.debug(LoggingLevel.ERROR, 'B19SCAN ordersWithPrintDate=' + os.size() + ' inSync=' + sync
+    + ' driftStoredLATER=' + later + ' driftStoredEARLIER=' + earlier + ' noRuns=' + norun);
+```
+
+📌 *Paste as ONE LINE into Execute Anonymous — the console's editor auto-indents and will mangle
+a multi-line paste. Tick **Open Log**, run, then filter the log for `B19SCAN`.*
+
+| Org | orders w/ print date | **have runs** | in sync | **drift, stored LATER** | drift, stored EARLIER | no runs |
+|---|---|---|---|---|---|---|
+| **dev2** | 64 | **42** | 20 | **14** | 8 | 22 |
+| **staging** | 3,249 | **11** | 4 | **5** | 2 | 3,238 |
+| production | — | — | — | — | — | **NOT RUN** |
+
+**dev2: 22 of the 42 orders that have both a print date and runs — 52% — disagree with their own
+runs.** Median drift **~5 days**, max **~13 days**; this is not rounding. **staging: 7 of 11, 64%.**
+
+✅ **Cross-validated with two independent instruments.** The Apex above and a separate scan driven
+through the app's own REST endpoints (`/api/production-orders` + `/api/production-runs`) agree
+**exactly** on dev2's split — **14 later, 8 earlier** from both. They differ only on totals, because
+the app's board query is rooted on `Production_Method__c` and cannot see the five orders that carry a
+print date with no method at all. Two instruments, same answer.
+
+🔑 **The DIRECTION of the drift separates B19 from E7.7, and this is the useful column.**
+E7.7's missing `after delete` can only ever leave an order holding an **earlier** date — you delete
+the earliest run, the new earliest is later, the stale stored value is therefore *before* what the
+runs now say. **It cannot produce `stored LATER`.** So the **14 dev2 and 5 staging orders in that
+column cannot be the delete gap**: on each, a run moved *earlier* (or an actual start was logged
+earlier), the rollup should have pulled the print date back with it, and it did not. That is the B19
+signature, at scale, on records nobody probed by hand.
+
+⚠️ **State this carefully: drift is a CANDIDATE SET, not per-order proof.** The mechanism is confirmed
+only on the orders actually probed (00013467 by app write, and the four Apex probes). A drifted order
+could in principle have another explanation. **The `stored LATER` column is the defensible number**;
+the `stored EARLIER` column is genuinely ambiguous between B19 and E7.7.
+
+🚩 **staging's shape is worth noting on its own: 3,238 orders carry a print date and have no runs
+at all.** That is not a defect — `rollupPrintDateToOrder` deliberately leaves the AM's committed date
+alone when an order has no runs — but it means **staging can never be the org that proves anything
+about this rollup**, the same way §8 item 3.10 found it cannot be the org that proves anything about
+board size. Only 11 orders there exercise the code path.
+
+⛔ **PRODUCTION IS THE NUMBER THAT MATTERS AND IT IS STILL MISSING.** Two blockers, both trivial:
+this Chrome profile is **not logged in to production**, and the browser extension has **no site
+permission** for `cultureapparel.lightning.force.com` (the sandbox domains do have it). Log in and
+grant the domain, or paste the script above into production's Developer Console by hand. Until that
+number exists, B19's priority is an inference from two sandboxes, not a measurement of the shop.
+
+##### 🔎 HUNT NARROWED 2026-09-11 — it is NOT a before-save flow. Look at the after-save eleven.
+
+Step 2 of the list below was started in dev2 while production access was blocked. `FlowDefinitionView`
+gives the candidate set in one query (Developer Console, no Tooling API needed):
+
+```sql
+SELECT Label, ApiName, ProcessType, TriggerType, TriggerOrder FROM FlowDefinitionView
+WHERE TriggerObjectOrEventLabel = 'Order' AND IsActive = true ORDER BY TriggerType
+```
+
+**14 active flows on Order in dev2, and only three are before-save.** (§4 elsewhere says "19 flows on
+Order update" — that count includes inactive definitions and Process Builder; **14 active is the
+number that matters**, and only 2 of those could possibly revert a field on update.)
+
+| Flow | Trigger | Verdict |
+|---|---|---|
+| `Order_Count` | **RecordBeforeSave**, *"A record is created"* only | ❌ **RULED OUT** — never runs on update |
+| `Order_Hold_Automation` | **RecordBeforeSave**, created or updated, Fast Field Updates | ❌ **RULED OUT for B19** — its two Assignments write `Hold_Placed_Date__c` / `Hold_Placed_By__c` and nothing else. It does not touch `Print_Date__c`. |
+| `Inventory_Log_from_Deleted_Order_Header` | RecordBeforeDelete | ❌ not an update path |
+| 11 others | **RecordAfterSave** | 🔎 **the remaining candidates** |
+
+🔑 **So the working hypothesis in this section — a before-save flow using `PRIORVALUE()` — is wrong,
+and an AFTER-save flow fits the evidence just as well.** Worth spelling out, because it is not
+obvious: an after-save flow that re-sets `Print_Date__c` runs **inside the same transaction** as the
+`Database.update`. So the DML still returns `isSuccess() = true`, and a SOQL re-read *after* that DML
+— which is exactly how B19 was measured — sees the value the after-save flow put back. **Identical
+symptom, different half of the save.** The REST PATCH path behaves the same way: 204, then the old
+value on the next read.
+
+📌 **Next, and it is now a short list.** Of the eleven after-save flows, two are print-date-shaped
+by name — **`ORDER_Scheduled_Update`** (the only one carrying a `TriggerOrder`, 200) and
+**`OrderStatusDateStamps`** — with `AUTOLAUNCH_OrderUpdate`, `OrderAnyUPDATE` and
+`RECORDTRIGGER_ORDER_Production_Status` behind them. Open those five and look for an assignment to
+`Print_Date__c`. Still worth doing first, and cheaper than any of it: **Setup → Object Manager →
+Order → Fields → `Print_Date__c` → *Where is this used?*** — that lists every reference outright and
+would settle this in one page. It also covers what a flow list cannot: **Apex triggers, workflow
+field updates, and managed-package automation**, none of which have been ruled out.
+
+🚩 **Side finding, unrelated to B19 but real: `Order_Hold_Automation` (Active, V2) references two
+fields that do not exist on Order.** Both Assignments show *"The `Hold_Placed_Date__c` field doesn't
+exist on the Order object, or you don't have access to the field"* — same for `Hold_Placed_By__c`.
+An active before-save flow assigning to a missing field is a failed save waiting to happen on
+whichever branch of its `Route Hold Change` decision fires. Either the fields were deleted out from
+under it or the integration/admin profile cannot see them (the error message cannot tell the two
+apart — **trap 1 territory**). **Worth its own look;** nothing in this session touched it.
+
 ##### What to look at, in order
 
 1. **Setup → Object Manager → Order → Fields → `Print_Date__c` → *Where is this used?*** Cheapest, and
@@ -4781,17 +4970,21 @@ the list behind it. So the honest statement of the risk is: **the warning exists
 decision is made.** Both states screenshotted 2026-09-11. Worth its own story: carry the demo state
 into the drawer (a strip above the action button), which also fixes B15 for free.
 
-🚩🚩 **NEW TRAP, and it may invalidate B19's evidence — a read-back through the proxy can be
-SERVED FROM BROWSER CACHE.** Immediately after the successful Complete, re-reading the record through
-`GET /api/production-orders` returned the **pre-write value** (`Status: "Enter Tracking"`) while the
-board query already reflected the change. Re-reading with `cache: 'no-store'` and a cache-busting
-param returned `"Complete"`. **The stale read is indistinguishable from a write being accepted and
-then reverted — which is exactly what B19 is currently diagnosed as.** `complete.js:56` sets
+🚩🚩 **NEW TRAP — a read-back through the proxy can be SERVED FROM BROWSER CACHE.** Immediately
+after the successful Complete, re-reading the record through `GET /api/production-orders` returned the
+**pre-write value** (`Status: "Enter Tracking"`) while the board query already reflected the change.
+Re-reading with `cache: 'no-store'` and a cache-busting param returned `"Complete"`. **A stale read is
+indistinguishable from a write being accepted and then reverted.** `complete.js:56` sets
 `Cache-Control: no-store` on its own response, but the GET endpoints used to verify writes do not.
-➡️ **Before any more work on B19: re-run its read-backs with `cache: 'no-store'` + a cache-buster.**
-If B19's `isSuccess()=true`-then-reverted evidence came from a plain GET, it may not be a revert at
-all. The two orders that refused the fixture PATCH with a real `400` (`00013435`, `00013436`) are
-unaffected by this — a 400 is not cacheable evidence — so that half of the B19 shape still stands.
+➡️ **Any browser-side verification of a write must use `cache: 'no-store'` plus a cache-buster.**
+
+❌ **CORRECTION 2026-09-11 (same day): I wrote here that this "may invalidate B19's evidence." It does
+not, and that claim was wrong.** I extended a browser finding to a measurement that never touched a
+browser. **B19 was measured in Apex, in the Developer Console, reading back inside the same
+transaction as the `Database.update`** — see the code block in B19's own section. There is no HTTP
+layer, no proxy and no browser cache anywhere in that path. **B19 stands exactly as written: P0,
+`isSuccess() = true` with the stored value unchanged, 3 of 4 orders.** The lesson is mine, not B19's:
+*check which instrument produced a finding before deciding a new trap undermines it.*
 
 ⚠️ **3.2's scope: the poll→flag mechanism is proved; the carrier wizard's Print button was NOT
 pressed.** The `zkmulti__MCShipment__c` row was created through the app's own
@@ -5771,6 +5964,15 @@ Newest first. One line per change; link to the story that carries the detail.
 
 | Date | What | Where |
 |---|---|---|
+| 2026-09-11 | **The AM's proposed press now reaches the run form** — `calendar.html` and `pre-production.html` both prefill `Press__c` from the proposal instead of making the manager re-pick a press the AM already chose, and both show it on the suggestion card (leading the meta line, ahead of print location) so it can be read before committing. **Two different guards, because the two pickers fail differently:** the calendar's is a `<select>`, so the press is carried only when it is actually in `presses()` — a `<select>` given a value with no matching `<option>` renders BLANK while reading as filled, and `POST /api/production-runs` requires `pressId`; pre-production's is a typeahead, where the visible box is bound to `pressQ` while the submit sends `pressId`, so id + name + query move together or not at all. Server side was already committed at `411715e`. Demo: calendar's `Proposals` fixture now carries `pressId:'p2'` (a real `_demo.presses` id, so demo exercises the carry-through, not the fallback); pre-production has no proposal fixtures at all — it fetches them live — so nothing to add there. Verified by `~/tmpwork/presscarry.mjs`, which extracts both real `useProposal()` bodies out of the shipped HTML and asserts on the patch that reached `setRunField()` — 9/9, and confirmed to FAIL 2/9 when the calendar guard is deleted — plus a browser run of both surfaces. ⛔ **DO NOT MERGE TO `main`:** production has neither `Proposed_Run__c.Press__c` nor the flow, and `proposed-runs/index.js` + `calendar/index.js` now name that field in their SELECTs — trap 1, so an org without it loses the WHOLE calendar and proposals list behind an HTTP 200. Branch `feat/proposed-run-press`, unpushed | §4, §9 |
+| 2026-09-11 | ✅ **STAGING now matches dev2 — both fields and the flow, all three verified by reading them back.** **`Account.Print_Method__c`** created (restricted picklist `Screen Print` / `Heat Press` / `Embroidery`) and set on the same five press Accounts, each confirmed `Type = 'Press'` at the moment of the edit: Press 1 `001ca00000SLbkR` → Screen Print, Press 2 `001ca00000SLRWZ` → Screen Print, Embroidery Machine `001ca00000SLXNV` → Embroidery, Shirt Press `001ca00000SLfo1` → Heat Press, Hat Press `001ca00000SLRLJ` → Heat Press — **re-fetched from the server afterwards, all five correct.** **`Proposed_Run__c.Press__c`** created as Lookup(Account) (`00Nca00000BH9u4`, object `01Ica000000W5z4`) and **compared field-by-field against dev2's `00Nca00000BHBfz`: label, API name, child relationship `Proposed_Runs`, Required off, `fkConstraint=N`, filter `Account.Type equals Press`, `IsOptional=0` — identical in both orgs.** **Flow: V45 saved and ACTIVE** (`301ca00000TvKKiAAN`), carrying the same three edits as dev2's V44 — `PressChoices` record choice set, `Press`/`RunPress` picklist inside the Schedule Runs repeater, and the `Press ← Current Item from Loop Loop Run Rows > Press` mapping on Create Proposed Run — all re-verified after a fresh reload of V45 from the server. 🎯 **THE DOC WAS WRONG ABOUT STAGING AND IS NOW CORRECTED: browser automation CAN reach staging.** §"What a session like this cannot do" claimed the extension had no permission on the staging hosts; it has, and classic Setup on `cultureapparel--staging.sandbox.my.salesforce.com` is as scriptable as dev2's. Two staging-specific notes worth keeping: **Lightning record pages are forced, so the classic edit form needs `/<id>/e?nooverride=1&isdtp=vw`** (the field's `00N…` id is the `<select>`'s DOM id — find it by matching option values); and **screenshots work on `my.salesforce-setup.com` but JavaScript does not**, so the Lightning Flows list is drivable by click and scroll only, and it lazy-loads in blocks that skip letters when you scroll fast. ⚠️ **Version numbers still do not align across orgs** — dev2 went V43→V44, staging V44→V45, same change. ⚠️ **Neither org has been exercised end to end yet**, and **production still has neither field**, so `feat/proposed-run-press` must not reach `main` until production has `Proposed_Run__c.Press__c` — `proposed-runs/index.js` and `calendar/index.js` now name it in their SELECTs and trap 1 fails the WHOLE query, not just that column | §4, §11 |
+| 2026-09-11 | ✅ **Press-on-proposed-run is BUILT AND LIVE IN DEV2 — flow included. `Order_and_Order_Items_SubflowDesign` V44 is saved and Active.** The Schedule Runs screen now carries a **Press** picklist (API name `RunPress`, Text, **not required**) **inside the "Schedule Runs" repeater**, so every row a manager adds gets its own press — the same screen as the Machine Group/Method picker, as asked. Its choices come from a new **Record Choice Set `PressChoices`**: object `Account`, filter `Type Equals Press`, **Choice Label = `Name`, Choice Value = `Id`**, data type Text — so the picklist shows "Press 1" and stores the 18-character Account Id the lookup needs. `Create Proposed Run` gained one mapping: **`Press` ← `Current Item from Loop Loop Run Rows > Press`**, alongside the eight that were already there (Machine Group, Notes, Order, Print Location, Proposed Hours, Proposed Start, Quantity, Status). 🔑 **Verified by reloading V44 fresh from the server and re-opening both elements**, not by trusting the save toast — the picklist is inside the repeater box (above Remove/Add, not after it), Choice reads `PressChoices`, and the field mapping is present. ⚠️ **Not yet exercised end to end.** The one thing metadata cannot prove is that a Text choice value lands in a **Lookup(Account)** field through Flow DML; the lookup filter `Account.Type equals Press` will never reject a value that came from `PressChoices`, so this is expected to pass, but **the first Close and Create Order run in dev2 is the test** — pick a press on a run row, then check `SELECT Press__c, Press__r.Name FROM Proposed_Run__c ORDER BY CreatedDate DESC LIMIT 5`. ⚠️ **The Developer Console query editor could not be driven this session** — `CodeMirror.setValue()` reports the new text but the console executes its old buffer, and `ctrl+a` prepends instead of replacing, so a half-typed query kept erroring. Not worth fighting; Setup itself stays scriptable via classic. 📌 **Staging is deliberately untouched** — Anthony reviews dev2 first, then the two fields + the same flow change get replicated there. | §11, this row |
+| 2026-09-11 | 🔧 **Press-on-proposed-run: BOTH FIELDS BUILT IN DEV2 and verified.** **`Account.Print_Method__c`** — restricted picklist, values `Screen Print` / `Heat Press` / `Embroidery` matching `Production_Method__c.Type__c` exactly; populated on all five press Accounts (Press 1 → Screen Print, Press 2 → Screen Print, Embroidery Machine → Embroidery, Shirt Press → Heat Press, Hat Press → Heat Press — the same mapping `PRESS_GROUPS` infers from names, now written down where Salesforce can read it). **`Proposed_Run__c.Press__c`** — **Lookup(Account)**, optional, clear-on-delete, child relationship `Proposed_Runs`, lookup filter `Account.Type equals Press`; API name deliberately matches `Production_Run__c.Press__c` so the value copies to the real run with no name matching. Both confirmed by querying `FieldDefinition`, not by trusting the save screen. 🎯 **TOOLING LESSON, and it reverses what this row first said: Salesforce Setup IS fully scriptable from this session — via CLASSIC Setup on `my.salesforce.com`, not the Lightning shell.** The Lightning Setup shell (`my.salesforce-setup.com`) renders its content in a frame the extension's JavaScript cannot see (`iframes: 0`, `radios: 0` while the screenshot plainly shows them) and will not scroll from synthetic input — which looked like a hard wall. **The classic equivalents are ordinary pages in the same document**: `/p/setup/layout/LayoutFieldList?type=<Object>` for a standard object's fields and `/p/setup/field/NewCustomFieldStageManager?entity=<Object or 01I id>` for the new-field wizard, where every input has a plain id (`MasterLabel`, `DeveloperName`, `ptext`, `pickopts_1`, `DomainEnumOrId`, `fkConstraintN`, `critfld1`/`critop1`/`pVAL1`) and can be set and submitted with one script per step. Get a custom object's `01I` id from `SELECT DurableId FROM EntityDefinition`. ⚠️ Two gotchas: the stage manager reports **"Invalid Data"** from stale DOM even when it has advanced a step — **check `Step N of M` rather than trusting the banner** — and Execute Anonymous / Query Editor coordinates shift when the window resizes, so drive the console by JS, not clicks | §4, new story | The Setup content frame blocks the extension's JavaScript *and* page-reading (`Permission denied for reading pages on this domain`), and it does not scroll from synthetic input — so only what fits in a fixed ~849px viewport is clickable, and step 1 of the New Custom Field wizard needs a radio below the fold. **Reading the orgs works fine** (Developer Console queries, Execute Anonymous, Flow Builder inspection) — it is only *editing* metadata through the UI that is out of reach. 📌 **So the split for any Salesforce metadata story is: Claude specs and verifies, Anthony clicks.** Do not plan a story around Claude driving Setup. Spec covers `Account.Print_Method__c` (picklist, values matching `Production_Method__c.Type__c`), `Proposed_Run__c.Press__c` (Lookup(Account), optional, filtered to `Type='Press'`), the Repeater-screen change in `Order_and_Order_Items_SubflowDesign` v43→v44, and the app-side carry-through | §4, new story |
+| 2026-09-11 | 🔍 **Survey for a new story — a press picker on Close and Create Order — and it turned up a structural gap.** Presses are **Account records with `Type = 'Press'`** (dev2 has exactly five: Press 1, Press 2, Embroidery Machine, Shirt Press, Hat Press) and `Production_Run__c.Press__c` is **Lookup(Account)**. `Proposed_Run__c` has **20 fields and no press field** — checked against the object, not the app's SELECT list. ✅ `Machine_Group__c` is **not** a press field: it holds print METHODS (Screen Print 34, Heat Press 13, Embroidery 3), so no duplication. 🚩🚩 **The press→method mapping exists ONLY in the dashboard's JavaScript.** `_priority.js:133` `PRESS_GROUPS` matches **regex against the press's NAME** (`/(heat|hat|shirt)\s*press|transfer/i` and friends) and **no field on Account records which method a press serves** — confirmed by listing Account's 59 custom fields. 📌 **That is why E3.3's misclassification bug was possible at all** (a bare `press` pattern put Press 1 and Press 2 under Heat Press), and it means any org-side feature that needs to know a press's method — starting with filtering the CAM's press choices by the job's method — **has no source of truth to read.** ➡️ **Proposed: a picklist on Account (Screen Print / Heat Press / Embroidery) set on the five press records**, which both enables the filter and gives the dashboard something to read *instead of* pattern-matching names. The flow to change is `Order_and_Order_Items_SubflowDesign`, **active at version 43**, whose Repeater screen already carries the `Print_Location__c` precedent from 2026-08-20 | §4, new story |
+| 2026-09-11 | 🔎 **B19 root-cause hunt narrowed in dev2: it is NOT a before-save flow.** `FlowDefinitionView` shows **14 active flows on Order, only 3 before-save** — `Order_Count` fires on **create only** (ruled out), `Order_Hold_Automation` assigns `Hold_Placed_Date__c`/`Hold_Placed_By__c` and **never touches `Print_Date__c`** (ruled out), and the third is before-**delete**. 🔑 **This section's standing hypothesis (a before-save `PRIORVALUE()` flow) is therefore wrong — and an AFTER-save flow fits the same evidence:** it runs inside the same transaction, so the DML still reports `isSuccess()=true` and the re-read afterwards sees the value it put back. Same symptom, other half of the save. **11 after-save flows remain**; `ORDER_Scheduled_Update` and `OrderStatusDateStamps` are the print-date-shaped names. 🚩 Side finding: **`Order_Hold_Automation` is ACTIVE and references two fields that don't exist on Order** (`Hold_Placed_Date__c`, `Hold_Placed_By__c`) — a failed save waiting to happen, or trap 1 hiding them. Untouched, needs its own look. ⛔ Still no production scan — the login needs Anthony's boss | §4 B19 |
+| 2026-09-11 | 📊 **B19 SCANNED, and 🔧 the rollup now verifies its own write (B23).** Read-only Apex drift scan (script in §4 B19, safe to run in production during a shift): **dev2 — 22 of the 42 orders with both a print date and runs, 52%, disagree with their own runs** (median ~5 days, max ~13); **staging — 7 of 11, 64%**. ✅ Cross-validated: the Apex and an independent scan through the app's own endpoints agree **exactly** on dev2's 14/8 split. 🔑 **Direction separates the two causes:** E7.7's missing `after delete` can only leave the stored date EARLIER, so the **14 dev2 / 5 staging orders storing a LATER date cannot be the delete gap** — that column is the defensible B19 number. ⛔ **Production not scanned** — this Chrome profile isn't logged in and the extension has no permission for the production domain; that is still the number that sets the priority. 🔧 **B23 shipped** (branch `fix/b19-verify-print-date-write`, `11b457e`, unpushed): the rollup reads the field back after its 204, logs loudly and reports `reverted:true` instead of `changed:true`, and the run endpoints pass a `printDateReverted` flag to the client. No retry, no Apex touched. Negative control: without the read-back, 9 assertions fail and the response is a bare `{ok:true}` | §4 B19, B23, E7.7 |
+| 2026-09-11 | 🔴 **B19 measured through the APP, and it is worse than the row said: the dashboard's own print-date rollup is defeated too.** A calendar-style run move on `00013467` returned **200 `{ok:true}`**, the rollup's arithmetic (18:15) differed from the stored value (17:30) so it definitely PATCHed — and the order still read **17:30**. Cache-busted. ❌ **Not FLS:** positive control on `00013493` moved `Print_Date__c` 13:15→14:15 and back through the *same code path*, both stuck. One conditional defect, and the app and the Apex probe agree on which orders. 🔑 **NEW — the replacement value is the field's OWN PRIOR value, not a recomputation.** No formula reproduces the three stored values (00013511 = earliest scheduled, 00013508 = a NON-earliest run's scheduled start, 00013467 = a run that no longer exists); each is a plausible *historical* value. ➡️ hunt a **before-save flow using `PRIORVALUE()`**, not a rival scheduler. ❌ `Proposed_Run__c` ruled out — all four orders have zero. ❌ Six discriminators eliminated (substatus, status, method count, account, receiving status, has-Opportunity). 🔑 **Drift is a fingerprint:** affected orders are exactly those where `Print_Date__c` disagrees with `MIN(Actual||Scheduled)` over their runs — **the full blast radius is measurable org-wide without writing anything.** ⚠️ Dragging a job on the calendar has been silently doing nothing on affected orders, while `Print_Date__c` drives both boards' card order, the Prep Time KPI and the priority score. dev2 left as found | §4 B19, E7.7 |
+| 2026-09-11 | ❌ **CORRECTION — the browser-cache trap does NOT invalidate B19, and saying it might was my error.** B19 was measured in **Apex, in the Developer Console, reading back inside the same transaction** as the `Database.update` — no HTTP layer, no proxy, no browser cache in that path. **B19 stands as written: P0, `isSuccess() = true` with the stored value unchanged, 3 of 4 orders.** The cache trap is real and still applies to any *browser-side* verification of a write; it just has no bearing here. 📌 Lesson recorded in place: **check which instrument produced a finding before deciding a new trap undermines it** | §4 B19, §8 surface 3 |
 | 2026-09-11 | 🎯 **The git-on-iCloud bus errors have a six-file fix: hydrate `.git/objects/pack/*` FIRST.** Git mmaps every pack `.idx` on almost any object lookup, so **one dataless pack file makes nearly every git command SIGBUS** — `git hash-object -w` on a single working file crashed. Staging the six pack files fixed `add`, `write-tree`, `commit-tree` and `update-ref` immediately. **Six files, not the 688 the 2026-09-09 count implied.** Full working order recorded in §2's eviction subsection, plus two traps it cost time: a dataless `.git/info/exclude` fails with `cannot use … as an exclude file` (reads like config, isn't), and **this mount forbids `unlink`** — so a crashed git leaves an `index.lock` that cannot be removed and blocks every later command; **`mv` it aside**, `rm` will not work. ⚠️ `git status`/`diff`/`ls-tree -r` may still crash afterwards and **that does not mean the commit failed** — verify with `git rev-parse HEAD:<path>` vs `git hash-object <path>` instead | §2 iCloud eviction |
 | 2026-09-11 | 🔧 **B22 FIXED — the formula-HTML-into-a-Name-field bug that broke combine.** New `plainText()` + `SF_NAME_MAX = 80` in `_sf.js`; `combine.js` and `split.js` now flatten `GOA_Order_Number__c` and budget their leg names against the field. `Combined w/ 20460-4 - 20461-2` is **29 characters, was 121**; split's leg name is **15, was 61** and no longer carries an anchor tag. Branch `fix/b22-formula-html-in-name`, **unpushed**. Verified by a harness driving the real endpoints against a stubbed Salesforce and asserting on the `Name__c` in the `/composite` body, **with a negative control** that reverts the labels and reproduces the 121-character value. ⚠️ **Not verified against an org — needs a deploy.** On deploy, re-run **3.6** then **3.9**; both have been blocked on this, and 3.6 is the only thing that can finally exercise **E5.10's 12→25 ceiling** | §4 B22, §8 surface 3, E5.10, E7.4 |
 | 2026-09-11 | ✅ **E8.4 surface 3 is now 9 of 10 run — 3.2 PASSED and the surface has a verdict.** 3.2: baseline 0 → shipment created → poll fired → `Shipping_Label_Printed__c` = **true** on the record, green "Shipping Label Printed" banner on screen. The shipment was logged through the app's own endpoint rather than the carrier wizard, so **no real label was bought**; the remaining sliver (does Zenkraft's Print write a row the poll sees) is narrowed by **three July-2026 shipment rows this app did not create that the app's `Order__c` query finds**. **Surface 3 tally — PASS: 3.1, 3.2, 3.3, 3.7 (live), 3.8. PARTIAL: 3.4, 3.5. FAIL: 3.6, 3.9. N/A: 3.10.** 🔴 **The one blocker is the `Name__c` HTML bug** — it fails combine outright, dirties split's record names, blocks 3.9's live half, and **travels to every org**. Fix that and 3.6 + 3.9 both become runnable | §8 surface 3, §4 E8.4 |
