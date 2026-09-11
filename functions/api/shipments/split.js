@@ -70,7 +70,7 @@
  * need at least one item and a carrier + tracking number, same minimum
  * ../index.js already requires for a normal shipment log.
  */
-import { apiVersion, jsonError, runQuery } from "../_sf.js";
+import { apiVersion, jsonError, runQuery, plainText, SF_NAME_MAX } from "../_sf.js";
 import { runComposite, runChunked, rollbackCreated, COMPOSITE_LIMIT } from "../_composite.js";
 import { requireCap } from "../_session.js";
 
@@ -122,7 +122,17 @@ export async function onRequestPost({ env, request }) {
     }
     const order = orderResult.records[0];
     if (!order) return jsonError("order_not_found", 404);
-    const orderLabel = order.GOA_Order_Number__c || order.OrderNumber || orderId;
+
+    /* GOA_Order_Number__c is a HYPERLINK() formula and arrives as ~53 characters
+     * of `<a href=...>` wrapping a 7-character order number -- see plainText() in
+     * ../_sf.js. Unlike ../combine.js this template is short enough that the raw
+     * value still FIT (61 characters against a field that holds 80), so split
+     * never failed; it just wrote an anchor tag into every leg's Name__c, which
+     * is what a human reads in Salesforce. Same fix, same budgeting: " - Leg 25"
+     * is the longest suffix this can produce, since HEAD 1 refuses more groups
+     * than COMPOSITE_LIMIT (25). */
+    const LABEL_MAX = SF_NAME_MAX - " - Leg 25".length;
+    const orderLabel = (plainText(order.GOA_Order_Number__c) || order.OrderNumber || orderId).slice(0, LABEL_MAX);
 
     // Every submitted item must actually belong to this order -- same
     // defensive check ../../orders/[id]/reprint.js uses, so a client can't
