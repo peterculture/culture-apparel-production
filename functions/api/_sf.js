@@ -235,6 +235,57 @@ export function soqlQuoteList(values) {
   return (values || []).map(soqlQuote).join(",");
 }
 
+/* Salesforce formula text, flattened so it is safe to WRITE BACK into a field.
+ *
+ * Trap 6 from the other side. GOA_Order_Number__c and Customer_Order_Name__c are
+ * HYPERLINK() formulas: they arrive as
+ * `<a href="/801ca00000PzawG" target="_self">20460-4</a>` -- 53 characters
+ * carrying 7 characters of meaning. ca-api.js's text() has flattened these for
+ * the BOARDS ever since the trap was first written down. The server never got an
+ * equivalent, and two call sites were putting the raw value straight into a
+ * Salesforce field.
+ *
+ * That was not cosmetic. shipments/combine.js built
+ * `Combined w/ <53 chars> - <53 chars>` = 121 characters for
+ * Shipment_Order__c.Name__c, which holds 80, and Salesforce refused the first leg
+ * with STRING_TOO_LONG -- so COMBINE FAILED AT TWO ORDERS, not at the 25 the
+ * composite ceiling talks about, and it failed in EVERY org, because a formula's
+ * definition travels with the metadata. Found by running the §8 surface 3
+ * checklist (item 3.6) against dev2 and confirmed against staging, 2026-09-11.
+ *
+ * NOT DOMParser, unlike the client: Workers have no DOM. Tag-stripping plus the
+ * entities a HYPERLINK() formula can actually produce, then the same whitespace
+ * collapse and trim ca-api.js does -- so a name written here reads the same as
+ * the label on the board.
+ *
+ * ORDER MATTERS in the entity pass: &amp; is decoded LAST, so `&amp;lt;` becomes
+ * the literal `&lt;` rather than `<`. Same reasoning as soqlEscape above.
+ *
+ * THIS IS FOR TEXT ON ITS WAY BACK TO SALESFORCE. Values merely being passed
+ * through to the browser must NOT be flattened here -- every board calls text()
+ * itself, and pre-stripping would change what each card renders. */
+export function plainText(value) {
+  if (value == null) return "";
+  let s = String(value);
+  if (s.indexOf("<") >= 0) s = s.replace(/<[^>]*>/g, "");
+  if (s.indexOf("&") >= 0) {
+    s = s
+      .replace(/&nbsp;/g, " ")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&(?:apos|#0*39);/g, "'")
+      .replace(/&amp;/g, "&");
+  }
+  return s.replace(/\s+/g, " ").trim();
+}
+
+/* Length of a standard Salesforce Name field. Shipment_Order__c.Name__c is one
+ * -- established empirically 2026-09-11: a 61-character split leg name was
+ * accepted and a 121-character combine leg name was not. Callers that build a
+ * name from record data budget against this rather than hoping. */
+export const SF_NAME_MAX = 80;
+
 /**
  * How many Ids to put in one SOQL `IN (...)` list.
  *
