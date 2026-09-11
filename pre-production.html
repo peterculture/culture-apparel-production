@@ -2100,6 +2100,19 @@ class Component extends DCLogic {
       const allowed=(api&&api.locationsForMethod)?api.locationsForMethod(rt.placements):[];
       if(allowed.indexOf(p.printLocation)!==-1) patch.printLocation=p.printLocation;
     }
+    /* Carry the AM's press. This picker is a TYPEAHEAD, not a select, so there
+       is no option list to validate against -- but it has its own trap: the
+       visible input is bound to pressQ while POST /api/production-runs sends
+       pressId. Setting the text without the id gives a box reading "Press 2"
+       over a form that submits no press at all, which is worse than an empty
+       box because nobody re-picks a field that looks done. So all three move
+       together or none do, exactly as pickRunPress() sets them -- and the id
+       is what gates it, because the id is the half that has to be real. */
+    if(p.pressId){
+      patch.pressId=p.pressId;
+      patch.pressName=p.pressName||'';
+      patch.pressQ=p.pressName||'';
+    }
     this.setRunField(patch);
     this.setState(st=>({proposalUsedId:p.id, runErr:'',
       hiddenProposalIds: st.hiddenProposalIds.concat([p.id]),
@@ -2562,8 +2575,11 @@ class Component extends DCLogic {
           ? new Date(p.proposedStart).toLocaleString([], {weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit'})
           : 'no date given';
         const bits=[];
-        // Print location leads the detail line -- it is the first thing the
-        // shop manager checks when deciding whether a suggestion is usable.
+        // Press leads the detail line, then print location -- the two things
+        // the shop manager checks to decide whether a suggestion is usable.
+        // Shown even when it cannot be prefilled (a press since deleted), so
+        // an empty press box has a visible explanation.
+        if(p.pressName) bits.push(p.pressName);
         if(p.printLocation) bits.push(p.printLocation);
         if(p.proposedHours) bits.push(p.proposedHours+(Number(p.proposedHours)===1?' hr':' hrs'));
         if(p.quantity) bits.push(p.quantity+' pcs');
@@ -2889,7 +2905,10 @@ class Component extends DCLogic {
         id:p.id, name:p.name,
         machine:p.machineGroup||'—',
         when: p.proposedStart ? new Date(p.proposedStart).toLocaleString([], {weekday:'short', month:'numeric', day:'numeric', hour:'numeric', minute:'2-digit'}) : 'no date given',
-        meta: [p.printLocation||null,
+        // Same ordering as the Management modal's list above and the
+        // calendar's card: press, then print location.
+        meta: [p.pressName||null,
+               p.printLocation||null,
                p.proposedHours ? p.proposedHours+(Number(p.proposedHours)===1?' hr':' hrs') : null,
                p.quantity ? p.quantity+' pcs' : null,
                p.proposedBy||null].filter(Boolean).join(' · ') || '—',
