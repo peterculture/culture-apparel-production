@@ -2446,7 +2446,7 @@
   }
 
   // Placement__c picklist values. MUST match Salesforce (Setup -> Object
-  // Manager -> Production Method -> Fields -> Placement) and the server-side
+  // Manager -> Decoration -> Fields -> Placement) and the server-side
   // ALLOWED_PLACEMENTS in functions/api/production-methods/index.js -- all
   // three copies have to move together if the shop adds a new print location.
   var PLACEMENTS = [
