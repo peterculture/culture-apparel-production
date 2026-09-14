@@ -526,7 +526,7 @@ window.__resources = Object.assign({}, window.__resources, {
             <div style="display:flex;flex-direction:column;gap:9px">
               <sc-if value="{{d.newRun.manyMethods}}" hint-placeholder-val="{{ false }}">
                 <div>
-                  <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:5px">Production Method</div>
+                  <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:5px">Decoration</div>
                   <select value="{{d.newRun.methodId}}" onChange="{{ d.newRun.onMethod }}" style="width:100%;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:12px;color:#ECEAE4;outline:none">
                     <sc-for list="{{d.newRun.methodOptions}}" as="m" hint-placeholder-count="2"><option value="{{m.id}}">{{m.name}}</option></sc-for>
                   </select>
@@ -1134,7 +1134,7 @@ class Component extends DCLogic {
         /* B6. This path already reloads below, so only the notice is needed. */
         if(api.noteRunRewind) api.noteRunRewind(dropRes);
       }else{
-        alert('This order has no production method to attach a run to.');
+        alert('This order has no decoration to attach a run to.');
         return;
       }
       // Order.Print_Date__c is NOT written from here any more. The run
@@ -1447,7 +1447,7 @@ class Component extends DCLogic {
         await api.patchProductionRun(run.Id, body, f.loadedAt);
       }else{
         const methodId=f.methodId || (((order.ProductionMethods||[])[0]||{}).Id);
-        if(!methodId){ this.runFail('This order has no production method to attach a run to.'); return; }
+        if(!methodId){ this.runFail('This order has no decoration to attach a run to.'); return; }
         const createBody={printMethodId:methodId, pressId:f.pressId,
           scheduledStart:start, scheduledEnd:end, quantity:qty};
         if(locationOn && f.printLocation) createBody.printLocation=f.printLocation;
