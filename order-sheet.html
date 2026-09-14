@@ -167,7 +167,7 @@ window.__resources = Object.assign({}, window.__resources, {
   </div>
 
   <div style="break-inside:avoid;margin-bottom:26px">
-    <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#6b645c;margin-bottom:10px">Production Methods</div>
+    <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#6b645c;margin-bottom:10px">Decorations</div>
     <div style="display:flex;flex-direction:column;gap:8px">
       <sc-for list="{{methods}}" as="m" hint-placeholder-count="2">
         <div style="display:flex;align-items:center;gap:10px;border:1.5px solid #d8d1c7;border-radius:8px;padding:10px 14px">
@@ -177,7 +177,7 @@ window.__resources = Object.assign({}, window.__resources, {
           <span style="margin-left:auto;font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#a79f92;flex-shrink:0">{{m.status}}</span>
         </div>
       </sc-for>
-      <sc-if value="{{methodsEmpty}}" hint-placeholder-val="{{ false }}"><div style="font:400 12px/1.4 'Archivo';color:#a79f92">No production methods linked to this order yet.</div></sc-if>
+      <sc-if value="{{methodsEmpty}}" hint-placeholder-val="{{ false }}"><div style="font:400 12px/1.4 'Archivo';color:#a79f92">No decorations linked to this order yet.</div></sc-if>
     </div>
   </div>
 
@@ -273,11 +273,11 @@ class Component extends DCLogic {
       const rec = o1.concat(o2).find(r => r.Id === orderId);
       /* Not an error in Salesforce -- both queries succeeded, this order just
          isn't in either result. The usual causes are an order marked Complete
-         (the boards' queries drop it) or one with no production method yet, so
+         (the boards' queries drop it) or one with no decoration yet, so
          say that rather than "not found", which reads as "deleted". */
       if(!rec){
         this.fail('Order ' + orderId + ' could not be found',
-                  'The order loaded no data from Salesforce. That usually means it is marked Complete, or it has no production method set up yet. Check it on the board before printing anything.');
+                  'The order loaded no data from Salesforce. That usually means it is marked Complete, or it has no decoration set up yet. Check it on the board before printing anything.');
         return;
       }
       /* One row per GARMENT + COLOUR, via sizeGrid() in ca-api.js (E1.5).
