@@ -358,7 +358,7 @@ window.__resources = Object.assign({}, window.__resources, {
         </div>
 
         <div>
-          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:11px">Production Methods</div>
+          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:11px">Decorations</div>
           <!-- B21: how many methods this ORDER has. Hidden entirely on a
                single-method order (methodSiblings returns shown:false), so the
                common case gains nothing to read. -->
@@ -413,7 +413,7 @@ window.__resources = Object.assign({}, window.__resources, {
                 </sc-if>
               </div>
             </sc-for>
-            <sc-if value="{{open.methodsEmpty}}" hint-placeholder-val="{{ false }}"><div style="font:400 11px/1.4 'Archivo';color:var(--text-faint);padding:2px">No production method set up yet.</div></sc-if>
+            <sc-if value="{{open.methodsEmpty}}" hint-placeholder-val="{{ false }}"><div style="font:400 11px/1.4 'Archivo';color:var(--text-faint);padding:2px">No decoration set up yet.</div></sc-if>
             <sc-if value="{{open.canManage}}" hint-placeholder-val="{{ false }}"><a href="{{open.addMethodUrl}}" style="display:inline-flex;align-items:center;justify-content:center;gap:7px;font:600 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#5E9B9A;background:transparent;border:1px dashed #3D5418;border-radius:8px;padding:11px;cursor:pointer;margin-top:2px;text-decoration:none" style-hover="background:#18230D" title="Opens the Pre-Production Management form for this order"><i class="ti ti-plus"></i>Add another method / location</a></sc-if>
           </div>
         </div>
@@ -1070,7 +1070,7 @@ class Component extends DCLogic {
          which is the third argument to CAApi.runQtyHint. null = not known yet,
          and the hint deliberately says nothing rather than implying zero. */
       methodCommitted:{},
-      // "Production Methods" section of the card drawer -- fresh per-order
+      // "Decorations" section of the card drawer -- fresh per-order
       // fetch (methodsByOrder, keyed by orderId) so a manager can see, edit,
       // and remove every sibling method on the order the open card belongs
       // to (not just the one method that card itself represents), and jump
@@ -1692,7 +1692,7 @@ class Component extends DCLogic {
     this.loadRunsForCard(cardId);
     this.loadMethodsForOrder(orderId);
   }
-  // ── Production Methods section of the card drawer -- edit-in-place + remove ──
+  // ── Decorations section of the card drawer -- edit-in-place + remove ──
   loadMethodsForOrder(orderId){
     if(!orderId || !this._api || this.state.connection!=='live') return;
     this.setState({methodsLoadingFor:orderId});
@@ -1703,7 +1703,7 @@ class Component extends DCLogic {
   async openMethodEdit(r){
     const api=this._api||window.CAApi;
     // await: confirmManager returns a Promise, and `!promise` is always false.
-    if(api && !(await api.confirmManager('Editing a production method'))) return;
+    if(api && !(await api.confirmManager('Editing a decoration'))) return;
     this.setState({
       methodEditId: r.Id,
       // Captured at open time so saveMethodEdit can ask the server "reject
@@ -1749,7 +1749,7 @@ class Component extends DCLogic {
       if(e && e.status===409){
         this.setState({methodSaving:false, methodEditId:null, methodEditForm:null, methodEditLoadedAt:null});
         this.loadMethodsForOrder(orderId);
-        window.alert('Someone else just updated this production method, so your changes were NOT saved. Reloading the latest version — please review it and re-apply your edit.');
+        window.alert('Someone else just updated this decoration, so your changes were NOT saved. Reloading the latest version — please review it and re-apply your edit.');
       } else {
         this.setState({methodSaving:false, methodErr:'Could not save — try again'});
       }
@@ -1758,8 +1758,8 @@ class Component extends DCLogic {
   async removeMethod(r, orderId){
     const api=this._api||window.CAApi;
     // await: confirmManager returns a Promise, and `!promise` is always false.
-    if(api && !(await api.confirmManager('Removing a production method'))) return;
-    if(!window.confirm('Remove this production method? This can’t be undone.')) return;
+    if(api && !(await api.confirmManager('Removing a decoration'))) return;
+    if(!window.confirm('Remove this decoration? This can’t be undone.')) return;
     if(!this._api) return;
     this._api.deleteMethod(r.Id).then(()=>{
       this.loadMethodsForOrder(orderId);
@@ -1770,7 +1770,7 @@ class Component extends DCLogic {
       if(this.state.openId===r.Id) this.setState({openId:null});
     }).catch(()=>{ window.alert('Could not remove — it may still have production items or runs attached to it. Remove those first.'); });
   }
-  // Builds one Production Methods row for the drawer, including its inline
+  // Builds one Decorations row for the drawer, including its inline
   // edit form (pm.mf) when that row is the one currently being edited.
   methodRowView(r, orderId, currentMethodId){
     const api=this._api||window.CAApi;
@@ -3271,7 +3271,7 @@ class Component extends DCLogic {
           hasErr:!!(st.runRowErr&&st.runRowErr[r.id]), hasMsg:!!(st.runRowMsg&&st.runRowMsg[r.id]),
         };
       });
-      // Production Methods section -- every Production_Method__c on this
+      // Decorations section -- every Production_Method__c on this
       // ORDER (fresh fetch, st.methodsByOrder), not just this card's own
       // method, so a manager can see/edit/remove sibling methods (and jump to
       // Pre-Production's Management form to add another) from any card.
