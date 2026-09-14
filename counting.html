@@ -335,6 +335,17 @@ window.__resources = Object.assign({}, window.__resources, {
         </sc-if>
 
         <button onClick="{{ onBack }}" style="width:100%;font:600 12px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-secondary);background:transparent;border:1px solid #232327;border-radius:11px;padding:16px;cursor:pointer;margin-top:12px" style-hover="border-color:#3a3a40;color:#ECEAE4">Back To Runs</button>
+        <!-- Counting is the last step of a run, and the press operator's next
+             job is almost never another count -- it is the production board.
+             Deliberately an anchor, not a button with a handler: this is a
+             page navigation rather than a state change (which is exactly what
+             the "Back To Runs" button above still is), and an anchor gets
+             middle-click and open-in-new-tab for free. Bare index.html with no
+             query params -- at this point the run is submitted and there is no
+             card or method left to deep-link to. Stacked full width rather
+             than two halves: this renders on a tablet at the press, where the
+             tap target matters more than the row. -->
+        <a href="index.html" style="display:flex;align-items:center;justify-content:center;gap:9px;width:100%;box-sizing:border-box;font:600 12px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-secondary);background:transparent;border:1px solid #232327;border-radius:11px;padding:16px;margin-top:9px;text-decoration:none" style-hover="border-color:#3a3a40;color:#ECEAE4">Back To Production<i class="ti ti-arrow-right"></i></a>
       </sc-if>
     </div>
   </sc-if>
