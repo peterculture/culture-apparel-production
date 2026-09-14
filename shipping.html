@@ -1060,7 +1060,7 @@ class Component extends DCLogic {
       emptyMsg: (boardState === 'empty' && q)
         ? ('No matches for "'+st.q.trim()+'". Clear the search to see the whole board.')
         : (api && api.listNotice)
-          ? api.listNotice(boardState, 'Nothing in Post-Production for this view. Orders arrive here once every production method on them is marked Completed.')
+          ? api.listNotice(boardState, 'Nothing in Post-Production for this view. Orders arrive here once every decoration on them is marked Completed.')
           : '',
       emptyIsLoading: boardState === 'loading',
       modalOpen:!!modal, modal, onCloseModal:()=>this.closeModal(),
