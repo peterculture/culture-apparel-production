@@ -111,7 +111,7 @@ const ALLOWED_TRANSFER_TYPE = new Set(["Screen Transfer","Digital Transfer","Sub
 const ALLOWED_METHOD_TYPES = new Set(["Screen Print", "Embroidery", "Heat Press", "Promotional Items"]);
 const ALLOWED_ITEM_TYPES   = new Set(["Screen", "Ink", "Thread", "Digitization", "Transfer"]);
 // Placement__c picklist values. MUST match Salesforce exactly (Setup ->
-// Object Manager -> Production Method -> Fields -> Placement) or the create
+// Object Manager -> Decoration -> Fields -> Placement) or the create
 // call fails with INVALID_OR_NULL_FOR_RESTRICTED_PICKLIST. If the shop adds a
 // new print location, add it in Salesforce first, then add it here.
 const ALLOWED_PLACEMENTS = new Set([
