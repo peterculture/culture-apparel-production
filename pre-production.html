@@ -264,7 +264,7 @@ window.__resources = Object.assign({}, window.__resources, {
         </div>
 
         <div>
-          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:11px">Production Methods</div>
+          <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:11px">Decorations</div>
           <!-- B21: how many methods this ORDER has. Hidden entirely on a
                single-method order (methodSiblings returns shown:false), so the
                common case gains nothing to read. -->
@@ -319,7 +319,7 @@ window.__resources = Object.assign({}, window.__resources, {
                 </sc-if>
               </div>
             </sc-for>
-            <sc-if value="{{open.methodsEmpty}}" hint-placeholder-val="{{ false }}"><div style="font:400 11px/1.4 'Archivo';color:var(--text-faint);padding:2px">No production method set up yet.</div></sc-if>
+            <sc-if value="{{open.methodsEmpty}}" hint-placeholder-val="{{ false }}"><div style="font:400 11px/1.4 'Archivo';color:var(--text-faint);padding:2px">No decoration set up yet.</div></sc-if>
             <sc-if value="{{open.canManage}}" hint-placeholder-val="{{ false }}"><button onClick="{{ open.onAddMethod }}" style="display:inline-flex;align-items:center;justify-content:center;gap:7px;font:600 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#5E9B9A;background:transparent;border:1px dashed #3D5418;border-radius:8px;padding:11px;cursor:pointer;margin-top:2px" style-hover="background:#18230D"><i class="ti ti-plus"></i>Add another method / location</button></sc-if>
           </div>
         </div>
@@ -565,7 +565,7 @@ window.__resources = Object.assign({}, window.__resources, {
     <div style="max-width:920px;margin:0 auto;padding:24px 26px 70px">
       <sc-if value="{{mgrShowInbox}}" hint-placeholder-val="{{ true }}">
         <div style="font:600 12px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:6px">Incoming orders</div>
-        <div style="font:400 12px/1.4 'Archivo';color:var(--text-muted);margin-bottom:18px">Orders in pre-production with no production method yet — plus reprints, which arrive with their method already mirrored and only need press time booked.</div>
+        <div style="font:400 12px/1.4 'Archivo';color:var(--text-muted);margin-bottom:18px">Orders in pre-production with no decoration yet — plus reprints, which arrive with their method already mirrored and only need press time booked.</div>
         <div style="position:relative;max-width:380px;margin-bottom:18px">
           <i class="ti ti-search" style="position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--text-faint);font-size:15px"></i>
           <input value="{{mgrQ}}" onInput="{{ onMgrSearch }}" placeholder="Search order #, customer, account…" style="width:100%;background:#121215;border:1px solid #242428;border-radius:9px;padding:11px 13px 11px 36px;font-size:13px;color:#ECEAE4;outline:none">
@@ -593,7 +593,7 @@ window.__resources = Object.assign({}, window.__resources, {
           </sc-for>
         </div>
         <sc-if value="{{inboxFailed}}" hint-placeholder-val="{{ false }}"><div style="border:1px dashed var(--danger-border);border-radius:12px;padding:40px 20px;text-align:center;font:400 13px/1.5 'Archivo';color:var(--danger-text)">Could not load the inbox. This is not "nothing to route" — the list could not be fetched at all. Check the connection and refresh.</div></sc-if>
-        <sc-if value="{{inboxEmpty}}" hint-placeholder-val="{{ false }}"><div style="border:1px dashed #2a2a2f;border-radius:12px;padding:40px 20px;text-align:center;font:400 13px/1.5 'Archivo';color:var(--text-faint)">No orders waiting for a production method. (Empty in demo mode — live once deployed against Salesforce.)</div></sc-if>
+        <sc-if value="{{inboxEmpty}}" hint-placeholder-val="{{ false }}"><div style="border:1px dashed #2a2a2f;border-radius:12px;padding:40px 20px;text-align:center;font:400 13px/1.5 'Archivo';color:var(--text-faint)">No orders waiting for a decoration. (Empty in demo mode — live once deployed against Salesforce.)</div></sc-if>
         <sc-if value="{{inboxNoMatches}}" hint-placeholder-val="{{ false }}"><div style="border:1px dashed #2a2a2f;border-radius:12px;padding:40px 20px;text-align:center;font:400 13px/1.5 'Archivo';color:var(--text-faint)">No incoming orders match "{{mgrQ}}".</div></sc-if>
       </sc-if>
 
@@ -713,7 +713,7 @@ window.__resources = Object.assign({}, window.__resources, {
 
       <sc-if value="{{mgrShowCreated}}" hint-placeholder-val="{{ false }}">
         <div style="background:#0D0D0F;border:1px solid #1f1f23;border-left:4px solid #7FA644;border-radius:12px;padding:16px 18px;margin-bottom:22px">
-          <div style="display:inline-flex;align-items:center;gap:7px;font:600 11px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:#BBD382;background:#18230D;border:1px solid #3D5418;border-radius:9px;padding:9px 13px;margin-bottom:12px"><i class="ti ti-check"></i>Production method created</div>
+          <div style="display:inline-flex;align-items:center;gap:7px;font:600 11px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:#BBD382;background:#18230D;border:1px solid #3D5418;border-radius:9px;padding:9px 13px;margin-bottom:12px"><i class="ti ti-check"></i>Decoration created</div>
           <div style="font:600 19px/1.1 'Oswald';color:#ECEAE4">{{createdPanel.customer}}</div>
           <div style="font:400 12px/1 'Archivo';color:var(--text-muted);margin-top:6px">{{createdPanel.num}} · {{createdPanel.qty}} pcs · {{createdPanel.methodLabel}}</div>
         </div>
@@ -973,7 +973,7 @@ class Component extends DCLogic {
       // All-boards sidebar (added 2026-08-11) -- see NAV_BOARDS/buildNavBoards
       // in ca-api.js.
       navOpen:false,
-      // Post-creation "Production Method Created" panel + the Create
+      // Post-creation "Decoration Created" panel + the Create
       // Production Run modal it launches -- see submitMethod()/submitRun().
       createdPanel:null, runModalOpen:false, runForm:null, runPressResults:[], runSubmitting:false, runErr:'', runMsg:'',
       /* Which Production_Method__c the open Create Production Run modal is
@@ -1011,7 +1011,7 @@ class Component extends DCLogic {
          matching block. Feeds runQtyHint's "N unallocated" tail. */
       methodCommitted:{},
       runsByMethod:{}, runsLoadingFor:null, runEdits:{}, runRowPressResults:{}, runRowSaving:{}, runRowErr:{}, runRowMsg:{},
-      // "Production Methods" section of the card drawer -- fresh per-order
+      // "Decorations" section of the card drawer -- fresh per-order
       // fetch (methodsByOrder, keyed by orderId) so add/edit/remove always
       // acts on the live list, including sibling methods still sitting in
       // Pre-Production themselves (unlike the board's own card list, which
@@ -1371,7 +1371,7 @@ class Component extends DCLogic {
     this.setState({mgrId:id, mgrSource:'inbox', mgrMultiMethod: rec.Multiple_Production_Methods__c === true, form, planResults:[], mgrErr:'', mgrMsg:''});
   }
   // Entry point for an order that's already staffed with at least one
-  // production method (so it won't be in /api/inbox any more -- that list
+  // decoration (so it won't be in /api/inbox any more -- that list
   // only shows orders with zero methods). Opens the SAME manager form,
   // seeded from the order data the worker board already has loaded, so a
   // manager can add a second (or third) placement/method to it -- e.g. an
@@ -1446,7 +1446,7 @@ class Component extends DCLogic {
     this.loadMethodsForOrder(orderId);
     this.loadProposals(orderId);
   }
-  // ── Production Methods section of the card drawer -- edit-in-place + remove ──
+  // ── Decorations section of the card drawer -- edit-in-place + remove ──
   /* opts.withRuns fans out a loadRunsForCard() per method once the list is
      back. Only the "Method Created" panel asks for that: it lists every method
      on the order with that method's own runs underneath, and runsByMethod is
@@ -1465,7 +1465,7 @@ class Component extends DCLogic {
   async openMethodEdit(r){
     const api=this._api||window.CAApi;
     // await: confirmManager returns a Promise, and `!promise` is always false.
-    if(api && !(await api.confirmManager('Editing a production method'))) return;
+    if(api && !(await api.confirmManager('Editing a decoration'))) return;
     this.setState({
       methodEditId: r.Id,
       // Captured at open time so saveMethodEdit can ask the server "reject
@@ -1513,7 +1513,7 @@ class Component extends DCLogic {
       if(e && e.status===409){
         this.setState({methodSaving:false, methodEditId:null, methodEditForm:null, methodEditLoadedAt:null});
         this.loadMethodsForOrder(orderId);
-        window.alert('Someone else just updated this production method, so your changes were NOT saved. Reloading the latest version — please review it and re-apply your edit.');
+        window.alert('Someone else just updated this decoration, so your changes were NOT saved. Reloading the latest version — please review it and re-apply your edit.');
       } else {
         this.setState({methodSaving:false, methodErr:'Could not save — try again'});
       }
@@ -1522,15 +1522,15 @@ class Component extends DCLogic {
   async removeMethod(r, orderId){
     const api=this._api||window.CAApi;
     // await: confirmManager returns a Promise, and `!promise` is always false.
-    if(api && !(await api.confirmManager('Removing a production method'))) return;
-    if(!window.confirm('Remove this production method? This can’t be undone.')) return;
+    if(api && !(await api.confirmManager('Removing a decoration'))) return;
+    if(!window.confirm('Remove this decoration? This can’t be undone.')) return;
     if(!this._api) return;
     this._api.deleteMethod(r.Id).then(()=>{
       this.loadMethodsForOrder(orderId);
       this.load();
     }).catch(()=>{ window.alert('Could not remove — it may still have production items or runs attached to it. Remove those first.'); });
   }
-  // Builds one Production Methods row for the drawer, including its inline
+  // Builds one Decorations row for the drawer, including its inline
   // edit form (pm.mf) when that row is the one currently being edited.
   methodRowView(r, orderId, currentMethodId){
     const api=this._api||window.CAApi;
@@ -1865,7 +1865,7 @@ class Component extends DCLogic {
       const res=await this._api.createMethod(body);
       if(res && (res.error || res.ok===false)) throw new Error(res.error||'create_failed');
       // 2026-07-22: instead of bouncing straight back to the inbox/board,
-      // land on a "Production Method Created" panel for THIS method --
+      // land on a "Decoration Created" panel for THIS method --
       // garment breakdown + specs/notes for reference, and a button into
       // the new Create Production Run modal. The manager can still leave
       // any time via the mgr header's "Back to Board" (closeMgr(), which
@@ -2153,7 +2153,7 @@ class Component extends DCLogic {
        Production Run button. Falls back to createdPanel for the pre-runTarget
        callers (and for a modal somehow opened without one). */
     const rt = st.runTarget || cp;
-    if(!rt.pmId){ this.setState({runErr:'No production method to attach this run to', runMsg:''}); return; }
+    if(!rt.pmId){ this.setState({runErr:'No decoration to attach this run to', runMsg:''}); return; }
     if(!f.pressId){ this.setState({runErr:'Pick a press', runMsg:''}); return; }
     const start=this.buildRunDateTime(f.startDate,f.startTime);
     if(!start){ this.setState({runErr:'Set a scheduled start date & time', runMsg:''}); return; }
@@ -2271,7 +2271,7 @@ class Component extends DCLogic {
       const ucs = window.CAApi.urgCardStyle(due.urg);
       // Card-face mockup thumbnail (added 2026-08-20) -- same treatment as the
       // worker board's cards (renderVals below) and index.html's, so an order
-      // looks the same before and after it has a Production Method. The URL
+      // looks the same before and after it has a Decoration. The URL
       // already rides along on /api/inbox as DesignMockupUrl (see
       // inbox/index.js, which calls fetchMockupsByOpportunity exactly like
       // /api/orders does), so this needs no extra request.
@@ -2432,7 +2432,7 @@ class Component extends DCLogic {
       ? cpMethodRecs.map(r=>{
           const placements=(r.Placements__c||'').split(';').map(x=>x.trim()).filter(Boolean);
           return { id:r.Id, type:r.Type__c||'', placements, status:r.Status__c||'',
-                   label:(r.Type__c||'Production Method')+(placements.length?(' – '+placements.join(' + ')):'') };
+                   label:(r.Type__c||'Decoration')+(placements.length?(' – '+placements.join(' + ')):'') };
         })
       : [{ id:cpRaw.pmId, type:'', placements:(cpRaw.placements||[]).slice(), status:'',
            label:cpRaw.methodLabel||'This method' }]);
@@ -2749,7 +2749,7 @@ class Component extends DCLogic {
       return Object.assign({},s,{ items, count:items.length,
         isEmpty: colState !== 'ready',
         emptyMsg: (colState === 'empty')
-          ? ('Nothing in ' + s.label + '. Orders appear here once a production method is created for them from the Management inbox.')
+          ? ('Nothing in ' + s.label + '. Orders appear here once a decoration is created for them from the Management inbox.')
           : ((window.CAApi && window.CAApi.listNotice) ? window.CAApi.listNotice(colState, '') : ''),
         emptyColor: colState === 'error' ? '#C9923A' : 'var(--text-muted)',
         readyLabel: ready+' ready to send · '+items.length+' in prep' });
