@@ -105,7 +105,7 @@ export async function onRequestGet({ env }) {
   try {
     const buildSoql = (withMulti) =>
       `SELECT ${PM_FIELDS.join(", ")}, ${ORDER_FIELDS.concat(withMulti ? [MULTI_METHOD_FIELD] : []).join(", ")} ` +
-      `FROM Production_Method__c ` +
+      `FROM Decoration__c ` +
       `WHERE Status__c = 'Pre-Production' AND Order__c != null`;
     // runQuery follows Salesforce's nextRecordsUrl pagination so a result
     // bigger than one batch (2000 records, org-dependent) doesn't silently
