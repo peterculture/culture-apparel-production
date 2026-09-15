@@ -533,6 +533,91 @@
     return out.length ? out : PLACEMENTS.slice();
   }
 
+  /**
+   * Which of an order's decorations does an AM's proposed run belong to? (B23)
+   *
+   * A Proposed_Run__c names its decoration only by TYPE -- Machine_Group__c,
+   * which carries the same vocabulary as Production_Method__c.Type__c ("Screen
+   * Print" / "Heat Press" / "Embroidery"). The AM proposes before any
+   * Production_Method__c exists, so there is no Id to carry and this has to be
+   * resolved against the order at the moment the manager adopts it.
+   *
+   * Getting it wrong is not cosmetic: calendar.html's new-run form defaults its
+   * decoration select to the order's FIRST decoration, so a Heat Press proposal
+   * on a Screen Print + Heat Press order booked press time against Screen Print
+   * with every other field correctly filled -- a wrong run that looks right.
+   *
+   * Never guesses. The four outcomes are distinct on purpose, because the
+   * caller has to be able to TELL THE MANAGER which one happened:
+   *   not-proposed        the AM named no type; nothing to match, say nothing
+   *   no-such-decoration  the order has no decoration of that type
+   *   matched             exactly one, or several narrowed to one by location
+   *   ambiguous           several of that type and no way to choose
+   *
+   * `ambiguous` is a real case, not a defensive branch: under D11/B4 an order
+   * legitimately carries two Screen Print decorations on different placements.
+   * Where the proposal names a print location that exactly one of them offers,
+   * that is a real answer and it is used. Otherwise the decoration is left
+   * alone -- picking the first would be a coin flip dressed up as a decision.
+   */
+  function matchProposalMethod(methods, machineGroup, printLocation){
+    var norm = function (s) { return String(s || '').trim().toLowerCase(); };
+    var want = String(machineGroup || '').trim();
+    if (!want) return { methodId:null, reason:'not-proposed', type:'' };
+    var same = (methods || []).filter(function (m) { return m && m.Id && norm(m.Type__c) === norm(want); });
+    if (!same.length) return { methodId:null, reason:'no-such-decoration', type:want };
+    if (same.length === 1) return { methodId:same[0].Id, reason:'matched', type:want };
+    var loc = String(printLocation || '').trim();
+    if (loc) {
+      var offering = same.filter(function (m) { return locationsForMethod(m.Placements).indexOf(loc) !== -1; });
+      if (offering.length === 1) {
+        return { methodId:offering[0].Id, reason:'matched', type:want, by:'location', location:loc };
+      }
+    }
+    return { methodId:null, reason:'ambiguous', type:want, count:same.length };
+  }
+  /* Does a decoration LABEL describe this type? pre-production.html's run modal
+     knows its decoration only as the label it was opened with ("Screen Print"
+     or "Screen Print - Full Front + Back", separator depending on the caller),
+     so this compares the leading segment. Returns null rather than false when
+     either side is missing: "we cannot tell" must not render as "these differ".
+     Plumbing Type__c through all four openRunModal call sites would be the
+     tidier fix and is not worth touching them for a warning string. */
+  function methodLabelIsType(label, type){
+    var l = String(label || '').trim(), t = String(type || '').trim();
+    if (!l || !t) return null;
+    if (l.toLowerCase() === t.toLowerCase()) return true;
+    return l.split(/\s+[\u00b7\u2013-]\s+/)[0].trim().toLowerCase() === t.toLowerCase();
+  }
+  /**
+   * The one sentence a manager reads after "Use this" (B23).
+   *
+   * Every guard in useProposal drops its value silently today, which makes
+   * "the AM did not specify a press" and "the AM specified a press this org no
+   * longer has" render identically -- as a blank box. The manager then either
+   * retypes something that was already decided, or ships a run missing what the
+   * AM asked for. Naming both halves is the whole point: what came across, and
+   * what did not and why.
+   *
+   * Deliberately a sentence appended to the existing runMsg rather than a new
+   * panel. This fires on a form the manager is already reading; a second box
+   * to dismiss is how it stops being read.
+   */
+  function proposalFillMessage(proposalName, carried, skipped, notes){
+    var kept = (carried || []).filter(Boolean);
+    var list = kept.length < 2 ? kept.join('')
+             : kept.slice(0, -1).join(', ') + ' and ' + kept[kept.length - 1];
+    var lead = 'Filled in from ' + (proposalName || 'the suggestion');
+    var out = [kept.length ? (lead + ' \u2014 ' + list + '.')
+                           : (lead + ', but none of it could be used on this form.')];
+    (skipped || []).filter(Boolean).forEach(function (s) { out.push(s); });
+    // The AM's note has nowhere to live: POST /api/production-runs writes six
+    // fields and none of them is a note. Showing it here is the only way it
+    // reaches the person booking the press.
+    if (notes && String(notes).trim()) out.push('AM note: \u201c' + String(notes).trim() + '\u201d');
+    return out.join(' ');
+  }
+
   var STATUS_HELP = {
     'Pre-Production': 'Screens, inks, thread and transfers are being prepped and garments counted in. Nothing is on a press yet.',
     'Ready for Print': 'Prep is finished and garments are staged. The job can be scheduled onto a press.',
@@ -2466,6 +2551,8 @@
     CHECK_FIELD: CHECK_FIELD, RECV_FROM_SF: RECV_FROM_SF, RECV_TO_SF: RECV_TO_SF, RECV_ORDER: RECV_ORDER, RECV_OPTIONAL: RECV_OPTIONAL, recvKeysBaseline: recvKeysBaseline, loadRecvKeys: loadRecvKeys, TIME_OPTIONS: TIME_OPTIONS,
     PLACEMENTS: PLACEMENTS, methodsList: methodsList, METHOD_META: METHOD_META,
     methodSiblings: methodSiblings, sameMethodId: sameMethodId,
+    matchProposalMethod: matchProposalMethod, methodLabelIsType: methodLabelIsType,
+    proposalFillMessage: proposalFillMessage,
     getOrders: getOrders, getProductionOrders: getProductionOrders, getInbox: getInbox, getPreProductionItems: getPreProductionItems, patchItem: patchItem, deleteItem: deleteItem, createItem: createItem, searchPlans: searchPlans, searchPresses: searchPresses, createMethod: createMethod, createProductionRun: createProductionRun, getProductionRuns: getProductionRuns, patchProductionRun: patchProductionRun, deleteProductionRun: deleteProductionRun, getProposedRuns: getProposedRuns, patchProposedRun: patchProposedRun, patchMethodStatus: patchMethodStatus, patchMethodChecklist: patchMethodChecklist, getMethodsForOrder: getMethodsForOrder, patchMethodFields: patchMethodFields, deleteMethod: deleteMethod, patchOrder: patchOrder, getOrderSizes: getOrderSizes,
     getCountableRuns: getCountableRuns, getRunResults: getRunResults, submitRunResults: submitRunResults,
     getRunLineItems: getRunLineItems, getMethodAllocation: getMethodAllocation, patchRunLineItems: patchRunLineItems,
