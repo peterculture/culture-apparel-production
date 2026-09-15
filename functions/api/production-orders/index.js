@@ -124,7 +124,7 @@ export async function onRequestGet({ env }) {
     // the chance to run.
     const soql =
       `SELECT ${PM_FIELDS.join(", ")}, ${ORDER_FIELDS.join(", ")} ` +
-      `FROM Production_Method__c ` +
+      `FROM Decoration__c ` +
       `WHERE (Status__c IN (${statusList}) OR Order__r.Status = 'Complete') AND Order__c != null`;
     // runQuery follows Salesforce's nextRecordsUrl pagination -- this is the
     // one query in the whole app with no date bound (it deliberately pulls
