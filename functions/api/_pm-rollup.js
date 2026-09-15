@@ -17,7 +17,7 @@
  */
 import { runQuery, sfFetch, apiVersion } from "./_sf.js";
 
-const PM_OBJECT = "Production_Method__c";
+const PM_OBJECT = "Decoration__c";
 
 // Production_Method__c.Status__c rank, lowest = least advanced. Keep in sync
 // with ALLOWED_STATUSES in production-methods/index.js and [id].js.
