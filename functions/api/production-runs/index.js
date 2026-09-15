@@ -192,7 +192,7 @@ export async function onRequestGet({ env, request }) {
    caller nothing was created, which is false. */
 /* This file otherwise only ever touches Production_Run__c; the rewind is the
    one place it writes the parent method. */
-const PM_OBJECT = "Production_Method__c";
+const PM_OBJECT = "Decoration__c";
 const REWIND_FROM = new Set(["In Production", "Post-Production", "Completed"]);
 const REWIND_TO = "Ready for Print";
 
