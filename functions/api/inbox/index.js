@@ -164,7 +164,7 @@ async function fetchReprintsAwaitingRuns(env) {
   //    one the main query's sub-select uses -- so no relationship name is guessed.
   const orderIds = orders.records.map((r) => r.Id).filter(Boolean);
   const methods = await runChunkedIdQuery(orderIds, (quoted) =>
-    runQuery(env, `SELECT ${REPRINT_METHOD_FIELDS.join(", ")} FROM Production_Method__c WHERE Order__c IN (${quoted})`),
+    runQuery(env, `SELECT ${REPRINT_METHOD_FIELDS.join(", ")} FROM Decoration__c WHERE Order__c IN (${quoted})`),
   );
   if (!methods.ok) throw new Error("reprint_method_query_failed:" + methods.status);
 
@@ -271,7 +271,7 @@ export async function onRequestGet({ env, waitUntil }) {
     const buildSoql = (withMulti) =>
       `SELECT ${FIELDS.concat(withMulti ? [MULTI_METHOD_FIELD] : []).join(", ")} FROM Order ` +
       `WHERE Status = 'Pre-Production' ` +
-      `AND Id NOT IN (SELECT Order__c FROM Production_Method__c) ` +
+      `AND Id NOT IN (SELECT Order__c FROM Decoration__c) ` +
       `ORDER BY Print_Date__c ASC`;
     // runQuery follows Salesforce's nextRecordsUrl pagination so the inbox
     // doesn't silently truncate if it ever grows past one query batch. See
