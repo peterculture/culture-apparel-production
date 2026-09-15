@@ -4,7 +4,7 @@
 system reference, trap list, task tracking, validation checklists and change history — one file, so
 there is one place to look and one place to update.
 
-**Last updated: 2026-09-09.** Replaces `ROADMAP.md`, `CLAUDE-CODE-QUEUE.md`, `CLAUDE.md`,
+**Last updated: 2026-09-11.** Replaces `ROADMAP.md`, `CLAUDE-CODE-QUEUE.md`, `CLAUDE.md`,
 `HANDOFF.md`, `VALIDATION-INTEGRATIONS.md`, `VALIDATION-SCENARIOS.md`, `SELECTOR-CHANGE.md` and
 `README.md`. See §12 for what happened to each of the old files and which ones were deliberately not
 carried over.
@@ -72,8 +72,155 @@ staging was at V35. Version numbers do not line up between orgs; do not use them
 in dev2 resolves in staging and production too. That is why the hardcoded `0055e000005tFYfAAM` in
 `CreateCalendarEvent` is not a promotion blocker — it has been checked in both.
 
-**Where to go next:** §1 Start here → §2 The traps → §4 Where things stand. §7 holds work that can
-be handed to Claude Code today, including the ready-to-run B9 prompt and the open-loops list.
+### ⏭️ RESUME HERE — HANDOFF, written 2026-09-14
+
+**This is a clean handoff at the end of a working session. Everything below was verified in the org
+or on disk on 2026-09-14, not carried forward from an earlier note.** Read this, then §2 The traps,
+then §4.
+
+---
+
+#### ✅ WHAT IS DONE AND VERIFIED
+
+**B9 is functionally complete in both sandboxes — both halves, for the first time.**
+
+| | dev2 | staging |
+|---|---|---|
+| **Item 1 — the enriched email** `B9 Order Complete With Damage - Awaiting AM` | ✅ **V2 Active** (9/11 4:27 PM) | ✅ **V3 Active** (9/14 7:30 AM, by change set) |
+| **Item 2 — the outcome screen** `B9 Record Misprint Outcome` | ✅ **Active** | ✅ **Active, V1** (9/14, by change set) |
+| Quick Action `Record_Misprint_Outcome` | ✅ | ✅ deployed |
+| Button on the 3 Order page layouts | ✅ all three | ⛔ **NONE — see open item 1** |
+| `Production_Method__c` priority fields | ✅ | ⚠️ deployed 9/14 but **no FLS — see open item 2** |
+
+📌 **The email satisfies the original ask in full.** Anthony asked for *"what order, what method, how
+many misprints, what sizes, and who the primary contact is."* All five ship, plus a link to the order.
+Confirmed against real debug output and an end-to-end test he ran himself. Two structural nits in the
+body (the `Totals:` line sits with the methods rather than heading the size block; no blank line above
+`Account contact:`) were raised and **deliberately shipped as-is**.
+
+📌 **Repo:** a "Back to Production" button was added to the post-submit confirmation screen in
+`counting.html` (the `showResult` block) via Claude Code, linking to `index.html`. **Reported done and
+logged by Anthony; not independently verified in this session.**
+
+---
+
+#### ⛔ OPEN — in the order a new session should take them
+
+**1. The outcome button is on NO staging page layout.** Staging has an active outcome flow that
+**nothing can launch** — there is no button on any record page. Three hand edits, between
+`Production Error` and `Edit`, on **Order Layout**, **Order Layout - EMB**, **Order Layout - Heat
+Press**. ⛔ **By hand, not by change set** — a layout in a change set replaces the *whole* layout and
+staging's may have diverged. (Those three are the layouts the press record types actually use; the
+assignment grid is 7 record types over 2 pages and `Print Shop Production`, the one that matters most,
+uses the plainly-named `Order Layout`.)
+
+**2. 🚩 The priority fields deployed to staging with NO field-level security.** Change set
+`0A2ca000000IzWT` landed `Production_Priority__c`, `Priority_Rating__c` and `Priority_Notes__c` on
+`Production_Method__c` — but **0 of 27 profiles have `Production_Priority__c` visible in staging**,
+against **26 of 26 visible-and-editable in dev2**. **A change set carries field permissions only for
+profiles included in the set, and none were.** So `_priority-rollup.js:83` still fails there — except
+it now fails for exactly the reason its error message names, which is a far more convincing wrong
+answer than the field simply being absent. **Fix: Set Field-Level Security on the field, Visible (not
+Read-Only).** The load-bearing profiles are the integration ones — **`Salesforce API Only System
+Integrations`** and **`Minimum Access - API Only Integrations`**. Do the other two fields too for
+parity; nothing reads them.
+
+**3. `Update Order` in the outcome flow has NEVER EXECUTED, in either org.** Readback-verified only
+(§2 trap 11). The dev2 debug was stopped at the screen on purpose, because finishing it writes a real
+order and fires `Printshop Misprint Process` to the print shop and Slack. **The first real press of
+that button is that flow's first real test — watch that the print shop is notified once and only once.**
+
+**4. Housekeeping:** staging still holds the superseded **V2 draft** of the email flow (the abandoned
+two-thirds hand-build). V3 is active. **Delete V2** so nobody opens the wrong one.
+
+**5. 🚩 One deliberate test the day `b47c233` ships.** `_rework.js` says the app writes `Awaiting AM`
+and that this is *"what the Flow watches for in order to email the AM."* **It is not** — the flow's
+entry condition is `Misprint Outcome **Is Null**`, so the app writing `Awaiting AM` is the one thing
+that makes it false. It *should* be fine (a record-triggered flow evaluates entry against the save that
+set Completed, not a later write) **but if that reasoning is wrong the failure is silent and total: the
+AM simply stops being emailed.** Do not discover this from an AM who never heard about an order.
+
+**6. Nothing makes a pending decision visible.** An AM who never presses the button leaves an order at
+`Awaiting AM` forever — no queue, no badge, no ageing indicator. §4's own "nothing must rot silently"
+warning, still entirely unaddressed.
+
+---
+
+#### ⛔ THE MERGE GUARDRAIL — unchanged, and it still gates everything
+
+**Do not let anything reach `main`.** `feat/proposed-run-press` and the unpushed stack name
+`Proposed_Run__c.Press__c` in `proposed-runs/index.js` and `calendar/index.js`; **production does not
+have that field**, and a missing field fails the WHOLE SELECT (trap 1) — calendar and proposals list
+both go dark. **The whole queue is gated on one thing: creating `Proposed_Run__c.Press__c` in
+production.** `b47c233` (B9's app half) sits *below* the press commits on the same stack, so it cannot
+ship separately through the GitHub web UI.
+
+⚠️ **Known and accepted:** because that merge is parked, the deployed app still creates the reprint
+automatically while both sandboxes' flows email the AM asking whether to create one. Testing B9 today
+means a reprint already exists before you answer — and answering **Credit or Refund leaves that
+auto-created reprint orphaned in pre-production**, to be deleted by hand.
+
+**Scope, set by Anthony 2026-09-11 and still in force: dev2 and staging ONLY. Nothing in production.**
+
+---
+
+#### 📌 WHAT THIS SESSION LEARNED THAT CHANGES HOW THE NEXT ONE SHOULD WORK
+
+**1. 🎯 CHANGE SETS WORK dev2 ⟷ staging, and this document said for days that they did not.**
+Setup → Deployment Settings shows a **double-headed arrow** on the `dev2 ⟷ Staging` row: authorised
+both directions, and always was. Salesforce creates deployment connections between **every org in a
+production org's family, sandbox-to-sandbox included.** Three deploys this session proved it.
+**The staging mirror was never a hand-rebuild. Hours were spent on a claim one Setup page disproves in
+ten seconds.** ⛔ **Before hand-building anything in staging again, check whether it can just be
+deployed.**
+
+**2. Three stale ⛔ lines were corrected in four days** — "B9 does not exist", "change sets can't go
+dev2 → staging", "dev2's V2 is still Inactive". The pattern is consistent enough to be a rule:
+**a ⛔ line is a snapshot of the moment it was written, and the ORG is the only source of truth.**
+Re-check before repeating one.
+
+**3. What a change set does NOT carry, learned the hard way:** **field-level security** (open item 2
+above), and a Flow arrives **INACTIVE** — and a Flow Quick Action cannot reference an inactive flow,
+so the order is always **deploy → activate → then the action**. Component type names in this org:
+a flow is **`Flow Definition`** (there is no "Flow" entry), a Quick Action is **`Action`**.
+
+**4. Dependency lists vary wildly and only one kind is readable.** The screen flow reported **4**
+dependencies; the email flow and the field set reported **423** and **416**, dragging in unrelated
+components and a managed-package warning from that noise. **Do not try to read a list that size — let
+staging's Validate be the proof.** It is non-mutating and definitive.
+
+**5. `device_commit_files` reports "written" without writing, in this iCloud folder.** It took two or
+three forced attempts every time today. **Always verify a doc write by reading the real file back
+afterwards** (`wc -c` + a grep for the new text via `device_bash`), not by trusting the tool result or
+a staged copy — the staging layer also serves stale content, which cost a wrong "the file was
+reverted" conclusion this session. Same family as the git-write flakiness in CLAUDE.md.
+
+**6. The Salesforce CLI is half-installed and was abandoned.** `@salesforce/cli` 2.150.6 is installed
+in the desktop workspace VM at `~/.npm-global/bin/sf` (global installs need
+`npm config set prefix "$HOME/.npm-global"` — no root, no Homebrew there). **It has no authenticated
+org and cannot easily get one:** this version has no device-code flow, `sf org login web` redirects to
+`localhost:1717`, and **that port is not shared between the VM and the Mac** (confirmed:
+`ERR_CONNECTION_REFUSED`). The remaining route is a connected app with JWT. ⛔ **Not worth doing unless
+change sets stop being enough** — they turned out to cover the real case.
+
+**7. Org parity was re-swept 2026-09-14, code-first. Full result in §9** — including the scraping
+recipe that works on both orgs and the `Order_Substatus__c` label-vs-API-name trap that exists in
+**both** orgs (so no diff could ever catch it).
+
+---
+
+🪤 **Flow Builder UI behaviour, measured — this is what makes hand-building slow:** a combobox closes
+itself after ~2 seconds, so a 3-second screenshot looks like a failed click (screenshot within ~1s);
+click the dropdown's **arrow**, not its text; a click straight after typing elsewhere is swallowed as a
+blur; a screen component's **API Name autofills from its Label and APPENDS** what you type; a screen's
+API name will collide with a Decision **outcome's** name (they share one namespace); the renderer
+freezes and recovery is a **fresh tab**, not a reload; the classic page-layout editor sits in an iframe
+that ignores scrolling. **`find` + click-by-ref is the escape hatch after two failed clicks, not ten.**
+
+---
+
+**Where to go next:** §2 The traps → §4 Where things stand → §9 for org parity. §7 holds work that can
+be handed to Claude Code today.
 
 ---
 
@@ -388,6 +535,66 @@ zero rows are skipped there too.
 **0, not null.** In this codebase blank means "nobody touched this" and a number means "someone
 decided" — which is why `counting.html` seeds its inputs as `''` rather than `0`. A 0 here records
 a manager's decision not to print that size on this run, and should read as one.
+
+**11. Three Flow-authoring traps, all found by reading a debug run's resolved values, none visible on the canvas.** Full story and the fixes in §4 B9; the rules are:
+
+- **`CONTAINS()` against an empty text variable returns null, not false** — and `NOT(null)` is null, so a Decision testing `Equals true` never fires. On the first pass of any accumulate-and-dedupe loop the accumulator IS empty, so **the feature is silently dead on every record**. `BLANKVALUE(x, '')` does NOT fix it; an empty substitute is still blank. Concatenate a non-empty sentinel: `CONTAINS('#' & {!vAccum}, …)`.
+- **Flow's `Add` treats null as zero; `Equals` copies the null through.** Seeding a counter with `Equals <nullable field>` leaves it null, which renders as a **blank** in an email while the `Add`-built totals look correct. Coalesce at the seed — a `BLANKVALUE(<field>, 0)` formula resource — not at the display.
+- **Flow strips leading AND trailing whitespace from a text template when it saves.** This undoes the usual "formulas can't make a newline, use a text template" advice: a template whose separator is a newline at either boundary loses it silently and reopens looking like one line, so every appended item runs together. Interior newlines survive. Anchor a boundary newline with a **zero-width space (U+200B)** on its own line — invisible in the output, and not whitespace to the trimmer. **A text template's blank-looking first line may be load-bearing; check before tidying it.**
+
+📌 And the rule behind all three: **a flow that completes is not a flow that works.** Every one of these ran green, on a complete canvas, producing a wrong email. Open the action's **resolved input values** in the debug log — that is the only place the real output exists.
+
+**12. "Decoration" is `Production_Method__c`.** The object's **label** was changed to Decoration on
+2026-09-14; its **API name was not, and is not going to be** — Salesforce blocks that rename outright
+(§11). So Setup, every page layout, the related lists on Order and Production Plan, report types, list
+views and all five boards now read **Decoration**, while every SOQL query, Apex class, flow and file
+under `functions/` still reads **`Production_Method__c`**.
+
+⛔ **`Decoration__c` does not exist.** `Decoration_Method__c` is an unrelated **field on Order**, live
+in `_rework.js`'s `CLONED_ORDER_FIELDS`. Reaching for either because a layout said "Decoration" is the
+mistake this rule exists to stop.
+
+This is the "don't guess API names from labels" rule (§9) aimed at the most-used object in the system.
+Unlike `Order_Substatus__c`, where the mismatch is an accident of history, here label and API name were
+made to disagree **on purpose** — the label is what the shop reads, the API name is what the code reads,
+and only the first one was cheap to change.
+
+
+**13. The custom-field EDIT page wedges the browser renderer — and it is NOT only Order.** Recorded
+2026-09-08 for the Order custom-field edit page (4 incidents, Lightning Object Manager AND Classic).
+🚩 **Confirmed 2026-09-14 on a CUSTOM OBJECT field too** — `Production_Run__c.PrintMethod__c` at
+`/<fieldId>/e`, trying to change nothing but the Field Label. The page loads and reads fine; the moment
+you try to save it, the renderer stops responding.
+
+⛔ **There is no browser-side workaround.** Both a synthetic mouse click (CDP `Input.dispatchMouseEvent`)
+and a direct in-page `Runtime.evaluate` timed out on the same page — so it is not the input path, it is
+the renderer. Scripting around it does not help.
+
+📌 **The OBJECT edit page is fine.** Four object label changes went through cleanly the same day
+(Decoration ×2 orgs, Run Line Item ×2 orgs). The trap is specific to the **field** edit page.
+
+**So: field label and field API-name changes are hand work, or a Metadata API deploy.** Changing a
+field's `<label>` in metadata is an ordinary supported deploy — unlike an object API rename (§11) —
+so once the Salesforce CLI exists, a batch of label changes is one small deploy per org instead of N
+hand edits. Read the field list back afterwards to confirm; do not trust the edit page.
+
+**14. "Resource deadlock avoided" / `errno -35` means iCloud EVICTED the file — nothing is corrupt.**
+This repo lives in an iCloud-synced Desktop folder. macOS evicts file *contents* and leaves a
+placeholder behind; a process reading the placeholder gets `EDEADLK`, which surfaces as
+*"Resource deadlock avoided"* from `sed`/`grep`/`cat`/`python`, as `errno: -35, syscall: 'read'` from
+Node, and as a **bus error** from git.
+
+✅ **Confirmed 2026-09-15:** every single file under `functions/api/` reported `cloudOnly: true`.
+Reads failed for all of them, `node tools/smoke.mjs` could not load its own source, and this very
+document was evicted mid-edit.
+
+📌 **It masquerades as corruption, and that is the danger.** It is very likely the real explanation
+for git appearing to be a "shallow clone with a missing HEAD commit object" — the pack files were
+evicted, not absent. Do not conclude the repo is broken until the files are known to be local.
+
+**Fix: force macOS to download them** (opening them, or staging them through the Claude device
+bridge, both do it), then everything works normally. A directory listing that reports `cloudOnly`
+is the fastest diagnosis — check before concluding anything else.
 
 #### Conventions to follow
 
@@ -820,7 +1027,7 @@ estimated. Owner column: **CC** = Claude Code (repo change), **SF** = this Sales
 | **B6b** | ⚠️ unpushed | CC | **DONE 2026-09-03**, branch `fix/b6b-postprod-new-run`, commit `ee19fc6`, `index.html` +21/−1. **A hole B5 opened and only showed up once something used it:** Post-Production collapsed the Production Runs section, so the status a make-up run is most likely to be booked from was the one status with no button to book it — and B5's deep link opened a drawer with no form in it. Full detail below. |
 | **B7** | ✅ stage 1 | CC (+SF) | **Setup / production time on the method cards** — Ready for Print shows the setup clock, In Production shows the production clock. The clocks are **per method, not per run**, so the run picker is not involved and the card needs no selection logic. **Stage 1 (no blocker):** show the stored figure, presented as *saved* rather than live. **Stage 2 (blocked on E2.3):** make it tick. ✅ **STAGE 1 IS BUILT — recorded 2026-09-09, and it had shipped without being written down.** Three commits, all reachable from `fix/e2.6-run-order`: `feat/b7-stage1-method-timers`, then `fix/b7-stage1-idle-state` (`320dbe2`) and `feat/b7-live-on-this-device` (`eec061a`). `index.html:157-181` (markup) and `:2681-2760` (the chip's view model). ⚠️ **Two things shipped that this row did not ask for, and both are defensible but must not be mistaken for stage 2.** (1) **The idle fix:** the first version hid the chip entirely at zero seconds, so on a shop that had not started using timers EVERY card rendered nothing — indistinguishable from the feature never having shipped, which is how it was reported. It now shows the chip with an em dash and the words "not started". "Blank is not zero" was right that `00:00` must never be printed as though measured; it was wrong taken as far as printing nothing. (2) **The live tick:** the card now ticks *on the tablet running the clock*, using B2 step 1's `localStorage` `{running, startedAt, elapsed}` and the same `liveElapsed()` the drawer tiles use — no new field, no new SOQL. 🚩 **This is NOT stage 2 and the wording is what keeps it honest:** a timer running on ANOTHER tablet is invisible here, so that card falls back to the saved figure and says "saved". Stage 2 is the SERVER knowing a clock runs (`Timer_Started_At__c` / `Timer_Running__c`, E2.3), which is what makes two tablets agree. ⛔ **Not verified against dev2** — that pass is still owed. Full detail below. |
 | **B8** | ⚠️ unpushed | CC | **DONE 2026-09-04**, branch `feat/b8-runs-left`, `index.html` + `production-orders/index.js`. **Runs left to print, on the method card** — a manager sees it without opening the drawer. The board had no run data at all: runs arrive per-method through `loadRunsForCard()` when a drawer opens, so `state.runsByMethod` held opened cards only. Added a **separate fail-open follow-up query** in the same handler — flat `SELECT Id, PrintMethod__c, Actual_End__c FROM Production_Run__c WHERE PrintMethod__c IN (…)`, chunked through `runChunkedIdQuery`, aggregated per method. **Kept out of the main SELECT deliberately** (trap 1: one FLS-hidden field empties the whole board; a badge is not worth that). Not a nested subquery (E3.4 — silent truncation at 200), not a rollup field (D9 — a stored derived number nothing refreshes). **"Left to print" reuses `index.html`'s own rule** — a run with no `Actual_End__c` — which is the same test that advances a method to Post-Production, so the badge and the status machine cannot disagree. Counts every placement (B4 made allocation placement-aware; a Front and a Back run both go through the press). **Unknown ≠ zero:** a failed count query leaves the fields absent and the card shows nothing, never "0 left". Shown on Ready for Print and In Production only, beside B7's clock; "all runs printed" at zero, "no runs scheduled" when the method has none (Anthony, 2026-09-04). ⚠️ **Verified against a fake-Salesforce harness and a stubbed board, NOT against dev2** — that pass is still owed. |
-| **B9** | 🟣 SPEC | SF + CC | **The reprint becomes opt-in: the account manager confirms it before it exists.** Today a reprint is created automatically the moment the last method completes. Anthony, 2026-09-04: the AM should be emailed, click through to say whether the customer actually wants the reprint, and only then does it get built — landing in the Management inbox with its methods already mirrored, ready to schedule. ⛔ **NOT READY TO BUILD.** Four decisions are open and two prerequisites do not exist in this system at all: there is **no email capability anywhere in the app** (Salesforce must send it — Anthony, 2026-09-04). The recipient, however, is **already on the Order**: `Opportunity_Owner_Email__c`. Full detail below. |
+| **B9** | ⚠️ BUILT · app half BLOCKED on production `Press__c` | SF + CC | **The reprint becomes opt-in: the account manager confirms it before it exists.** Today a reprint is created automatically the moment the last method completes. Anthony, 2026-09-04: the AM should be emailed, click through to say whether the customer actually wants the reprint, and only then does it get built — landing in the Management inbox with its methods already mirrored, ready to schedule. ⛔ **NOT READY TO BUILD.** Four decisions are open and two prerequisites do not exist in this system at all: there is **no email capability anywhere in the app** (Salesforce must send it — Anthony, 2026-09-04). The recipient, however, is **already on the Order**: `Opportunity_Owner_Email__c`. Full detail below. |
 | **B10** | ⚠️ unpushed | CC | **DONE 2026-09-08**, branch `feat/method-colours`, `tokens.css` + `ca-api.js` + six pages. **One colour per print method, on every board** — Anthony, 2026-09-08: screen print green, embroidery purple, heat press orange, “a subtle indicator that clearly visually marks them”. The hexes had been copy-pasted into **five** separate places, so they now come from four `tokens.css` variables (`--method-sp` / `-em` / `-hp` / `-promo`) that every page already links, the printed order sheet included. ⚠️ **Deliberately NOT `--ok` / `--warn`**, which are already a green and an orange: those two carry meaning on these boards (“fine” and “watch this one”), and a method chip in the exact status green reads as a verdict on the job rather than a label for the press. Neighbouring hues instead — `--method-sp #4E9A6A` vs `--ok #7FA644`, `--method-hp #D2762F` vs `--warn #C9923A` — all four clearing 4.5:1 on `--surface-card` and 3:1 on the order sheet's white. **Where it shows:** `index.html` board chip and drawer chip (the LABEL is tinted, not just the 8px dot) plus a 3px method stripe on the drawer's method card; `pre-production.html` the same two, plus the column headers, which were already method-keyed; `counting.html` a dot + tinted label on the run cards and the run header; `order-sheet.html` the Method chip and the per-method rows; `calendar.html` the press-group tabs; `stats.html` the per-method timing rows. **Left alone on purpose:** `shipping.html` — its `methodColor` is the **delivery** method (Ship / Pickup / Local Dropoff), a different axis that happens to share the name — and the calendar GRID blocks, which already carry four colour axes (outstanding prep, Confirmed vs Planned, priority score, grey for finished) on a 30px target. **Fixed in passing:** the order sheet's Method chip was `api.methodOf(rec)`, a guess off the press name that falls back to Screen Print whenever it cannot tell; it now reads the order's real `Production_Method__c` records and only guesses when there are none. Colour is why it got fixed — a green “Screen Print” dot on an embroidery sheet is a wrong colour on paper, not just a wrong word. Verified in a wrangler rig on all six pages by reading computed styles, not by looking at the screen. |
 | **B11** | ✅ DONE | CC | **The counting screen can mark a run Submitted when Salesforce rejected every count.** `run-results/index.js:566` — its private `composite()` inspects each sub-response but **never reads `resp.ok`**. When `/composite` itself answers 4xx/5xx the body is a top-level error array, so `data.compositeResponse` is `undefined`, `subs` is `[]`, `failures` is `[]`, and it returns `{ok:true}`. The caller (`:449-461`) treats that as a successful write and falls through to `:464-476`, which PATCHes `Result_Status__c = 'Submitted'`. 🚩 **This is the one defect that D1's model cannot survive:** a perfect run and an untouched run are byte-identical on purpose, so `Result_Status__c` is *the only evidence a human counted* — and this produces a run asserting "counted, all fine" over rejected counts. Gate 2 of `createReworkIfNeeded` then passes, gate 4 sees blanks, and a damaged order silently gets no reprint. ⚠️ **This is not one of the three deliberately-left-alone composite copies behaving consistently — it is one that DRIFTED.** `_composite.js:126` checks `!resp.ok \|\| real` under the comment *"Trap 2: resp.ok alone proves nothing"*, and `run-line-items/index.js:452` checks it too. ✅ **FIXED 2026-09-09**, branch `fix/b11-composite-status`, commit `81b67ec`, `run-results/index.js` +30/−3 — **unpushed.** Reproduced against a fake Salesforce BEFORE fixing, then re-run after; both controls unchanged. Full detail below. |
 | **B12** | 🔴 P0 | CC | **The production board builds an unbounded `IN` list out of the one query the file itself calls unbounded.** `production-orders/index.js:221-225` does `orderIds.map(oid => "'"+oid+"'").join(",")` with no chunking, over the result of the query at `:126-128` whose own comment at `:129-133` says it is *"the one query in the whole app with no date bound (it deliberately pulls in every Completed order ever)"*. An over-long IN list is an **HTTP-level rejection, not a SOQL error** — E5.12 exactly — and it **fails open** (`:236-240` only `console.error`s), so every card loses its size/quantity breakdown behind a 200 and a green chip. ⛔ **CHECK THIS BEFORE ANYTHING ELSE: it may already be live on staging.** dev2 has 81 orders and is nowhere near; staging has **2,164** orders at `Order_Substatus__c = 'Completed'` (§4's own B9 populate check), which at ~21 bytes per quoted Id is a ~45KB query URL. E7.5 made staging a switchable destination, so this is not a future risk there. 📌 The fix is already in the file: `runChunkedIdQuery` is imported at `:36` and used 60 lines below at `:284`. Same unchunked shape at `orders/index.js:209`, `shipping-orders/index.js:117`, `_mockup.js:34`, `shortfalls/index.js:90,106,116`, `shipments/split.js:131`. Full detail below. |
@@ -1791,7 +1998,291 @@ field for one conversation — the drift the collapse just removed — but touch
 damage > 0 + outcome still blank". Cheapest and touches nothing, but there is then no record
 that the AM was ever asked, and no way to distinguish "asked, no reply" from "never asked".
 
-⛔ **The B9 flow itself is still NOT created.** Only the guard below exists.
+❌ ~~**The B9 flow itself is still NOT created.** Only the guard below exists.~~ **STALE — CORRECTED 2026-09-11. The flow WAS created, later the same day (9/08, 2:49 PM).** `B9 Order Complete With Damage - Awaiting AM` is **Active, V1, in BOTH dev2 (`301ca00000To7lgAAB`) and staging** — record-triggered on Order, 2 entry conditions, Run Immediately: `Get Damaged Line Items` → `Has Misprint Or Damage` → (Damage Found) `Set Awaiting AM` → `AM Email On Order` → `Send Reprint Email To AM`. Confirmed by *Where is this used?* on `Misprint_Outcome__c` in both orgs. The line above was written hours before the build and never updated — **when a row says something does not exist, re-check the org before repeating it.**
+
+---
+
+
+##### B9 email enrichment — BUILT AND VERIFIED IN dev2 V2 — **ACTIVE since 2026-09-11 4:27 PM**
+
+**State at 2026-09-11 14:02.** dev2 flow `B9 Order Complete With Damage - Awaiting AM` **V2, Inactive**
+(`301ca00000TvbBtAAJ`; the flowId changes on every save — find it from the Flows list, not this number).
+**V1 is still the Active flow, so dev2 behaviour is unchanged.** The whole element-by-element build below
+is now **in, saved, reloaded fresh from the server, and debugged against a real damaged order**
+(00013504, Screen Print + Heat Press, 7 damaged line items across 4 sizes). Activation is deliberately
+**not** done — the app half (`b47c233`) is still unpushed, and staging has not been mirrored.
+
+**Built and verified in V2:**
+
+| Element / resource | State |
+|---|---|
+| `Get Damaged Line Items` | All records (was first-match); sorted **Ascending by `Size_Sort__c`** — the single load-bearing precondition for the grouping loop |
+| `Get Order Methods` | Production Method where `Order__c` = Triggering Order > Order ID, all records |
+| `Get Primary Contact` | Contact where Id = Triggering Order > Account ID > Primary Contact |
+| `Init Email Build` | `vMisTotal = 0`, `vDamTotal = 0` |
+| `Loop Damaged Rows` | over `Production Run Line Items from Get Damaged Line Items`, first-to-last |
+| `Same Size As Previous` | Decision, outcome **Same Size**: `Loop Damaged Rows > Size` **Equals** `vPrevSize` |
+| `Accumulate Into Group` | Assignment on **Same Size**: `vSizeMis`/`vMisTotal` Add `fRowMis`, `vSizeDam`/`vDamTotal` Add `fRowDam` |
+| `Group Pending` | Decision on **Default Outcome**, outcome `Pending` = `vPrevSize` **Is Null** = **False** |
+| `Flush And Start Group` | Assignment on `Pending`. **Row order is load-bearing:** 1 `vSizeLines` Add `tGroupLine` · 2 `vPrevSize` Equals Size · 3 `vSizeMis` Equals `fRowMis` · 4 `vSizeDam` Equals `fRowDam` · 5 `vMisTotal` Add `fRowMis` · 6 `vDamTotal` Add `fRowDam` |
+| `Start First Group` | Assignment on `Group Pending`'s Default: rows 2-6 of the above, no append |
+| `Flush Last Group` | Assignment on the loop's **After Last** path, **outside the loop rectangle** — see the trap below |
+| `Loop Methods` | over `Production Methods from Get Order Methods`, between `Flush Last Group` and `AM Email On Order` |
+| `Method Not Listed` | Decision inside Loop Methods, outcome `Not Listed` = `fMethodNotListed` **Equals True** |
+| `Append Method` | Assignment on `Not Listed`: `vMethods` Add `tMethodItem` |
+| `Send Reprint Email To AM` | Subject `Reprint decision needed - order {!$Record.OrderNumber}`; Body `{!tEmailBody}` in Plain Text; Rich-Text-Formatted Body **empty**; **Use Line Breaks = True** |
+| Formulas | `fRecordLink` (Text), `fMethodNotListed` (Boolean), `fRowMis`, `fRowDam` (Number, 0 dp) |
+| Text templates | `tEmailBody`, `tGroupLine`, `tMethodItem` — all **Plain Text** |
+| Variables | `vSizeLines`, `vMethods`, `vPrevSize` (Text); `vMisTotal`, `vDamTotal`, `vSizeMis`, `vSizeDam` (Number, 0 dp) |
+| Dead, delete when convenient | `vSizeLadder`, `vOtherLines` — left over from the abandoned ladder design |
+
+**The email the debug run actually produced** (read out of the Send Email action's resolved inputs,
+not off the canvas):
+
+```
+Hi Anthony Martinez,
+
+Order 00013504 has finished production and some garments came off the press misprinted or
+damaged. Before we build a reprint, please check with the customer what they would like to
+do, then record the outcome on the order.
+
+Print methods on this order:
+Screen Print
+Heat Press
+Totals: 11 misprinted, 1 damaged
+
+By size:
+S — 4 misprint, 0 damaged
+M — 3 misprint, 1 damaged
+L — 2 misprint, 0 damaged
+XL — 2 misprint, 0 damaged
+Account contact:
+Some X Person
+somexperson@gmail.com
+
+Open the order to record the outcome:
+https://cultureapparel--dev2.sandbox.my.salesforce.com/801ca00000TebvdAAB
+```
+
+Recipient resolved to `anthony@cultureapparel.com` from `$Record.Opportunity_Owner_Email__c`.
+
+---
+
+###### 🪤 THREE DEFECTS THE DEBUG RUN CAUGHT THAT THE CANVAS DID NOT
+
+**The flow was green, complete, and saved — and the email was wrong three different ways.** All three
+were only visible by opening the Send Email action's resolved input values in the debug log. This is the
+"a green board is not a passing test" rule in a new place: *a flow that completes is not a flow that works.*
+
+**1. `CONTAINS()` on an empty variable returns null, not false — the whole print-methods list was blank.**
+The spec's formula was `NOT(CONTAINS({!vMethods}, {!Loop_Methods.Type__c}))`. On the first iteration
+`vMethods` is empty, `CONTAINS` null-propagates, `NOT(null)` is null, and the Decision's
+`fMethodNotListed Equals true` never matched — so **no method was ever appended, on any iteration**, and
+`Print methods on this order:` came out empty. The debug log said it plainly: `{!fMethodNotListed} (null) Equals true`.
+**`BLANKVALUE({!vMethods}, '')` does NOT fix this** — an empty substitute is still blank. The fix is to make
+the haystack genuinely non-empty:
+
+```
+NOT(CONTAINS('#' & {!vMethods}, TEXT({!Loop_Methods.Type__c})))
+```
+
+`TEXT()` is separately required because `Type__c` is a picklist (trap 5, same as B4's `Run_Print_Location__c`).
+
+**2. A null quantity seeded a group counter as null, and rendered as a blank in the email.**
+`Damaged_Qty__c` is nullable. `vSizeDam Equals {!Loop_Damaged_Rows.Damaged_Qty__c}` on a null field leaves
+the counter **null**, which prints as nothing: the L line read `L — 2 misprint,  damaged`. Flow's **Add**
+is null-tolerant (it treats null as zero, which is why the totals were right) but **Equals is not** — it
+copies the null through. Fixed with two Number formula resources used everywhere a quantity is read:
+
+```
+fRowMis = BLANKVALUE({!Loop_Damaged_Rows.Misprint_Qty__c}, 0)
+fRowDam = BLANKVALUE({!Loop_Damaged_Rows.Damaged_Qty__c}, 0)
+```
+
+📌 The general rule: **in Flow, `Add` forgives nulls and `Equals` does not.** Any counter seeded from a
+nullable field needs coalescing at the seed, not at the display.
+
+**3. Flow strips leading AND trailing whitespace from a text template on save — every line ran together.**
+This is the one that undoes the "use a text template, formulas cannot make a newline" advice above. A text
+template whose separator is a bare trailing newline loses it silently on save; the editor reopens showing a
+single line, and the email reads `Screen PrintHeat Press` and
+`S — 4 misprint, 0 damagedM — 3 misprint, 1 damaged`. **Moving the newline to the front does not help —
+leading whitespace is trimmed too.** Interior newlines survive; only the boundaries are trimmed.
+
+🔑 **The fix: anchor the newline with a zero-width space (U+200B).** `tGroupLine` and `tMethodItem` each
+begin with a line containing a single U+200B, then the content line:
+
+```
+<U+200B>
+{!vPrevSize} — {!vSizeMis} misprint, {!vSizeDam} damaged
+```
+
+The zero-width space is not whitespace to the trimmer, so the newline after it survives; it is invisible in
+the delivered email. **That first line looks empty in Flow Builder and is not — do not "clean it up".** Both
+templates' descriptions say so in the org. Because the separator is now *leading*, `tEmailBody` has **no**
+newline after `Print methods on this order:` or after `By size:` — the items supply their own.
+
+⚠️ This trap applies to **every** text template used as a repeated list item, not just B9's two.
+
+---
+
+###### Other things worth knowing about this build
+
+- **`Flush Last Group` landed inside the loop on the first attempt.** The connector label in the element
+  list said "after the loop closes"; the element was in fact on the For-Each path and would have flushed
+  a line every iteration. Fixed with ⋮ → **Cut Element** and pasting at the `+` below the loop rectangle.
+  **Verify loop membership by zooming the canvas and looking at the rectangle, not by reading a label.**
+- **A Decision cannot take a formula inline** — there is no "Formula Evaluates to True" operator, only
+  AND / OR / Custom Condition Logic. That is why `fMethodNotListed` exists as its own resource.
+- **`tMethodItem` separates with a newline, not a comma**, so there is no trailing separator to strip.
+- **`Use Line Breaks = True` on the Send Email action was added and is not optional** — it is what turns
+  the plain-text newlines into line breaks in the delivered mail. It was not in the original spec.
+- **`Send Reprint Email To AM` still has the API name `Send_Reprint_Email_Fallback`.** Cosmetic, left alone
+  deliberately; renaming an element in Flow Builder is a rebuild.
+- **Debug with "Skip start condition requirements" checked**, or the run stops at the entry conditions —
+  00013504's Production Status is not `Completed`. Rollback mode is forced on and no email is actually sent,
+  which is why the resolved input values in the log are the only way to read the message.
+- **Reading the debug log:** the panel is virtualised, so `get_page_text` and `innerText` return only what is
+  scrolled into view, and `innerText` collapses the newlines you are trying to check. Filter with the panel's
+  own search box and read `textContent`, which preserves them.
+- The contact block prints a blank line when `Phone` is empty. Cosmetic; left as is.
+
+**Still open:**
+
+1. **Activate V2 in dev2** — not done. V1 is live. Do this only alongside the app half.
+2. **Mirror the whole build in staging by hand** — nothing has been done there; staging is still V1.
+3. **Create `Size_Sort__c` in production** before `feat/proposed-run-press` or anything else B9-related
+   ships. Without it the sort silently does nothing and the by-size list comes out in arbitrary order.
+4. Delete the dead `vSizeLadder` / `vOtherLines` resources.
+
+**UI facts that cost time — read before touching Flow Builder:**
+- **This is a Mac: select-all is `cmd+a`.** `ctrl+a` goes to line start and silently PREPENDS.
+- **Comboboxes open on click-then-`Down`, and commit on blur.** A second click on an already-open
+  dropdown CLOSES it — verify the open state with a zoom before clicking an option, or you will
+  select nothing and not notice. **Never chain the typing and the option-click into one batch**; screenshot
+  between them. A value left as uncommitted literal text shows "We couldn't find any matching resources,
+  but you can enter a value" and saves as a string.
+- **To replace a committed value pill, click its `X` first**, then click the field and type.
+- **The canvas does not scroll on the wheel; drag the background to pan.**
+- **Save often.** `Save` updates the inactive V2 in place; `Save As New Version` makes a new one.
+- **The Tooling/REST API is not reachable from the browser session cookie** (`INVALID_SESSION_ID`), so
+  there is no shortcut around the UI for reading a flow back.
+
+---
+
+##### ❌ B9 in STAGING — ~~V2 part-built, NOT finished~~ **SUPERSEDED 2026-09-14: deployed by change set as V3 and ACTIVE. The hand-build below was never completed and never needed to be — kept only for the traps it recorded.**
+
+**State at 2026-09-11 15:05.** staging flow `B9 Order Complete With Damage - Awaiting AM`,
+DefinitionId **`300ca00000H8ayz`**. **V1 is Active** (`301ca00000To95rAAB`, activated 9/8 2:49 PM) and
+untouched. **V2 exists, is INACTIVE, and is roughly two-thirds built** (latest flowId
+`301ca00000TvWqVAAV` — it changes on every save, so find it from the Flows list, never from this number).
+Everything listed as built below is saved. Nothing is half-written: the build stopped between elements,
+not inside one.
+
+⚠️ **Anthony's call, 2026-09-11: finish the build but do NOT run the debug and do NOT touch staging's
+data.** So staging V2 has been read back off the screen only. **It has never been exercised, not once.**
+Treat its first real run as unproven — in dev2 the debug was the only thing that found all three defects,
+and a readback cannot find them.
+
+**Built and saved in staging V2:**
+
+| Element / resource | State |
+|---|---|
+| Variables (7) | `vSizeLines`, `vMethods`, `vPrevSize` (Text); `vMisTotal`, `vDamTotal`, `vSizeMis`, `vSizeDam` (Number, 0 dp) |
+| `fRecordLink` | Text formula, same body as dev2 |
+| `fRowMis` / `fRowDam` | Number (0 dp), `BLANKVALUE({!Loop_Damaged_Rows.<qty>__c}, 0)` |
+| `tGroupLine` | Plain Text, **line 1 is a zero-width space (U+200B)**, line 2 is the size line — the anchor trap, see above |
+| `Get Damaged Line Items` | changed from first-match to **All records**, **Ascending by `Size_Sort__c`**; conditions unchanged (`1 AND (2 OR 3)`) |
+| `Get Order Methods` | Production Method where **Order Equals Triggering Order > Order ID**, All records |
+| `Get Primary Contact` | Contact where **Contact ID Equals Triggering Order > Account ID > Primary Contact**, first record |
+| `Init Email Build` | `vMisTotal` Equals 0 · `vDamTotal` Equals 0 |
+| `Loop Damaged Rows` | over `Production_Run_Line_Items from Get Damaged Line Items`, first-to-last |
+| `Same Size As Previous` | Decision, outcome **Same Size**: `Loop Damaged Rows > Size` **Equals** `vPrevSize` |
+| `Accumulate Into Group` | Assignment on **Same Size**: `vSizeMis` Add `fRowMis` · `vSizeDam` Add `fRowDam` · `vMisTotal` Add `fRowMis` · `vDamTotal` Add `fRowDam` |
+| `Group Pending` | Decision on **Default Outcome**, outcome **Pending**: `vPrevSize` **Is Null** = **False** |
+
+**Still to build in staging — pick up here.** Every value below is what dev2 actually has, after its
+three defects were fixed; build from this table, not from the original V1-era spec.
+
+1. **`Flush And Start Group`** — Assignment on the **Pending** branch. **Row order is load-bearing**,
+   because row 1 must read the OLD group before rows 2-4 overwrite it:
+   1 `vSizeLines` **Add** `tGroupLine` · 2 `vPrevSize` **Equals** `Loop Damaged Rows > Size` ·
+   3 `vSizeMis` **Equals** `fRowMis` · 4 `vSizeDam` **Equals** `fRowDam` ·
+   5 `vMisTotal` **Add** `fRowMis` · 6 `vDamTotal` **Add** `fRowDam`.
+2. **`Start First Group`** — Assignment on `Group Pending`'s **Default Outcome**: rows 2-6 of the above,
+   no append.
+3. **`Flush Last Group`** — Assignment on the loop's **After Last** path: `vSizeLines` **Add** `tGroupLine`.
+   🚩 In dev2 this landed **inside** the loop on the first attempt and would have flushed every iteration.
+   **Verify by zooming the canvas and looking at the loop rectangle, not by reading a connector label.**
+4. **`Loop Methods`** — Loop over `Production Methods from Get Order Methods`, first-to-last, placed
+   between `Flush Last Group` and `AM Email On Order`.
+5. **`tMethodItem`** — Text Template, **Plain Text**, **line 1 a zero-width space (U+200B)**, line 2
+   `{!Loop_Methods.Type__c}`. Create it after the loop exists or the merge field will not resolve.
+6. **`fMethodNotListed`** — Boolean formula:
+   `NOT(CONTAINS('#' & {!vMethods}, TEXT({!Loop_Methods.Type__c})))`.
+   The `'#'` and the `TEXT()` are both load-bearing — see the three-defects section above.
+7. **`Method Not Listed`** — Decision inside Loop Methods, outcome **Not Listed**:
+   `fMethodNotListed` **Equals** **True**. (A Decision cannot take a formula inline; that is why the
+   formula resource exists.)
+8. **`Append Method`** — Assignment on **Not Listed**: `vMethods` **Add** `tMethodItem`.
+9. **`tEmailBody`** — Text Template, **Plain Text**, body exactly as dev2's (reproduced in the dev2
+   section above). Note it has **no** newline after `Print methods on this order:` or after `By size:` —
+   the item templates supply their own leading newline.
+10. **Wire `Send Reprint Email To AM`**: Subject → `Reprint decision needed - order {!$Record.OrderNumber}`;
+    Body → `{!tEmailBody}` in **Plain Text**; **Rich-Text-Formatted Body left empty**; **Use Line Breaks → True**.
+11. **Save, reload V2 fresh from the server, re-open every element.** Leave it **INACTIVE**.
+
+⛔ **STAGING HAS NO DATA THAT CAN EXERCISE B9 — this is the reason the debug was skipped, and it does not
+go away on its own.** Staging holds **14** Production Run Line Items in total. The three with a misprint
+quantity (PRLI-0001, PRLI-0003, PRLI-0004) have **no Order Product**, so their `Order_Id__c` formula is
+blank and `Get Damaged Line Items` can never match them. The ten that **do** carry an `Order_Id__c` — all
+on order **00009525** (`801ca00000TSkqPAAT`, Production Status already `Completed`, "Multiple Methods,
+Custom Tags on Heat Press", sizes S/M/L/XL/2XL) — have **no misprint or damaged quantity at all**. So the
+query matches nothing, on every order in the org.
+
+📌 **To debug it later, the fixture is:** temporarily set Misprint/Damaged Qty on a few of 00009525's line
+items, Debug with **Skip start condition requirements** checked (rollback mode is forced on, so no email
+is actually sent and the Order is not written), read the Send Email action's **resolved input values**,
+then clear the quantities back to blank. Editing line items is inert with respect to the live automation:
+B9 V1 and `Printshop Misprint Process` both fire on **Order** update, and 00009525 already satisfies B9
+V1's entry conditions, so there is no new transition to trip.
+
+**Deviations from dev2, deliberate and recorded:**
+- `Get Order Methods` in staging uses **Automatically store all fields**; dev2 stores only `Type__c, Id`.
+  A superset — no behavioural difference for this flow, one fewer UI step.
+- Staging's V1 never had `Get Order Methods`, `Get Primary Contact` or `Init Email Build`, so staging V2
+  is being built from a smaller starting point than dev2's V2 was. It is not a like-for-like delta.
+
+🪤 **Staging-specific facts that cost time:**
+- **Object key prefixes are NOT the same across the two sandboxes.** Production Run Line Items is `a3V…`
+  in staging and `a3W…` in dev2. **Never carry a record id, or a prefix, from one org's notes to the other.**
+- **The staging Lightning Setup shell (`my.salesforce-setup.com`) blocks BOTH screenshots and page reads**
+  — worse than dev2, where screenshots worked. The way in is the **classic Flows list at `/300` on
+  `cultureapparel--staging.sandbox.my.salesforce.com`**, which is fully scriptable; from there the flow's
+  detail page gives the DefinitionId and every version's flowId. Flow Builder itself
+  (`lightning.force.com/builder_platform_interaction/flowBuilder.app`) is fine.
+- **A flowId copied from this document will not open** — `301ca00000TnvhGAAR`, recorded on 9/08, now
+  returns "We can't open this flow right now." The doc's own rule, demonstrated.
+- ❌ ~~**There is no metadata shortcut.** Change sets only move between a production org and its own
+  sandboxes, so dev2 → staging is not a valid pair.~~ **WRONG — CORRECTED 2026-09-11, and only because
+  Anthony asked "can I not just use a change set?" and I went and looked.** dev2 → Setup → **Deployment
+  Settings** lists three connections and the **`dev2 ⟷ Staging`** row carries a **double-headed arrow**:
+  upload is **already authorised in BOTH directions**. Salesforce creates deployment connections between
+  *every* org in a production org's family, **sandbox-to-sandbox included** — not just production-to-sandbox.
+  (For contrast, `dev2 ⟵ Production` and `dev2 ⟵ Dev` are single arrows pointing at dev2.) 🎯 **So the
+  staging mirror never had to be a hand-rebuild.** Two hours of hand-building were spent on a claim that
+  one Setup page disproves in ten seconds. **Same lesson as the "B9 does not exist" correction above: the
+  ⛔ lines are the ones most likely to be wrong, and a capability claim gets checked against the ORG.**
+
+🪤 **Flow Builder dropdown behaviour, measured this session — this is the thing that makes the UI slow:**
+- **A combobox closes itself after about two seconds.** A screenshot taken 3 seconds after the click shows
+  it closed and looks like the click failed. **Screenshot within ~1 second.**
+- **Click the dropdown's ARROW, not the field text.** Clicking the text usually only focuses it.
+- **A click that follows typing in another field is usually swallowed as a blur** — the next click opens.
+- When coordinates keep failing, `find` returns a `ref` and clicking by ref works first time. Cheapest
+  escape hatch in the whole toolkit; reach for it after two failed clicks, not ten.
+- **`Get Records` → Sort By shows a stale "Enter a value." even after the field is set.** Press Enter to
+  commit, then click elsewhere; the error clears on blur. Do not retype it.
 
 ---
 
@@ -1834,6 +2325,239 @@ order in either org matches the new clause. That is why it was safe to activate 
 ⚠️ **Production still has the unguarded flow** and picks this up at **E7.4**. A change set
 deploys flows INACTIVE (§9), so the guard must be activated by hand there, and it must land
 **before** anything that writes `Awaiting AM`.
+
+##### ✅ B9 item 2 IS BUILT IN dev2 — `B9 Record Misprint Outcome` (the AM's answer)
+
+**State at 2026-09-11 15:58.** The email half of B9 tells the AM an order came off the press
+damaged. **This is the thing the email points at** — where the AM records what the customer
+decided. Built by hand in dev2, **Active**, reachable from a button on the Order.
+
+✅ **NOW IN STAGING TOO — deployed by change set 2026-09-14 and Active there (V1, `300ca00000HHtPk`).**
+The flow and the Quick Action both moved; **the three page layouts did not** — see "Deployed to staging"
+at the end of this section. ⛔ **Production still has none of it** (Anthony's scope call, 2026-09-11).
+
+| | Value |
+|---|---|
+| Flow label / API name | `B9 Record Misprint Outcome` / `B9_Record_Misprint_Outcome` |
+| Type | **Screen Flow** |
+| Version / state | **V1, ACTIVE** |
+| flowId at time of writing | `301ca00000TvdTuAAJ` |
+| Launched from | Quick Action `Record_Misprint_Outcome` on Order (Action Id `09Dca000000BAQf`) |
+
+🪤 **The flowId changed on every single save** (`…TvaB5AAJ` → `…TvY4OAAV` → `…TvRfYAAV` →
+`…TvdTuAAJ`). Same rule as everywhere else in this document: **a recorded flowId is a
+receipt, not an address.** Open it from Setup → Flows by name.
+
+**The three decisions Anthony made, 2026-09-11:**
+
+| Question | Chosen | Why it matters |
+|---|---|---|
+| Where does the AM answer? | **A screen flow launched from an Action on the Order** | The "put the decision in Salesforce, not in this app" option this document argued for above. No token, no new endpoint, **no Cloudflare Access exception** — the E6.4 collision simply does not happen. |
+| Which outcomes are offered? | **Three: `Reprint` · `Credit` · `Refund`** | `Misprint_Outcome__c` has five restricted values and three of them overlap. `Credit/Refund` stays **active on the field** so historical records still read correctly, but **the AM is never shown it.** |
+| Are notes required? | **Required for everything but `Reprint`** | A reprint explains itself. A credit or refund is money leaving, and six months later nobody remembers why. |
+
+**Shape (read back off a fresh page load of the saved version):**
+
+```
+Start   Screen Flow
+        recordId   Text, Available for input      <- how the Action passes the Order
+  |
+Get Order                 Order · Order ID Equals {!recordId} · first record · all fields
+  |
+Outcome Already Recorded  Decision
+        Already Recorded (AND):  Misprint Outcome Is Null = False
+                                 AND Does Not Equal "Awaiting AM"
+        Default Outcome:         everything else
+  |
+  +-- Already Recorded --> Already Recorded (Screen, dead end) --> End
+  |         txtAlready: names the recorded outcome and says to edit the field directly
+  |
+  +-- Default Outcome ----> Record Outcome (Screen)
+                              txtPrompt      Display Text
+                              outcomeChoice  Radio Buttons, REQUIRED, Text
+                                             Choice_Reprint / Choice_Credit / Choice_Refund
+                              outcomeNotes   Long Text Area, REQUIRED,
+                                             visible only when ANY (OR):
+                                               {!outcomeChoice} = {!Choice_Credit}
+                                               {!outcomeChoice} = {!Choice_Refund}
+                            |
+                            Update Order (Update Records, Order, Order ID = {!recordId})
+                              Misprint_Outcome__c        = {!outcomeChoice}
+                              Misprint_Outcome_By__c     = {!$User.Id}
+                              Misprint_Outcome_At__c     = {!$Flow.CurrentDateTime}
+                              Misprint_Outcome_Notes__c  = {!outcomeNotes}
+                            |
+                            End
+```
+
+📌 **The three choice resources store the picklist's API values verbatim** — `Reprint`,
+`Credit`, `Refund` — so `{!outcomeChoice}` drops straight into the restricted picklist with
+no translation. Label and stored value are identical on all three. **If anyone renames a
+picklist value, these three Choice resources are what breaks, silently, at save time.**
+
+📌 **Component visibility is what makes Notes conditionally required.** The component is
+marked Required unconditionally; a *hidden* required component does not block Finish. So
+`Reprint` → Notes is not on the screen at all → Finish works. `Credit`/`Refund` → Notes
+appears with its red asterisk → Finish is blocked until it is filled. **Do not "fix" this by
+removing Required — that is the mechanism, not a bug.**
+
+📌 **The visibility conditions compare against the Choice resources (`{!Choice_Credit}`),
+not against literal text.** Both work; the resource reference survives a later edit to a
+choice's stored value, a literal does not.
+
+##### ⛔ WHY THE GUARD EXISTS — it is not politeness, it re-notifies the print shop
+
+`Printshop Misprint Process` and `Misprint Outcome Slack` test **"Misprint Outcome is not
+null AND does not equal `Awaiting AM`"** — see the guard section immediately above. Those are
+**state tests on every qualifying update, not transition tests.** Re-setting an outcome that
+is already recorded therefore fires the print-shop notification and the Slack post **again**,
+with nothing on screen to suggest it happened.
+
+⛔ **Therefore an already-answered order must never reach `Update Order`.** That is the whole
+job of the `Outcome Already Recorded` decision, and it is why the Already Recorded branch is
+a **dead-end screen and not a second chance to edit.** If a recorded outcome is genuinely
+wrong, it gets changed on the field itself by someone who knows they are re-triggering.
+
+🪤 **`Is Null = False` AND `Does Not Equal 'Awaiting AM'` — both clauses are load-bearing.**
+`Awaiting AM` is what B9's *email* flow writes, so it is the normal state of an order arriving
+at this screen. Guarding on "is not null" alone would send every single one of them to the
+dead end. This is the same "**inside this context, `Awaiting AM` means the same thing as
+blank**" rule the guard section states.
+
+##### The button — Quick Action and page layouts
+
+| | Value |
+|---|---|
+| Action label / API name | **Record Misprint Outcome** / `Record_Misprint_Outcome` |
+| Type | Flow (Quick Action) → `B9 Record Misprint Outcome` |
+| Object | Order |
+
+⛔ **A Flow Quick Action can only reference an ACTIVE flow.** The flow does not appear in the
+action's Flow picklist while it is Inactive — this is why `B9 Record Misprint Outcome` was
+activated before the action could be created, and it is the order of operations to repeat in
+staging and production. (Activating *this* flow is harmless on its own: a screen flow does
+nothing until somebody presses the button. It is **not** the B9 *email* flow, which is still
+deliberately Inactive in dev2 pending `b47c233`.)
+
+Added to the **Salesforce Mobile and Lightning Experience Actions** section, positioned
+between `Production Error` and `Edit`, on the three layouts that serve press orders:
+
+| Order record type | Page layout | Action added |
+|---|---|---|
+| **Print Shop Production** | Order Layout (`00h5e000003cR2fAAE`) | ✅ 15:53 |
+| **EMB Production** | Order Layout - EMB (`00hca000001Yf1lAAC`) | ✅ 15:54 |
+| **Heat Press Production** | Order Layout - Heat Press (`00hca000001YRrdAAG`) | ✅ 15:58 |
+| Master · Vendor Order | Order Layout | ✅ (same layout) |
+| Ecommerce · ShipStation | Ecommerce | ❌ **deliberately not added** — these are not press orders |
+| — | Inventory Works Order Layout | ❌ not assigned to any Order record type in the assignment grid |
+
+📌 **Read the Page Layout Assignment grid before deciding which layouts to touch** — it is
+7 record types across 2 pages of that table, and the mapping is not guessable from the layout
+names. `Print Shop Production`, the one that matters most, uses the plainly-named
+**`Order Layout`**, not one of the two obviously-production-sounding ones.
+
+📌 **`Production Error` already exists as an action on all three layouts.** Not touched, not
+investigated. Worth knowing it is there before adding anything else misprint-shaped.
+
+##### ✅ WHAT WAS ACTUALLY VERIFIED — and the one thing that was not
+
+Debug run, dev2, 2026-09-11 15:49, `recordId = 801ca00000ThktNAAR` (Order **00013509**,
+`Misprint_Outcome__c` blank):
+
+| Checked | Result |
+|---|---|
+| `Get Order` retrieves by `recordId` | ✅ "One or more Order records were retrieved" |
+| Decision routes a blank outcome | ✅ "The **default** outcome was executed" |
+| Prompt merge field resolves | ✅ rendered *"Order **00013509** came off the press with misprinted or damaged garments…"* — not `{!Get_Order.OrderNumber}` |
+| Three choices, correct labels | ✅ Reprint · Credit · Refund |
+| Notes hidden on load | ✅ |
+| Notes appears on **Credit** | ✅ with the required asterisk |
+| Notes disappears on **Reprint** | ✅ |
+
+⛔ **THE WRITE PATH WAS NOT EXERCISED. `Update Order` has never run.** The debug was stopped
+at the screen, deliberately, **before** pressing Next — because finishing it would have
+written `Misprint_Outcome__c` on a real dev2 order and, per the section above, fired
+`Printshop Misprint Process` and the Slack post. Flow Builder offers **no rollback option for
+screen flows** (only "Run the latest version of each flow called by subflow elements" and
+"Run automation as another user" — there is no "roll back changes" checkbox the way a
+record-triggered debug has one), so there was no safe way to complete it.
+
+📌 **So four field bindings are verified by readback only, not by execution:**
+`Misprint_Outcome__c`, `Misprint_Outcome_By__c`, `Misprint_Outcome_At__c`,
+`Misprint_Outcome_Notes__c`. Every one was read back off the saved element and all four
+resolved to the right resource. **That is exactly the level of assurance this document says
+is not enough** — §2 trap 11, *"a flow that completes is not a flow that works"*. The first
+real click of this button is therefore also its first real test, and **the thing to check
+immediately after it is whether the print shop got notified once and only once.**
+
+📌 The safe way to close this gap when someone wants to: pick a **dev2 order that is not
+plausibly real**, press the button once, then read `Misprint_Outcome_At__c`/`_By__c` and the
+Slack channel. One order, once, watched.
+
+##### 🪤 Traps this build hit (UI-driving, all cost real time)
+
+1. **A screen component's API Name auto-fills from its Label and APPENDS what you type.**
+   Label `Outcome` + typing `outcomeChoice` produced **`OutcomeoutcomeChoice`**. Select-all
+   before typing into any auto-filled API Name field, then zoom in and read it back.
+2. **A screen's API Name will silently collide with a Decision outcome's API name.**
+   `Already Recorded` as a screen label auto-generated `Already_Recorded`, which the
+   `Outcome Already Recorded` decision's outcome already owned — *"This API name is already
+   used for another element or resource in this flow."* Renamed to `Already_Recorded_Screen`.
+   **Outcome names share the flow's namespace with element names.**
+3. **Flow Builder's renderer froze twice** — screenshots timed out for minutes while
+   JavaScript still answered. Recovery is a **fresh tab**, not a reload; the frozen tab stays
+   frozen. Everything saved up to that point survived.
+4. **The classic page-layout editor lives in an iframe that ignores normal scrolling.**
+   The Actions section is below the fold and cannot be reached by scrolling the page.
+5. **The `New Action` form's Action Type is a native `<select>`** — click it and *type*
+   `Flow`; a click that lands a few pixels off hits the neighbouring info icon and does
+   nothing visible.
+
+##### ✅ DEPLOYED TO STAGING — 2026-09-14, by change set
+
+| | Value |
+|---|---|
+| Change set | **`B9 Record Misprint Outcome`**, dev2 `0A2ca000000Iyyb` |
+| Components | `Flow Definition: B9_Record_Misprint_Outcome` · `Action: Record_Misprint_Outcome` |
+| Result | **Validate: Succeeded · Deploy: Succeeded, 2/2**, 9/14 7:12 AM |
+| Staging flow | **Active Version 1**, `300ca00000HHtPk`, Screen Flow, API 67.0, activated 7:13 AM |
+
+📌 **Both pre-flight checks are worth repeating for the production run:**
+
+1. **Dependencies** — exactly four reported (`Misprint_Outcome__c`, `_At__c`, `_By__c`, `_Notes__c`),
+   **all four already present in staging**, so none were added. Deploying a custom field over an
+   existing one replaces the whole field definition — same risk class as a layout.
+2. **The picklist** — `Misprint_Outcome__c` is **restricted**. Its values were read in staging *before*
+   upload: all five active, including `Reprint`, `Credit`, `Refund`. **A missing value would not have
+   failed the deploy — it would have failed the flow, at runtime, in front of an AM.**
+
+🪤 **Change-set component-type names in this org:** a flow is **`Flow Definition`** (there is no "Flow"
+entry in the Component Type list); a Quick Action is **`Action`**.
+
+⛔ **The button is on NO staging page layout.** The three Order layouts were deliberately excluded, so
+staging currently has an **active flow that nothing can launch**. Add `Record Misprint Outcome` by hand
+to **Order Layout**, **Order Layout - EMB** and **Order Layout - Heat Press**, between `Production Error`
+and `Edit`.
+
+⛔ **A successful deploy is not a passing test.** Staging inherits dev2's unexercised `Update Order`
+exactly as-is. Nothing about this deployment reduces the need for the first real button press to be
+watched.
+
+##### 📍 WHAT REMAINS BEFORE THIS IS LIVE ANYWHERE
+
+1. ⛔ **The write path has never executed.** See above.
+2. ⛔ **Staging has none of this** — not the flow, not the action, not the layouts. It is a
+   full hand-rebuild today, the same way the email flow was. (See the CLI note in §0.)
+3. ⛔ **Production has none of it either**, and per §9 a change set deploys flows
+   **INACTIVE** — so there the order is: deploy → activate the flow → *then* create the
+   Quick Action, because the action cannot reference an inactive flow.
+4. ⛔ **The app half still does not know this screen exists.** `rework-check` and
+   `createReworkIfNeeded` read `Misprint_Outcome__c` and `Misprint_Outcome_By__c`
+   (branch `feat/b9-optin-reprint`, unpushed) — now something finally writes them, but that
+   branch has never been run against an order this screen has touched.
+5. 📌 **Nothing yet makes a pending decision visible.** The "nothing must rot silently"
+   warning above is still entirely unaddressed: an AM who never presses the button leaves an
+   order at `Awaiting AM` forever, with no queue, no badge and no ageing indicator.
 
 ##### ✅ THE RECORD-TRIGGERED FLOW IS BUILT — `B9 Order Complete With Damage - Awaiting AM`
 
@@ -2025,6 +2749,15 @@ Two consequences, and the second is a hazard:
 1. ✅ **Expect ZERO delivered emails when testing B9 in staging.** That is the sandbox working
    as designed, NOT a broken flow. To test delivery end-to-end, de-scramble ONE test user's
    email in Setup → Users and use an order owned by them. Do not de-scramble in bulk.
+   🚩 **BUT BE PRECISE ABOUT WHY, because the safety net is narrower than it sounds.** Checked
+   2026-09-14: **Deliverability → Access to Send Email is `All email` in BOTH dev2 and staging** —
+   neither sandbox is set to "System email only", so **nothing at the org level is stopping mail
+   from leaving.** The only reason B9's emails do not land is that sandbox refresh scrambles User
+   emails to `.invalid`, and `Opportunity_Owner_Email__c` is a formula off that. **That is a
+   per-address property, not an org-wide block** — and this document already records one address
+   it does not apply to: **Anthony's own user is un-scrambled in both orgs**, so a qualifying order
+   whose Opportunity Owner is Anthony sends him a real email from a sandbox, today. Treat "sandboxes
+   can't send" as false; the accurate statement is "most sandbox addresses are invalid."
 2. 🚩 **`Opp_Owner_Email__c` holds UN-scrambled, real, live addresses inside the sandbox** —
    it is a pre-refresh copy of production data, and a custom field's data is not scrambled.
    **A flow that sends to it from staging emails real staff from a sandbox.** This is a second,
@@ -5501,7 +6234,98 @@ most, because it is the only path that creates records on its own.
 ## 9. Org parity and change management
 What each org actually has, how that was measured, and what moving metadata between them does and does not carry.
 
-### Org parity — measured 2026-09-03/04
+### Org parity — RE-MEASURED 2026-09-14 (supersedes the 2026-09-03/04 sweep below)
+
+**Why redone:** the earlier sweep predates `Size_Sort__c`, the B9 audit fields, `Press__c`, and three
+priority fields added 8/17. **Method, and it is the one to repeat:** parse every Salesforce field name
+out of `functions/` first — **139 custom fields across 7 objects** — then enumerate both orgs' field
+lists and diff, then check each difference back against the code. Going org-first produces a list of
+differences nobody can act on; going code-first tells you which differences can actually break a board.
+
+📌 **Scraping recipe that works on both orgs** (staging's Lightning Setup blocks reads, classic does
+not): `/p/setup/layout/LayoutFieldList?type=<Order|01I id>&setupid=<OrderFields|CustomObjects>`, then
+read the API-name column out of the table. Get the `01I` ids from `/p/setup/custent/CustomObjectsPage`.
+⛔ **`fetch()` from the page is useless here** — Salesforce answers with a 744-byte JS redirect stub, so
+navigate page by page. ⛔ **And `/<01I id>` alone redirects to Lightning in staging** — use the
+`LayoutFieldList` URL above.
+
+**HEADLINE: no field the UI reads is missing from either org. Nothing is taking a board dark today.**
+`Order` (238 fields dev2 / 246 staging), `Proposed_Run__c` (11/11) and `Pre_Production_Item__c` (17/17)
+are identical on everything the code touches. Four differences exist:
+
+| Object | Field | dev2 | staging | Used by code? | Verdict |
+|---|---|---|---|---|---|
+| **Production_Method__c** | **`Production_Priority__c`** Number(2,2) | ✅ | ❌ | ✅ **written every refresh** | 🚩 **live silent failure — fix** |
+| Production_Method__c | `Priority_Rating__c` Picklist | ✅ | ❌ | ❌ | parity only |
+| Production_Method__c | `Priority_Notes__c` Text Area(255) | ✅ | ❌ | ❌ | parity only |
+| Production_Run__c | `Operator__c` | ✅ | ❌ | ❌ | leave |
+| Production_Run__c | `Quantity_Completed_c__c`, `Reprint_Quantity_c__c` | ❌ | ✅ | ❌ | staging leftovers, leave |
+| Production_Run_Line_Item__c | `Actual_Good_Qty__c`, `Reprint_Qty_Needed__c` | ❌ | ✅ | ❌ | staging leftovers, leave |
+
+##### 🚩 `Production_Method__c.Production_Priority__c` is missing in staging and the app writes it on every refresh
+
+`_priority-rollup.js:83` PATCHes this field for every method on the order. **In staging every one of
+those PATCHes 400s.** It fails *safely* — the call is wrapped, `failed` is logged, nothing throws, and
+`rollupPriorityToMethods` returns normally — so **the UI is unaffected and this has been invisible.**
+What it actually costs:
+
+- **The priority score is never written to Production Method in staging**, so any Salesforce report,
+  list view or sort built on that field is permanently blank there. The dashboard is fine because it
+  computes priority itself in `_priority.js`; the calendar reads `Order__r.Priority_Rating__c`, an
+  **Order** field that exists in both.
+- 🪤 **The log message points at the wrong cause.** It says *"check the integration user has Edit (not
+  just Read) on Production_Method__c.Production_Priority__c"* — correct guidance in an org where the
+  field exists, and a guaranteed wild goose chase through profiles in staging, where it does not.
+  **When adding a "most likely cause" to an error string, the cause that is most likely in the org you
+  developed in is not the one most likely in the org that breaks.**
+
+📌 **`Priority_Rating__c` and `Priority_Notes__c` on Production_Method__c are NOT the ones the code
+reads** — every code reference is `Order__r.Priority_Rating__c` / `Order__r.Priority_Notes__c`, i.e. the
+**Order** fields, which exist in both orgs. The Production Method copies were created alongside
+`Production_Priority__c` on 8/17 and nothing in `functions/` touches them.
+
+📌 **The code comment saying `Production_Priority__c` is `Number(4,2)` is wrong — dev2 has it as
+`Number(2,2)`.** Harmless: `scoreOrder()` clamps to 1-10 (`_priority.js:265`) and rounds to 2 dp, so
+10.00 fits inside Number(2,2)'s ±99.99. Worth knowing before anyone "fixes" the field to match the
+comment.
+
+##### ✅ Picklists the UI branches on — all identical across both orgs
+
+| Field | Values | Same in both? |
+|---|---|---|
+| `Production_Method__c.Status__c` (drives board columns via `BOARD_STATUSES`) | Pre-Production · Ready for Print · In Production · Post-Production · Completed · Cancelled · On Hold | ✅ |
+| `Production_Method__c.Type__c` | Screen Print · Embroidery · Heat Press · Promotional Items | ✅ |
+| `Order.Order_Substatus__c` | Pre-Production · Ready for Print · In Production · Post-Production · Completed | ✅ |
+
+🪤 **A TRAP THAT IS IN BOTH ORGS, SO THE DIFF WOULD NEVER HAVE CAUGHT IT — `Order.Order_Substatus__c`
+has a value LABELLED "In Production" whose API NAME IS "Production".** SOQL and Apex match the **API
+name**, so `WHERE Order_Substatus__c = 'In Production'` returns **zero rows, silently, in every org.**
+✅ Checked: no code does this today. `BOARD_STATUSES` in `production-orders/index.js:44` uses
+`'In Production'` against **`Production_Method__c.Status__c`**, where label and API name DO match.
+⛔ **Before writing any filter on `Order_Substatus__c`, read the API-name column, not the value column.**
+Every other value on that picklist has label == API name, which is exactly what makes this one easy to
+miss.
+
+##### Object labels — dev2 AND staging, as of 2026-09-14
+
+| | dev2 | staging | production |
+|---|---|---|---|
+| `Production_Method__c` label | **Decoration / Decorations** | **Decoration / Decorations** | object absent |
+| `Production_Run_Line_Items__c` label | **Run Line Item / Run Line Items** | **Run Line Item / Run Line Items** | object absent |
+
+**Label only — the API name is unchanged in every org.** Nothing in code reads a label, so this changed
+no behaviour anywhere. Applied by hand in both sandboxes the same day (labels do not travel on a change
+set, so there was nothing to promote). **The two sandboxes now agree**; production has none of these
+objects. See §2 rule 12 for why the API name did not move, and why it is not going to.
+
+📌 Staging's object id is `01Ica000000IeBt`, dev2's is `01Ica000000So1v` — **object ids differ between
+these orgs**, so a Setup URL copied from one will silently open a different object, or nothing, in the
+other. `Misprint_Outcome__c`'s shared field id (§9) is the exception, not the rule.
+
+
+---
+
+### Org parity — measured 2026-09-03/04 (SUPERSEDED by the 2026-09-14 sweep above; kept for its method notes)
 
 **Method: read both orgs' Object Manager directly and diff, then check each difference against the
 codebase to see whether the app actually uses it.** Not taken from documentation — an earlier note
@@ -5663,6 +6487,15 @@ version, so it has deliberately been left alone. **If you write a note there, cl
 of the field first.**
 
 ### Moving metadata between orgs — what change sets do not do
+
+🚩 **ADD THIS ONE FIRST, learned 2026-09-14: a change set does NOT carry field-level security.**
+Field permissions travel only for **profiles included in the set**. Deploy a custom field on its own
+and it arrives **invisible to every profile** — in staging, `Production_Method__c.Production_Priority__c`
+landed visible to **0 of 27**, against 26 of 26 in dev2. **The field exists, the API can see it in the
+schema, and every write still fails.** Worse, if the code's error message blames permissions (as
+`_priority-rollup.js` does), the deploy looks like it worked and the log looks like a profile problem.
+⛔ **After deploying any field: Set Field-Level Security on it before believing the deploy.**
+
 
 📌 **Learned the hard way, 2026-09-04, deploying B4 to staging.** Add each of these to the
 post-deploy checklist; none of them shows up as a failure.
@@ -5964,6 +6797,27 @@ Newest first. One line per change; link to the story that carries the detail.
 
 | Date | What | Where |
 |---|---|---|
+| 2026-09-15 | 🚩🚩 **UNCOMMITTED IN THE WORKING TREE: a `Production_Method__c` → `Decoration__c` rename across 16 server files, 21 sites, and it reaches live SOQL** (`FROM Decoration__c` in `_rework.js`, `rework-check.js`, `inbox/index.js`, plus semi-joins). **`Decoration__c` does not exist** — "decoration" is the UI label for `Production_Method__c`. Nothing of this is in HEAD (0 occurrences), so it is working-tree only, but it is one `git add -A` away from shipping. Trap 1 at full blast radius: a missing object in a SELECT is a parse error that empties the board behind an HTTP 200, and these queries back the inbox, the calendar, the production board, run-results, rework-check and every rollup. Found while staging B24; **left untouched and uncommitted**. Decide whether the field is being created in Salesforce or the sweep should be reverted | §2 trap 1 |
+| 2026-09-15 | **B24 — the AM's decoration now reaches the run form, and the form says what did not come with it** — `calendar.html`'s new-run form defaulted its decoration select to the order's FIRST `Production_Method__c`, so a Heat Press proposal on a two-decoration order booked press time against **Screen Print** with every other field correctly filled. New shared `matchProposalMethod()` in `ca-api.js` resolves `Machine_Group__c` against the order and never guesses — none / exactly one / several, and several is only resolved when the proposal's print location is offered by exactly one of them (D11/B4: two Screen Print decorations on different placements is a real order). ⚠️ **The decoration is resolved BEFORE the print-location guard** because that guard reads it; reversing the two lines fails 5 assertions in the harness's own negative control. All three guards now name what they dropped in the existing `runMsg` instead of blanking a box silently, and the AM's `notes` are displayed there — `POST /api/production-runs` writes six fields and none is a note, so there is nowhere to store it. `pre-production.html` deliberately does NOT set the decoration (the modal is fixed to one) and warns on a type mismatch only when it can positively tell. The `runMsg` chip lost its uppercase — it was built for "Run created." and now carries a human's note. **No new SOQL, no endpoint change.** 26/26 in `~/tmpwork/decorationcarry.mjs` plus two negative controls, and driven in a rig on a two-decoration order. Commit `4eb612c` on `feat/proposed-run-press`, unpushed. No Asana id supplied; B23 was taken | §4 B24 |
+| 2026-09-15 | ✅ **WAVE 0b IS DONE IN BOTH SANDBOXES — `ProductionRequirements__c` → `Production_Requirement__c` and `ProductionPlan__c` → `Production_Plan__c`, org side AND app side.** Sequence used, and it is the one to repeat for 0c: deploy a STUB of the only referencing Apex class → rename → restore the class rewritten against the new names → change the BFF. Anthony did the three Apex/org steps by hand in dev2 and staging. ✅ **Rename verified by compilation, not by eye:** the restored `ProductionAutoSchedulerServiceTest` contains `Production_Plan__c` and `Production_Requirement__c` and is Active — Apex only saves if it compiles, so the objects must exist under the new names. ⚠️ **Tests: 4 of 5 pass.** `testHappyPath` fails at line 105 — *"One Event should be created: Expected: 1, Actual: 0"*. The three assertions before it pass, so the scheduler itself is fine (status `Proposal`, both scheduled times set); only the calendar Event is missing. 📌 **Probably NOT caused by the rename:** `ProductionEventPublisher` has ZERO references to either renamed object, and §2 rule 9 independently documents this exact failure (`Trigger.oldMap` is null on insert, so a run created already-Confirmed may publish no Event) — and the test inserts a run directly instead of the app's insert-then-PATCH. **Unresolved: no prior test history exists for the class, so whether it was ever green is unknown.** ✅ **BFF: 11 changed lines across 3 files** — 6 code, 5 comments. `plans/index.js` 2 (`FROM ProductionPlan__c` ×2), `production-methods/index.js` 6 (`REQ_OBJECT`, `PLAN_OBJECT`, 4 comments), `_rework.js` 3 (two composite **write** URLs + 1 comment). `node --check` clean on all three. 🪤 **THE TRAP THAT MAKES THIS A HAND EDIT: `ProductionPlan__c` is an object AND a field, four lines apart.** `production-methods/index.js:61` is `PLAN_OBJECT` (renamed); **`:65` is `PM_PLAN_FIELD` (must NOT be renamed)**. Same in `_rework.js`: `:500` is the object in a composite URL (renamed), **`:508` is the field in the body (not renamed)**. A find-and-replace breaks both files silently. Four old-name mentions deliberately remain and are all correct — they are the field | §2 r14, §9, §11 |
+| 2026-09-14 | 🚩 **THE CUSTOM-FIELD EDIT PAGE WEDGE IS WIDER THAN RECORDED — it is not an Order-only problem.** Attempted the nine stale "...Method..." field labels left over from the Decoration relabel, starting with `Production_Run__c.PrintMethod__c` → *Decoration*. The classic direct edit URL `/<fieldId>/e` is a clean, compact form and loads fine; **saving wedges the renderer.** Hit twice by two different mechanisms — a synthetic mouse click on Save (CDP `Input.dispatchMouseEvent`, 30s timeout) and then setting `MasterLabel` + `input[name=save].click()` from inside the page (`Runtime.evaluate`, 45s timeout). ⛔ **It is the renderer, not the input path, so there is no scripted way around it.** Stopped after the second attempt per the standing rule (§2 rule 13, and the 2026-09-08 entry that first recorded this for Order). ✅ **NOTHING WAS SAVED** — all seven reachable field labels read back unchanged from a fresh tab: `PrintMethod__c` *Print Method*, `Pre_Production_Item__c.Production_Method__c` *Production Method*, `Print_Process_Details__c.ProductionMethod__c` *Production Method*, and Production Plan's `TotalMethods__c` / `MethodsComplete__c` / `AllMethodsComplete__c` / `BlockedProductionMethods__c`. 📌 **Useful contrast: the OBJECT edit page does NOT wedge** — four object label changes went through cleanly the same afternoon. The trap is specifically the **field** edit page. 📌 **Also learned from the form before it froze: `AggregateRelationshipName` is `Production_Runs` and `RelationshipLabel` is *Production Runs*** — first-hand confirmation of the child relationship name §2 rule 2 asserts. ➡️ **Next step is the CLI, not more clicking:** a field `<label>` change is an ordinary Metadata API deploy (unlike an object API rename), so all nine become one small deploy per org | §2 r13, §11 |
+| 2026-09-14 | ✅ **`Production_Run_Line_Items__c` RELABELLED "Run Line Item" in dev2 AND staging** — the rename map's target label, taken for free. API name **unchanged** (still the plural `Production_Run_Line_Items__c`, which remains one of the three objects whose API name breaks the label→API pattern, §9). 🚩 **And it surfaced real pre-existing drift: staging's labels were already wrong.** Singular read *"Production Run Line Items"* (plural, where dev2 said singular) and the **Plural Label was literally `Production_Run_Line_Items`, underscores and all** — the API name leaked into a user-facing label at some point and nobody noticed, because nothing in code reads a label. Both orgs now read Run Line Item / Run Line Items. 🪤 **A near-miss worth recording: the object edit form can open SCROLLED.** The first Edit click was swallowed (see the previous entry), the second opened the form already scrolled past the label fields, and blind typing at the usual coordinates landed on the Optional Features / Object Classification checkbox block. **Typed label text contains spaces, and a space on a focused checkbox toggles it** — so that is a silent way to flip `Allow Sharing`, `Allow Bulk API Access` or `Track Field History` while believing you are renaming something. Cancelled without saving, verified the checkboxes were untouched, and redid it. ⛔ **Screenshot the form before typing into it; never reuse coordinates across a page load** | §9, §11 |
+| 2026-09-14 | ✅ **STAGING NOW SAYS "DECORATION" TOO — label only, applied by hand, the two sandboxes agree again.** `Production_Method__c` in staging: Label → **Decoration**, Plural → **Decorations**; API name untouched, as in dev2. Done by hand because **labels do not travel on a change set**, so there was nothing to promote and nothing to deploy. 📌 **Object ids differ between the orgs** — staging's is `01Ica000000IeBt` against dev2's `01Ica000000So1v`, so a Setup URL copied from one org opens something else, or nothing, in the other. 🪤 **And the Lightning Details page swallows the first click on Edit** in both orgs — the button is in the accessibility tree and reports the click, but the form does not open until the page has fully settled. Click it twice, or verify the URL changed to `/edit?address=` before typing, or you will type into a read-only page and think it saved | §2 r12, §9, §11 |
+| 2026-09-14 | ✅ **"PRODUCTION METHOD" IS NOW "DECORATION" — LABEL ONLY, dev2, and the API name deliberately did not change.** The goal was that the shop stops saying *Production Method*, not that the API name changes; those are different jobs and only one of them is cheap. ⛔ **Salesforce BLOCKS the API rename outright** — Object Manager → Edit → Object Name → Save returns *"Cannot rename custom object referenced in Apex class or trigger: `ProductionAutoSchedulerServiceTest`"*. A hard validation failure, nothing written; not a warning, not a cascade. 📌 **So an object's Apex reference count is a FEASIBILITY TEST, not a risk estimate** — zero references renames through Setup, one or more cannot be renamed through Setup at all. Proven both ways the same afternoon: `Production_Run_Line_Items__c` (0 Apex refs) renamed cleanly and was reverted; `ProductionPlan__c` (1 ref, and it is only the test class) was rejected. ⛔ **The Metadata API does not rename either** — deploying a CustomObject under a new fullName creates a SECOND object, so a deploy-based "rename" is really create + migrate 745 records + destructive-delete. The only real route is strip the Apex references → rename → restore, with the trigger **deleted and recreated** because a trigger names its object in its own signature. Not attempted; the wave is repriced accordingly. **What actually landed:** dev2 object Label `Production Method` → **`Decoration`**, Plural → **`Decorations`**, API name still `Production_Method__c`. Carries automatically to the tab, page layouts, the Order and Production Plan related lists, report types, list views and the New button — no Apex, flow, report or query affected, because nothing references an object by its label. Reversible in ~30 seconds. Plus **39 prose-only lines across 7 repo files**: `pre-production.html` 19, `index.html` 10, `order-sheet.html` 4, `calendar.html` 3, `shipping.html` 1, and one line each in `ca-api.js` and `functions/api/production-methods/index.js` — both a stale `Object Manager -> Production Method -> Fields -> Placement` Setup path that became wrong the instant the label changed. Headings, empty states, confirm/alert dialogs, one fallback label. Verified line-by-line old vs new, `node --check` clean on both .js files, all 10 inline `<script>` blocks parse. `functions/` otherwise untouched — its comments and `console.error` strings still say "Production method", which remains correct, since they describe `Production_Method__c`. 🚩 **NEW TRAP — §2 rule 12: label and API name now disagree on the busiest object in the system.** 🪤 **And `index.html` (3,458 lines) and `order-sheet.html` (399) are CRLF while every other board is LF** — a naive Python text-mode rewrite silently converts them and produces a whole-file diff instead of a 10-line one. Read and write those two with `newline=""`. Hit and corrected during this change. **Staging still says Production Method** (§9), and the field labels on `Production_Run__c.PrintMethod__c` and `Pre_Production_Item__c.Production_Method__c` were not swept | §2 r12, §9, §11 |
+| 2026-09-14 | ✅ **PRIORITY FIELDS DEPLOYED dev2 → staging — and the deploy landed them with NO FIELD-LEVEL SECURITY, which is the part worth remembering.** Change set **`Production Method priority fields`** (`0A2ca000000IzWT`): `Production_Priority__c` (Number(2,2)), `Priority_Rating__c` (Picklist 1-5, local value set — checked, no global-value-set dependency), `Priority_Notes__c` (Text Area 255), all on `Production_Method__c`. Uploaded and deployed by Anthony. ✅ Verified in staging: all three present, Production Method now **94 fields, matching dev2**. 🚩 **BUT: `Production_Priority__c` is visible to 0 of 27 profiles in staging, against 26 of 26 visible-and-editable in dev2.** **A change set carries field permissions only for profiles included in the set, and none were included.** So `_priority-rollup.js:83` STILL fails in staging — except it now fails for exactly the reason its own error message names (*"check the integration user has Edit…"*), which is a far more convincing wrong answer than the field being absent. **Deploying a field is not the same as granting it.** ⛔ **Fix: Set Field-Level Security → Visible (not Read-Only); the load-bearing profiles are `Salesforce API Only System Integrations` and `Minimum Access - API Only Integrations`.** Added to the §9 list of what change sets do not carry. 📌 **§0 RESUME HERE was rewritten as a clean handoff** at the close of this session: what is done and verified in both orgs, six open items in priority order, the merge guardrail, and seven tooling lessons — including that **change sets work dev2 ⟷ staging** (three deploys this session proved it) and that **`device_commit_files` reports "written" without writing** in this iCloud folder, so every doc write needs reading back off the real file | §0, §9, §11 |
+| 2026-09-14 | 🔍 **ORG PARITY RE-SWEPT dev2 vs staging, code-first — and it found one live silent failure.** Method worth repeating: parse every Salesforce field name out of `functions/` FIRST (**139 custom fields, 7 objects**), then enumerate both orgs and diff, then check each difference back against the code. Org-first gives a list nobody can act on; code-first tells you which differences can take a board dark. **HEADLINE: no field the UI reads is missing from either org — nothing is broken on screen.** `Order` (238 dev2 / 246 staging), `Proposed_Run__c` and `Pre_Production_Item__c` are identical on everything the code touches. 🚩 **THE ONE THAT MATTERS: `Production_Method__c.Production_Priority__c` does not exist in staging, and `_priority-rollup.js:83` PATCHes it on every refresh.** Every one of those 400s there. **It fails safely** — wrapped, logged, never thrown — which is exactly why it has been invisible. Cost: the priority score is **never written to Production Method in staging**, so any Salesforce report, list view or sort on that field is permanently blank; the dashboard is unaffected because it computes priority itself and the calendar reads the **Order** copy, which exists in both. 🪤 **The error string points at the wrong cause** (*"check the integration user has Edit…"*) — true in an org where the field exists, a wild goose chase in the org that actually breaks. **A 'most likely cause' written for the org you developed in is not the most likely cause in the org that fails.** 📌 Two further Production Method fields (`Priority_Rating__c` picklist, `Priority_Notes__c` Text Area 255) are dev2-only but **unused** — every code reference is `Order__r.Priority_Rating__c`/`Priority_Notes__c`, the ORDER fields, present in both. `Production_Run__c.Operator__c` dev2-only/unused; `Quantity_Completed_c__c`, `Reprint_Quantity_c__c` (Production Run) and `Actual_Good_Qty__c`, `Reprint_Qty_Needed__c` (Production Run Line Item) are staging-only leftovers, unused. **Leave all of those.** 📌 The code comment calling `Production_Priority__c` `Number(4,2)` is wrong — dev2 has `Number(2,2)`, which is fine: `scoreOrder()` clamps 1-10. ✅ **Every picklist the UI branches on is identical in both orgs** — `Production_Method__c.Status__c` (the board columns), `Type__c`, `Order.Order_Substatus__c`. 🪤 **But the sweep surfaced a trap that is in BOTH orgs, so a diff could never have caught it: `Order.Order_Substatus__c` has a value LABELLED "In Production" whose API NAME is "Production".** SOQL matches the API name, so `WHERE Order_Substatus__c = 'In Production'` returns **zero rows, silently, everywhere.** No code does this today — `BOARD_STATUSES` uses that literal against `Production_Method__c.Status__c`, where label and API name match. **Every other value on that picklist has label == API name, which is what makes this one easy to miss.** 📌 **Scraping recipe** (staging's Lightning Setup blocks page reads, classic does not): `/p/setup/layout/LayoutFieldList?type=<Order|01I id>&setupid=<OrderFields|CustomObjects>`; `01I` ids from `/p/setup/custent/CustomObjectsPage`. ⛔ `fetch()` from the page returns a 744-byte redirect stub — navigate page by page; ⛔ `/<01I id>` alone redirects to Lightning in staging | §9, §11 |
+| 2026-09-14 | **"Back To Production" on counting's post-submit screen** — the confirmation panel only offered "Back To Runs", so a press operator finishing a count reached the board via the nav drawer or the browser. Added as an **anchor**, not a button with a handler: a page navigation rather than a state change, and it gets middle-click / open-in-new-tab free. Bare `index.html`, no query params — the run is submitted, so there is no card to deep-link to and `makeupHrefFor()` stays the single source of the make-up URL format. Nothing added to the props object. Placed inside `showResult` but **outside the four inner `sc-if`s**, so it renders in every variant rather than only the clean one. ⚠️ **Verified in real Chrome driven over CDP** — both in-app browser tools were unavailable this session (an MCP server name collides with a built-in), so `~/tmpwork/backbtn-verify.mjs` drives headless Chrome directly: 42 assertions across all four panel variants at 820px and 390px, and it hard-fails if the confirmation panel is never reached. Same width as the button above it (362px vs 362px on a phone), 9px below it, 46px tall; the amber make-up CTA still renders above both on `needsReschedule`. Branch `feat/counting-back-to-production` off `origin/main`, also cherry-picked onto `feat/proposed-run-press` so the working tree carries it. Unpushed. No Asana id was supplied | §4 |
+| 2026-09-14 | ✅ **B9 ITEM 1 CLOSED — the enriched reprint email is live in BOTH sandboxes, and staging got it by change set rather than by hand.** Change set **`B9 Email Enrichment V2`** (`0A2ca000000Iz53`), one component `Flow Definition: B9_Order_Complete_With_Damage_Awaiting_AM`; dev2's active version was V2 so V2 is what travelled. Anthony deployed and **activated V3 in staging** at 7:30 AM, then ran an end-to-end test and confirmed the email reads correctly. Verified on staging's flow detail page: **Active Version 3**, created 7:29 AM, API 67.0; **V1 and the abandoned two-thirds hand-built V2 are both Inactive/Draft** and V2 can be deleted. **The whole "B9 in STAGING" hand-rebuild section in §4 is now superseded — it was never finished and never needed to be.** 🪤 **Dependency behaviour differs wildly by flow and the difference matters:** the screen flow reported **4** dependencies, this one **423**, because Salesforce walks transitively and drags in unrelated components plus a managed-package warning that comes from that noise. **Do not try to read a list that size.** The direct references were the expected set, and the one recently hand-built field that would genuinely break the build — **`Size_Sort__c`** — was spot-checked in staging first. **For a large dependency list, staging's Validate is the proof; it is non-mutating and definitive.** 📌 **Item 1 satisfies the original ask in full** — order, method, misprint counts, per-size breakdown, primary contact, plus a link — confirmed against real debug output rather than the canvas. Two structural nits (the `Totals:` line grouped with the methods instead of heading the size block; no blank line above `Account contact:`) were raised and Anthony chose to ship as-is; **they are now a two-org fix**. 🚩 **ONE THING TO TEST DELIBERATELY THE DAY `b47c233` SHIPS.** `_rework.js` states the app writes `Awaiting AM` and that this is *"what the Flow watches for in order to email the AM"* — **but the flow's entry condition is `Misprint Outcome Is Null`**, so the app writing `Awaiting AM` is the one thing that makes it false. It should still be fine (a record-triggered flow evaluates entry against the save that set Completed, not a later write) **but if that is wrong the failure is silent and total — the AM stops being emailed.** Do not find this out from an AM who never heard about an order. ⛔ **Still open and unrelated to item 1: the outcome BUTTON is on no staging page layout**, so staging has an active outcome flow nothing can launch; and **`Update Order` has never executed in either org** | §0, §4 B9, §11 |
+| 2026-09-14 | ❌ **CORRECTION — dev2's B9 EMAIL flow V2 has been ACTIVE since 9/11 4:27 PM, and this document said "deliberately still Inactive" for three days.** Found by checking the org when Anthony asked whether the email feature's info was current — it was not. dev2's flow detail page reads **Active Version 2**, V1 now Inactive/Draft, activated by Anthony Martinez 9/11 4:27 PM. The ⛔ *"Do not activate V2 in dev2 yet"* line in §0 has been struck. **Staging is unchanged and was NOT activated: V1 still Active since 9/8, V2 still Inactive/Draft and still two-thirds built.** 📌 **Live consequence: the two sandboxes now send DIFFERENT emails for the same event** — dev2 the enriched one (order number, methods, per-size misprint/damage breakdown, primary contact), staging the original fixed paragraph with no merge fields. ⚠️ **The sequencing hazard activation was gated on is still open**, because `b47c233` is still unpushed: the deployed app still creates the reprint automatically while the flow emails the AM asking whether to create one. Activation changed only *which* email arrives, not that mismatch. 🚩 **AND A SAFETY ASSUMPTION IN THIS DOCUMENT IS WRONG IN ITS REASONING: "expect zero delivered emails from a sandbox" is not an org-level block.** Checked in both orgs 9/14: **Deliverability → Access to Send Email = `All email` in dev2 AND staging.** Neither is on "System email only". The only thing stopping B9 mail from landing is that sandbox refresh scrambles User emails to `.invalid`, which `Opportunity_Owner_Email__c` inherits — **a per-address property, not a wall.** This document already records the exception: **Anthony's own user is un-scrambled in both orgs**, so a qualifying order whose Opportunity Owner is Anthony will send a real email out of a sandbox. The accurate statement is not "sandboxes can't send" but **"most sandbox addresses are invalid, and we know of at least one that isn't."** 🎯 **Third stale-⛔ correction in four days** (after "B9 does not exist" and "change sets can't go dev2 → staging"). The pattern is consistent enough to be a rule: **a ⛔ line is a snapshot of a moment, and the org is the only source of truth** | §0, §4 B9, §11 |
+| 2026-09-14 | ✅ **B9 ITEM 2 DEPLOYED dev2 → STAGING BY CHANGE SET — the first metadata that has ever moved between these sandboxes instead of being rebuilt by hand.** Change set **`B9 Record Misprint Outcome`** (`0A2ca000000Iyyb`), **two components**: `Flow Definition: B9_Record_Misprint_Outcome` and `Action: Record_Misprint_Outcome`. **Validate: Succeeded, Deploy: Succeeded 2/2**, 9/14 7:12 AM; Anthony activated the flow at 7:13 AM. Staging now reads **Active Version 1 · Screen Flow · Activated · API 67.0** (`300ca00000HHtPk`). **Verified in staging's own Deployment Status and flow detail page, not from the sending org's say-so.** 📌 **Two pre-flight checks that are the reason this landed clean, and both are worth repeating on the production run:** **(1) Dependencies** — Salesforce reported exactly four (`Misprint_Outcome__c`, `_At__c`, `_By__c`, `_Notes__c`) and **all four already existed in staging** with identical API names and types, so none were added; deploying a custom field over an existing one replaces the whole field definition, the same whole-component-replacement risk as a layout. **(2) The picklist** — `Misprint_Outcome__c` is **restricted**, so its values were read one by one in staging before uploading: all five active, including the three the flow writes verbatim (`Reprint`, `Credit`, `Refund`). Had any been missing the deploy would still have succeeded and the flow would have failed at runtime on the first real use. 🪤 **Change-set naming in this org:** a flow's component type is **`Flow Definition`** — there is no "Flow" entry in the Component Type list at all — and a Quick Action is type **`Action`**. ⛔ **NOT done and it is load-bearing: the button is on NO staging page layout.** The three Order layouts were deliberately kept out of the set (a layout in a change set replaces the whole layout and staging's may have diverged), so staging has an active flow that **nothing can launch** until `Record Misprint Outcome` is added by hand to **Order Layout**, **Order Layout - EMB** and **Order Layout - Heat Press**, between `Production Error` and `Edit`. ⛔ **AND THE WRITE PATH HAS STILL NEVER EXECUTED IN EITHER ORG.** A green deploy proves the metadata moved; it proves nothing about behaviour. `Update Order` remains readback-verified only in dev2 and staging inherits exactly that gap — **trap 11, a flow that completes is not a flow that works.** First real press in either org is the first real test; watch the print shop is notified once and only once. 🎯 **Cost of the wrong note this replaces: the staging mirror had been treated as a hand-rebuild for days on the strength of a ⛔ line that one Setup page disproved in ten seconds** | §0, §4 B9, §9, §11 |
+| 2026-09-11 | ❌ **CORRECTION — dev2 → staging CHANGE SETS WORK, and this document said they did not. Anthony asked "can I not just use a change set?" and he was right.** dev2 → Setup → **Deployment Settings** shows three connections; the **`dev2 ⟷ Staging`** row has a **double-headed arrow** — upload authorised **in both directions**, and it has been all along. The claim I had recorded (*"change sets only move between a production org and its own sandboxes"*) is simply false: Salesforce creates deployment connections between **every org in a production org's family, sandbox-to-sandbox included**. `dev2 ⟵ Production` and `dev2 ⟵ Dev` are single arrows by contrast, so the double arrow is unambiguous. 🎯 **The cost of that error: the staging half of B9's email flow was being hand-rebuilt element by element, and the entire Salesforce-CLI detour was undertaken to solve a problem that did not exist.** ⚠️ **Two real caveats before anyone fires a change set, though — it is not a pure copy:** **(1) a change set deploys a Flow INACTIVE** (§9), so `B9 Record Misprint Outcome` will land in staging as an inactive version and must be **activated by hand there** — and the Quick Action cannot be created against an inactive flow, so the order is deploy → activate → then the action if it is not in the same set. **(2) A PAGE LAYOUT IN A CHANGE SET REPLACES THE WHOLE LAYOUT, not just the action you added.** If staging's `Order Layout` / `- EMB` / `- Heat Press` have diverged from dev2's in any way, deploying dev2's versions **overwrites staging's**. 📌 **Safer split: put the Flow and the QuickAction in the change set, and add the action to staging's three layouts by hand** — that is three small edits against an unknown-divergence risk that is invisible until someone notices a missing field. 📌 **Components to include:** `Flow: B9_Record_Misprint_Outcome`, `QuickAction: Order.Record_Misprint_Outcome`, and — only after checking parity — `Layout: Order-Order Layout`, `Order-Order Layout - EMB`, `Order-Order Layout - Heat Press`. **Verify the receiving end** (staging → Deployment Settings → the dev2 row must allow inbound) before uploading. 🎯 **Standing lesson, and it is the same one as the "B9 does not exist" correction: a ⛔ capability claim in this document is the most likely kind of line to be stale or wrong, because it gets written at the moment of frustration and never re-tested. Check the ORG, not the row** | §4 B9, §9, §11 |
+| 2026-09-11 | ✅ **B9 ITEM 2 IS BUILT IN dev2 — `B9 Record Misprint Outcome`, the screen the reprint email points at.** Anthony: *"Let's do the Approve/Decline mechanism on the Order."* Three decisions, all his: **(1) a screen flow launched from a Quick Action on the Order** — which is the "put the decision in Salesforce, not in this app" option §4 argued for, and it makes the whole capability-URL / Cloudflare-Access collision (E6.4) simply not happen: no token, no new endpoint, no Access exception; **(2) three outcomes offered — `Reprint` · `Credit` · `Refund`** — `Misprint_Outcome__c` has five restricted values and three overlap, so `Credit/Refund` stays **active on the field** (historical records still read correctly) but is **never shown to the AM**; **(3) notes required for everything but `Reprint`** — a reprint explains itself, money leaving does not. **Shape:** `Get Order` by `recordId` → `Outcome Already Recorded` decision → *Already Recorded* to a **dead-end screen**, *Default* to the `Record Outcome` screen → `Update Order` stamping `Misprint_Outcome__c` + `_By__c` (`{!$User.Id}`) + `_At__c` (`{!$Flow.CurrentDateTime}`) + `_Notes__c` **in one DML**. ⛔ **The guard is not politeness — it prevents re-notifying the print shop.** `Printshop Misprint Process` and `Misprint Outcome Slack` test *state* ("not null AND not `Awaiting AM`"), **not transition**, so re-recording an outcome fires the print-shop notification and the Slack post **again**, invisibly. Both clauses of the guard are load-bearing: `Awaiting AM` is what B9's email flow writes, so "is not null" alone would dead-end every order that legitimately arrives. 📌 **Conditional-required is done with component visibility, not with Required:** the Notes box is Required unconditionally and *hidden* unless outcome = Credit or Refund — a hidden required component does not block Finish. **Do not "fix" that by unchecking Required.** The three Choice resources store the picklist API values **verbatim**, so `{!outcomeChoice}` drops straight into the restricted picklist; rename a picklist value and these break silently. **Button:** Quick Action **Record Misprint Outcome** / `Record_Misprint_Outcome` (`09Dca000000BAQf`), added between `Production Error` and `Edit` on **Order Layout** (`00h5e…cR2fAAE`), **Order Layout - EMB** (`00hca…Yf1lAAC`) and **Order Layout - Heat Press** (`00hca…YRrdAAG`) — the three layouts the press record types actually use; Ecommerce/ShipStation deliberately skipped. 🪤 **A Flow Quick Action can only reference an ACTIVE flow** — it does not appear in the picker while Inactive, so activate first, then create the action; that is the order to repeat in staging and production (where change sets land flows Inactive, §9). ✅ **Verified by debug** against order **00013509**: Get Order retrieves, a blank outcome takes the **default** branch, the prompt's merge field resolves to the real order number, three choices render, and Notes appears on Credit and disappears on Reprint. ⛔ **But `Update Order` has NEVER EXECUTED.** The debug was stopped at the screen on purpose — finishing it would have written a real dev2 order and fired the print-shop + Slack notifications, and **Flow Builder offers no rollback option for screen flows** (unlike a record-triggered debug). So the four field bindings are **readback-verified only**, which is exactly the assurance level trap 11 says is not enough: *a flow that completes is not a flow that works.* **The first real button press is also this flow's first real test — watch the print shop gets notified once and only once.** 🪤 **Four UI traps, all new:** a screen component's **API Name autofills from its Label and APPENDS** what you type (`Outcome` + `outcomeChoice` → `OutcomeoutcomeChoice`); **a screen's API name collides with a Decision OUTCOME's** — outcome names share the flow namespace, so `Already Recorded` had to become `Already_Recorded_Screen`; the **classic page-layout editor sits in an iframe that ignores scrolling**, so the Actions section is unreachable without scripting the scroll; and **Flow Builder's renderer froze twice** — recovery is a *fresh tab*, not a reload. ⛔ **dev2 ONLY. Nothing created in staging or production** (Anthony's scope call). **And nothing yet makes a pending decision visible** — an AM who never presses the button leaves an order at `Awaiting AM` forever, which is the "nothing must rot silently" warning §4 wrote down and still nobody has addressed | §4 B9, §11 |
+| 2026-09-11 | 🔧 **STAGING MIRROR STARTED — V2 is about two-thirds built, INACTIVE, and deliberately NOT exercised.** Built and saved in staging V2: the 7 variables, `fRecordLink`, `fRowMis`/`fRowDam`, `tGroupLine` (with the U+200B anchor), `Get Damaged Line Items` switched to **All records / Ascending by `Size_Sort__c`**, `Get Order Methods`, `Get Primary Contact`, `Init Email Build`, `Loop Damaged Rows`, `Same Size As Previous`, `Accumulate Into Group`, `Group Pending`. **Remaining: `Flush And Start Group`, `Start First Group`, `Flush Last Group`, `Loop Methods`, `tMethodItem`, `fMethodNotListed`, `Method Not Listed`, `Append Method`, `tEmailBody`, and the Send Email wiring** — all ten written out with their exact post-fix values in §4 B9 → "B9 in STAGING". **Staging V1 stays Active and untouched throughout.** ⛔ **The debug was skipped on Anthony's instruction, and staging could not have been debugged anyway: no line item in the org carries both an `Order_Id__c` and a misprint/damaged quantity.** Staging has 14 line items; the three with misprints (PRLI-0001/0003/0004) have no Order Product so their `Order_Id__c` formula is blank, and the ten that do have an Order Id (order **00009525**, already `Completed`, multiple methods, S–2XL) have no quantities. The fixture to build when someone wants to debug it is recorded in §4. **So staging V2 is read-back-only and its first real run is unproven** — which matters more than usual here, because in dev2 the debug was the only thing that caught all three defects. 🪤 **Two org facts worth not rediscovering:** object key prefixes are **not** shared between the sandboxes (Production Run Line Items is `a3V…` in staging, `a3W…` in dev2), so no id or prefix travels between orgs; and staging's Lightning Setup shell blocks **both** screenshots and page reads (dev2 allowed screenshots), leaving the **classic `/300` Flows list on `my.salesforce.com`** as the way to find a flow's DefinitionId and version ids. The 9/08 staging flowId in this document no longer resolves — the doc's own rule, demonstrated. 🪤 **And the reason this is slow: a Flow Builder combobox closes itself after ~2 seconds** (so a 3-second screenshot looks like a failed click — screenshot within 1s), **you must click the dropdown's ARROW not its text**, a click straight after typing elsewhere is swallowed as a blur, and `find` + click-by-ref is the escape hatch worth reaching for after two failed clicks rather than ten. ❌ ~~**No metadata shortcut exists:** change sets only run between a production org and its own sandboxes, so dev2 → staging is not a valid pair~~ — **THIS WAS WRONG, corrected the same day; see the change-set row at the top of this log. dev2 ⟷ Staging change sets are authorised in both directions and always were** | §4 B9, §11 |
+| 2026-09-11 | ✅ **B9 EMAIL ENRICHMENT IS BUILT AND VERIFIED IN dev2 V2 — and the debug run found THREE defects a complete, green, saved flow was hiding.** All ten specced items are in: `Accumulate Into Group`, `Group Pending`, `Flush And Start Group`, `Start First Group`, `Flush Last Group`, `Loop Methods` → `Method Not Listed` → `Append Method`, the three plain-text templates, `fRecordLink`, and `Send Reprint Email To AM` wired to `{!tEmailBody}` with the order number in the Subject, Rich-Text Body empty and **Use Line Breaks = True** (an addition, and not optional — it is what renders the newlines). **V2 is still INACTIVE and V1 is still live**; reloaded fresh from the server and re-debugged against order **00013504** (Screen Print + Heat Press, 7 rows, 4 sizes), reading the Send Email action's **resolved input values**, which is the only place the real message text exists. 🪤 **Defect 1 — `CONTAINS()` on an empty variable returns null, not false, so the print-methods list was silently EMPTY on every order.** `NOT(CONTAINS({!vMethods}, …))` evaluates to null on the first iteration, the Decision never matches, nothing is ever appended. **`BLANKVALUE(x,'')` does not fix it** — an empty substitute is still blank. Fixed by making the haystack non-empty: `NOT(CONTAINS('#' & {!vMethods}, TEXT({!Loop_Methods.Type__c})))`. `TEXT()` separately required — `Type__c` is a picklist (trap 5, as B4 hit). 🪤 **Defect 2 — a null quantity seeded a counter as null and printed as a blank:** `L — 2 misprint,  damaged`. **Flow's `Add` treats null as zero; `Equals` copies the null through** — which is why the totals were right and the per-size line was not. Fixed with `fRowMis`/`fRowDam` = `BLANKVALUE(<qty>, 0)`, used at every read of a quantity. 🪤 **Defect 3 — Flow strips leading AND trailing whitespace from a text template on save, so every list item ran together on one line** (`Screen PrintHeat Press`). This **undoes the "use a text template, formulas cannot make a newline" advice** — a template whose separator is at either boundary loses it, silently, and reopens looking like a single line. Interior newlines survive. Fixed by anchoring the newline with a **zero-width space (U+200B)** as the template's first line; it is invisible in the mail and not whitespace to the trimmer. **That blank-looking first line in `tGroupLine` and `tMethodItem` is load-bearing — do not clean it up**; both templates say so in their org descriptions. 📌 **The through-line: the canvas was complete and the flow completed successfully on every run. Three separate wrong emails.** *A flow that completes is not a flow that works* — read the action's resolved inputs, not the green chip. Also caught: `Flush Last Group` landed **inside** the loop (the element list's connector label lied; verify by zooming the canvas, not by reading a label), and a Decision **cannot** take a formula inline, which is why `fMethodNotListed` exists as a resource. ⏭️ **Open: activate V2 (gated on the unpushed app half `b47c233`), mirror the whole build in staging by hand, create `Size_Sort__c` in production, delete dead `vSizeLadder`/`vOtherLines`** | §4 B9, §11 |
+| 2026-09-11 | 📌 **SCOPE, Anthony 2026-09-11: production is OUT for now — dev2 and staging only.** The production Setup checklist in the row below stands but is **deferred, not cancelled**. ⛔ **The merge guardrail does NOT relax with it: `feat/proposed-run-press` and the 14-commit stack still must not reach `main`** while production lacks `Proposed_Run__c.Press__c`, because `proposed-runs/index.js` and `calendar/index.js` name that field and trap 1 fails the whole SELECT — calendar and proposals list both go dark. Deferring the field means deferring the merge, which also means **B9's app half (`b47c233`) stays unshipped**, so in whichever org the app points at, the flow keeps emailing the AM about a reprint the deployed app has already created. Known and accepted for now; it is the reason not to leave this half-done indefinitely. ✅ **`Size_Sort__c` now exists in STAGING too** (`00Nca00000BHlcY`, object `01Ica000000Otsz`) — Formula (Text), Check Syntax clean, **compiled size 1,437 characters, identical to dev2's**, and the saved formula body read back off the field detail page matches dev2 character for character. Both sandboxes are now ready for the flow half of the email enrichment; nothing in staging is blocked behind field work any more | §4 B9, §11 |
+| 2026-09-11 | 🚩 **SEQUENCING CORRECTED — `b47c233` CANNOT SHIP ON ITS OWN, and that collapses three open items into one.** I had been describing "push B9's app half" as a decision separate from the press feature. It is not. `b47c233` is the **10th-newest of 14 unpushed commits** on this stack; `411715e` and `d9eeb4f` (the press feature) sit **on top of** it, so merging the branch to `main` ships B9's opt-in reprint AND the press feature together. Anthony merges through the **GitHub web UI**, which has no cherry-pick, so splitting them is not practically available. ⛔ **Therefore the whole queue is gated on ONE thing: `Proposed_Run__c.Press__c` existing in PRODUCTION.** Without it, `proposed-runs/index.js` and `calendar/index.js` name a field that is not there and **trap 1 fails the entire SELECT**, taking down the calendar and the proposals list. With it, the stack merges and B9's app half ships in the same motion — which also **resolves the live mismatch** where both sandboxes' flows email the AM about a reprint the deployed app has already created automatically. 📌 **Production Setup checklist, ~20 minutes, all of it in CLASSIC Setup on `cultureapparel.my.salesforce.com` (the Lightning shell is not scriptable; classic is):** (1) **`Proposed_Run__c.Press__c`** — `/p/setup/field/NewCustomFieldStageManager?entity=<01I id of Proposed Run>`, data type **Lookup**, related to **Account**, label `Press`, name `Press`, child relationship **`Proposed_Runs`**, **Required OFF**, delete-behaviour **Clear the value** (`fkConstraint=N`), lookup filter **`Account.Type` equals `Press`** with `IsOptional=0`; get the `01I` id from the Custom Objects page. (2) **`Production_Run_Line_Item__c.Size_Sort__c`** — Formula (**Text**), body exactly as recorded in the B9 spec above, and run **Check Syntax** before saving. (3) Confirm the five press Accounts exist in production with `Type = 'Press'` — production may not carry the same five as the sandboxes, and `Account.Print_Method__c` is only needed if the press-method filtering is ever revived. 🎯 **Do NOT merge before step 1.** After it, the 14-commit stack can go in one merge | §4 B9, §11 |
+| 2026-09-11 | 🔧 **B9 email enrichment IN PROGRESS in dev2 — checkpointed as V2 (Inactive); V1 is still the live flow.** Anthony asked the reprint email to name the order, the method, the misprint count, the sizes, and the account's primary contact. Today's email has **no merge fields at all** — a fixed paragraph that does not even carry the order number. 🔑 **Where the logic had to live was decided by evidence, not preference:** the flow fires on Order when `Production_Status__c = 'Completed'` AND `Misprint_Outcome__c` is null, after-save, "only when updated to meet" — and **nothing in `functions/` ever writes `Production_Status__c`**, so the app is not what trips the trigger and cannot be relied on to have written a summary field first. The aggregation therefore lives in the flow. ⚠️ **TRAP FOUND — `Production_Run_Line_Item__c.Method__c` IS NOT A METHOD NAME.** It is `CASESAFEID(ProductionRun__r.PrintMethod__c)` — an 18-character record Id. Merging it into an email would show the AM `a1Xca0000012345ABC`. The method words come from `Production_Method__c.Type__c` off the Order instead (one hop, Master-Detail). **Third formula-field trap on this project** after the `HYPERLINK()` HTML in B22 and the duplicate `Opportunity_Owner_Email__c` labels. 🎯 **DESIGN CHANGED MID-BUILD, on cost.** Grouping sizes in wearing order first meant an 11-row `vSizeLadder` seed inside the flow — and Flow's comboboxes only open on click-then-Down and only commit on blur, so that is **~10 UI interactions per row, ~100 per org, ~300 across three orgs, purely for row ordering.** Replaced with **`Production_Run_Line_Item__c.Size_Sort__c`**, a Formula (Text) created in dev2 (`00Nca00000BHgJA`): `RIGHT("0" & TEXT(CASE(UPPER(TRIM(Size__c)), "YS",1, "YM",2, "YL",3, "XS",4, "S",5, "M",6, "L",7, "XL",8, "2XL",9, "XXL",9, "3XL",10, "XXXL",10, "4XL",11, "XXXXL",11, 99)), 2) & "|" & UPPER(TRIM(Size__c))` — checked with Check Syntax, no errors. 📌 **Why rank AND the size in one key:** Get Records allows only ONE sort field, so `"01\|YS"` / `"05\|S"` / `"99\|OSFA"` makes a single ascending sort both order the sizes and keep identical sizes adjacent, which is what a single-pass grouping loop needs. Unrecognised sizes get rank 99 and fall to the end grouped by name — nothing is dropped, and the whole catch-all pass the ladder design needed disappears. ✅ **Built and read back in dev2 V2:** `Get Damaged Line Items` now returns ALL rows (was first-match-only, an existence check); `Get Order Methods` (Production Method where Order = triggering order); `Get Primary Contact` (Contact where Id = Account → Primary Contact — the two-hop resource traversal works, so this is one element, not two); eight variables. 🪤 **Two UI lessons, both cost time:** this is a **Mac**, so select-all is **cmd+a** — `ctrl+a` moves to line start and silently PREPENDS, which is what produced `RunPressPress` earlier and what kept corrupting Developer Console queries; and the Flow canvas **does not scroll on the wheel, it pans by dragging**. ⏭️ **Remaining:** sort the query by `Size_Sort__c`, drop `vSizeLadder`/`vOtherLines`, add `vPrevSize`, build the single-pass loop (loop + 3 decisions + 4 assignments), the method loop, the text templates and the body, then activate — then the same in staging, and `Size_Sort__c` in production before any of it ships | §4 B9, §11 |
+| 2026-09-11 | ❌ **CORRECTION — B9 IS BUILT, and the doc said it was not. My error, found only because Anthony said so and I went and looked.** Both halves exist. **Salesforce:** `B9 Order Complete With Damage - Awaiting AM`, **Active V1 in dev2 AND staging**, saved 2026-09-08 2:49 PM — record-triggered on Order, 2 entry conditions, `Get Damaged Line Items` → `Has Misprint Or Damage` → `Set Awaiting AM` → `AM Email On Order` → `Send Reprint Email To AM`. **App:** commit **`b47c233`** — `_rework.js` carries `OUTCOME_AWAITING = 'Awaiting AM'` and writes it with `Misprint_Outcome_At__c`, `inbox/index.js` runs a **B9 sweep** that builds the reprint for orders where `Misprint_Outcome__c = 'Reprint'`, and `rework-check.js` reports the B9 states (`declined_by_am`, `awaiting_am`, decision-not-requested, `unknown_outcome`). 🚩 **THE HALVES ARE OUT OF STEP: `b47c233` IS UNPUSHED, so the deployed app does not have it** — `origin/main` still auto-creates the reprint the moment the last method completes, while both sandboxes' flows now email the AM to ask about a reprint the deployed app has already built. That is the sequencing hazard this story was written to avoid, live in whichever org the app points at. **Either push `b47c233` or expect the email to be asking about an order that already exists.** 🎯 **Lesson: the doc's ⛔ lines are the ones most likely to be stale** — they get written at the moment of blocking and never revisited. Two separate places said B9 did not exist; both were hours out of date. Re-read the ORG, not the row. | §4 B9, §11 |
 | 2026-09-11 | **The AM's proposed press now reaches the run form** — `calendar.html` and `pre-production.html` both prefill `Press__c` from the proposal instead of making the manager re-pick a press the AM already chose, and both show it on the suggestion card (leading the meta line, ahead of print location) so it can be read before committing. **Two different guards, because the two pickers fail differently:** the calendar's is a `<select>`, so the press is carried only when it is actually in `presses()` — a `<select>` given a value with no matching `<option>` renders BLANK while reading as filled, and `POST /api/production-runs` requires `pressId`; pre-production's is a typeahead, where the visible box is bound to `pressQ` while the submit sends `pressId`, so id + name + query move together or not at all. Server side was already committed at `411715e`. Demo: calendar's `Proposals` fixture now carries `pressId:'p2'` (a real `_demo.presses` id, so demo exercises the carry-through, not the fallback); pre-production has no proposal fixtures at all — it fetches them live — so nothing to add there. Verified by `~/tmpwork/presscarry.mjs`, which extracts both real `useProposal()` bodies out of the shipped HTML and asserts on the patch that reached `setRunField()` — 9/9, and confirmed to FAIL 2/9 when the calendar guard is deleted — plus a browser run of both surfaces. ⛔ **DO NOT MERGE TO `main`:** production has neither `Proposed_Run__c.Press__c` nor the flow, and `proposed-runs/index.js` + `calendar/index.js` now name that field in their SELECTs — trap 1, so an org without it loses the WHOLE calendar and proposals list behind an HTTP 200. Branch `feat/proposed-run-press`, unpushed | §4, §9 |
 | 2026-09-11 | ✅ **STAGING now matches dev2 — both fields and the flow, all three verified by reading them back.** **`Account.Print_Method__c`** created (restricted picklist `Screen Print` / `Heat Press` / `Embroidery`) and set on the same five press Accounts, each confirmed `Type = 'Press'` at the moment of the edit: Press 1 `001ca00000SLbkR` → Screen Print, Press 2 `001ca00000SLRWZ` → Screen Print, Embroidery Machine `001ca00000SLXNV` → Embroidery, Shirt Press `001ca00000SLfo1` → Heat Press, Hat Press `001ca00000SLRLJ` → Heat Press — **re-fetched from the server afterwards, all five correct.** **`Proposed_Run__c.Press__c`** created as Lookup(Account) (`00Nca00000BH9u4`, object `01Ica000000W5z4`) and **compared field-by-field against dev2's `00Nca00000BHBfz`: label, API name, child relationship `Proposed_Runs`, Required off, `fkConstraint=N`, filter `Account.Type equals Press`, `IsOptional=0` — identical in both orgs.** **Flow: V45 saved and ACTIVE** (`301ca00000TvKKiAAN`), carrying the same three edits as dev2's V44 — `PressChoices` record choice set, `Press`/`RunPress` picklist inside the Schedule Runs repeater, and the `Press ← Current Item from Loop Loop Run Rows > Press` mapping on Create Proposed Run — all re-verified after a fresh reload of V45 from the server. 🎯 **THE DOC WAS WRONG ABOUT STAGING AND IS NOW CORRECTED: browser automation CAN reach staging.** §"What a session like this cannot do" claimed the extension had no permission on the staging hosts; it has, and classic Setup on `cultureapparel--staging.sandbox.my.salesforce.com` is as scriptable as dev2's. Two staging-specific notes worth keeping: **Lightning record pages are forced, so the classic edit form needs `/<id>/e?nooverride=1&isdtp=vw`** (the field's `00N…` id is the `<select>`'s DOM id — find it by matching option values); and **screenshots work on `my.salesforce-setup.com` but JavaScript does not**, so the Lightning Flows list is drivable by click and scroll only, and it lazy-loads in blocks that skip letters when you scroll fast. ⚠️ **Version numbers still do not align across orgs** — dev2 went V43→V44, staging V44→V45, same change. ⚠️ **Neither org has been exercised end to end yet**, and **production still has neither field**, so `feat/proposed-run-press` must not reach `main` until production has `Proposed_Run__c.Press__c` — `proposed-runs/index.js` and `calendar/index.js` now name it in their SELECTs and trap 1 fails the WHOLE query, not just that column | §4, §11 |
 | 2026-09-11 | ✅ **Press-on-proposed-run is BUILT AND LIVE IN DEV2 — flow included. `Order_and_Order_Items_SubflowDesign` V44 is saved and Active.** The Schedule Runs screen now carries a **Press** picklist (API name `RunPress`, Text, **not required**) **inside the "Schedule Runs" repeater**, so every row a manager adds gets its own press — the same screen as the Machine Group/Method picker, as asked. Its choices come from a new **Record Choice Set `PressChoices`**: object `Account`, filter `Type Equals Press`, **Choice Label = `Name`, Choice Value = `Id`**, data type Text — so the picklist shows "Press 1" and stores the 18-character Account Id the lookup needs. `Create Proposed Run` gained one mapping: **`Press` ← `Current Item from Loop Loop Run Rows > Press`**, alongside the eight that were already there (Machine Group, Notes, Order, Print Location, Proposed Hours, Proposed Start, Quantity, Status). 🔑 **Verified by reloading V44 fresh from the server and re-opening both elements**, not by trusting the save toast — the picklist is inside the repeater box (above Remove/Add, not after it), Choice reads `PressChoices`, and the field mapping is present. ⚠️ **Not yet exercised end to end.** The one thing metadata cannot prove is that a Text choice value lands in a **Lookup(Account)** field through Flow DML; the lookup filter `Account.Type equals Press` will never reject a value that came from `PressChoices`, so this is expected to pass, but **the first Close and Create Order run in dev2 is the test** — pick a press on a run row, then check `SELECT Press__c, Press__r.Name FROM Proposed_Run__c ORDER BY CreatedDate DESC LIMIT 5`. ⚠️ **The Developer Console query editor could not be driven this session** — `CodeMirror.setValue()` reports the new text but the console executes its old buffer, and `ctrl+a` prepends instead of replacing, so a half-typed query kept erroring. Not worth fighting; Setup itself stays scriptable via classic. 📌 **Staging is deliberately untouched** — Anthony reviews dev2 first, then the two fields + the same flow change get replicated there. | §11, this row |
