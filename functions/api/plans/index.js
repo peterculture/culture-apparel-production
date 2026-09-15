@@ -26,12 +26,12 @@ export async function onRequestGet({ env, request }) {
     if (q.length >= 2) {
       const term = soqlEscape(q);
       soql =
-        `SELECT Id, Name FROM ProductionPlan__c ` +
+        `SELECT Id, Name FROM Production_Plan__c ` +
         `WHERE Name LIKE '%${term}%' ` +
         `ORDER BY Name ASC LIMIT 20`;
     } else {
       soql =
-        `SELECT Id, Name FROM ProductionPlan__c ` +
+        `SELECT Id, Name FROM Production_Plan__c ` +
         `ORDER BY CreatedDate DESC LIMIT 20`;
     }
 
