@@ -256,7 +256,7 @@ async function getCountableRuns(env, url) {
   const buildSoql = (include) =>
     `SELECT ${RUN_BASE_FIELDS.concat(RUN_RESULT_FIELDS, include ? [PR_LOCATION_FIELD] : []).join(", ")} FROM ${RUN_OBJECT} ` +
     `WHERE PrintMethod__c IN (` +
-    `SELECT Id FROM Production_Method__c WHERE Status__c IN (${quoteList(COUNTABLE_METHOD_STATUSES)})` +
+    `SELECT Id FROM Decoration__c WHERE Status__c IN (${quoteList(COUNTABLE_METHOD_STATUSES)})` +
     `) ORDER BY Scheduled_Start__c DESC NULLS LAST LIMIT ${LIST_LIMIT}`;
 
   const runs = await runQueryOptionalField(env, buildSoql, PR_LOCATION_FIELD);
@@ -276,7 +276,7 @@ async function getCountableRuns(env, url) {
   const methods = methodIds.length
     ? await runQuery(
         env,
-        `SELECT Id, Type__c, Status__c, Placements__c, Order__c FROM Production_Method__c ` +
+        `SELECT Id, Type__c, Status__c, Placements__c, Order__c FROM Decoration__c ` +
           `WHERE Id IN (${quoteList(methodIds)})`,
       )
     : { ok: true, records: [] };
@@ -369,7 +369,7 @@ async function getOneRun(env, runId) {
   if (r.PrintMethod__c) {
     const mRes = await runQuery(
       env,
-      `SELECT Id, Type__c, Status__c, Placements__c, Order__c FROM Production_Method__c ` +
+      `SELECT Id, Type__c, Status__c, Placements__c, Order__c FROM Decoration__c ` +
         `WHERE Id = ${q(r.PrintMethod__c)}`,
     );
     method = mRes.ok && mRes.records.length ? mRes.records[0] : null;
