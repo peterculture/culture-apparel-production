@@ -47,6 +47,100 @@
  */
 import { sfFetch, apiVersion, runQuery, soqlQuote, soqlQuoteList } from "./_sf.js";
 import { rollupMisprintsToOrder } from "./_pm-rollup.js";
+import { runQueryOptionalField } from "./_placements.js";
+
+/* ── B9: the reprint is opt-in, once the org can ask ───────────────────────
+   Order.Misprint_Outcome__c is what the ACCOUNT MANAGER chose. It predates this
+   story by two and a half years (Brad Oliver, 2023-02-04) and its help text
+   already describes this exact process, which is why B9 collapsed onto it
+   rather than adding a second field covering the same conversation.
+
+   BLANK IS THE RESTING STATE (Anthony, 2026-09-08). There is no "Not Needed"
+   value, so blank means nobody has been asked yet -- not "no reprint wanted".
+
+   THE THREE DECLINED VALUES ARE ALL DECLINES, for our purposes. Credit/Refund
+   (2023) was superseded by separate Credit and Refund (2024) and never
+   deactivated, so all three overlap. Each means the customer settled without a
+   reprint; none of them should ever build one. If that distinction ever has to
+   matter here, it is a picklist cleanup first, not a branch in this file. */
+const OUTCOME_FIELD = "Misprint_Outcome__c";
+const OUTCOME_REPRINT = "Reprint";
+const OUTCOME_AWAITING = "Awaiting AM";
+const OUTCOME_DECLINED = new Set(["Credit", "Refund", "Credit/Refund"]);
+
+/* The audit trio exists ONLY where B9 has been built (dev2 + staging as of
+   2026-09-08; absent in production). Probing one of them is therefore the
+   capability test for "does this org do opt-in reprints yet".
+
+   WHY FIELD PRESENCE AND NOT CONFIG. One deployment serves all three orgs and
+   the active one is a KV value switched at runtime, so an env flag cannot
+   distinguish them at all; a per-org allow-list could, but it is something
+   somebody has to remember to update the day B9 reaches production -- and
+   forgetting it fails SILENTLY in the direction of never building a reprint
+   again. Field presence follows the org on its own.
+
+   Misprint_Outcome__c itself is selected here too. It exists in all three orgs
+   (confirmed with Anthony 2026-09-08), but existing is not the same as being
+   visible to the integration user, and trap 1 is that an FLS-hidden field
+   fails the WHOLE select. So the whole B9 group rides on the optional-field
+   retry: if any of it is unreadable we fall back to the legacy path rather
+   than to a half-answer. */
+const B9_PROBE_FIELD = "Misprint_Outcome_By__c";
+const B9_FIELDS = [OUTCOME_FIELD, B9_PROBE_FIELD, "Misprint_Outcome_At__c"];
+
+/**
+ * @returns {Promise<{b9:boolean, outcome:string|null}>}
+ *   b9 false means this org has no opt-in machinery -- behave exactly as before
+ *   B9 existed. ANY failure resolves to b9:false on purpose: falling back to
+ *   the legacy path re-creates today's behaviour, which is loud (a reprint
+ *   appears) and is what production does anyway. Falling back to "defer" would
+ *   mean no reprint is ever built and nobody finds out until a customer asks
+ *   where their replacement shirts are.
+ */
+async function readMisprintOutcome(env, orderId) {
+  try {
+    const res = await runQueryOptionalField(
+      env,
+      (include) =>
+        `SELECT Id${include ? ", " + B9_FIELDS.join(", ") : ""} FROM Order WHERE Id = ${q(orderId)} LIMIT 1`,
+      B9_PROBE_FIELD,
+    );
+    if (!res.ok || !res.records.length) {
+      console.error("rework: outcome probe failed, falling back to automatic reprint", orderId, res.status);
+      return { b9: false, outcome: null };
+    }
+    if (!res.hadField) return { b9: false, outcome: null };
+    return { b9: true, outcome: res.records[0][OUTCOME_FIELD] || null };
+  } catch (e) {
+    console.error("rework: outcome probe error, falling back to automatic reprint", orderId, e);
+    return { b9: false, outcome: null };
+  }
+}
+
+/** Claim the order for the AM. Best-effort: a failure must not fail the caller. */
+async function markAwaitingAm(env, orderId) {
+  try {
+    const resp = await sfFetch(env, `/services/data/${apiVersion(env)}/sobjects/Order/${orderId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      /* Allow-listed by construction -- two literal field names, nothing from a
+         caller. Misprint_Outcome__c is a RESTRICTED picklist (trap 5), so a
+         drifted string 400s after the request was accepted here; OUTCOME_AWAITING
+         is the exact stored value read back from both orgs. */
+      body: JSON.stringify({ [OUTCOME_FIELD]: OUTCOME_AWAITING, Misprint_Outcome_At__c: new Date().toISOString() }),
+    });
+    if (resp.status !== 204) {
+      let detail = "";
+      try { detail = JSON.stringify(await resp.json()); } catch { /* empty */ }
+      console.error("rework: could not set Awaiting AM", orderId, resp.status, detail);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error("rework: Awaiting AM write error", orderId, e);
+    return false;
+  }
+}
 
 const SF_ID = /^[a-zA-Z0-9]{15,18}$/;
 
@@ -274,6 +368,61 @@ export async function createReworkIfNeeded(env, orderId, by) {
     if (!affectedMethods.length) return { created: false, reason: "no_affected_methods" };
 
     // ---------------------------------------------------------------------
+    // 3b. Has the account manager actually asked for this reprint? (B9)
+    //
+    // PLACED HERE, AFTER THE DAMAGE GATE, NOT BEFORE IT. Everything above
+    // establishes that a reprint is warranted at all: runs submitted, methods
+    // finished, something actually ruined, and a method that lost it. Only then
+    // is there a question worth putting to the AM. Asking earlier would set
+    // Awaiting AM -- and, once the Flow is pointed at that value, email
+    // somebody -- for orders that finished perfectly clean.
+    //
+    // THE GATE LIVES IN THIS FUNCTION, NOT IN THE CALL SITES, and that is the
+    // whole reason it is safe. There are two callers: the method-status PATCH
+    // (production-methods/[id].js) and the counting screen (run-results). They
+    // exist because printing finishing and counting finishing are different
+    // moments and either can be last. A gate added at one of them would simply
+    // let the reprint fire from the other. Neither caller changes.
+    //
+    // AN ORG WITHOUT B9 BEHAVES EXACTLY AS IT DID. b9:false falls straight
+    // through to the build below -- which is production today, where the flow
+    // and the audit fields do not exist. Nothing about this deploy changes what
+    // that org does.
+    // ---------------------------------------------------------------------
+    const decision = await readMisprintOutcome(env, orderId);
+    if (decision.b9) {
+      const outcome = decision.outcome;
+
+      /* A settled customer is a real business outcome, not an absence. It has
+         no reprint child, so gate 1 above would happily build one on the next
+         call -- this is the only thing stopping that. */
+      if (outcome && OUTCOME_DECLINED.has(outcome)) {
+        return { created: false, reason: "declined_by_am", outcome };
+      }
+
+      if (outcome === OUTCOME_AWAITING) {
+        return { created: false, reason: "awaiting_am", outcome };
+      }
+
+      /* Blank is the resting state: nobody has been asked. Claim it, which is
+         what the Flow watches for in order to email the AM. The app sets this
+         rather than the Flow because only the app has just established every
+         gate above -- a Flow triggering on substatus alone cannot tell a
+         damaged order from a clean one. */
+      if (!outcome) {
+        const claimed = await markAwaitingAm(env, orderId);
+        return { created: false, reason: claimed ? "awaiting_am_set" : "awaiting_am_write_failed" };
+      }
+
+      /* Anything else is the AM having chosen Reprint -- fall through and
+         build. Checked explicitly rather than by elimination so a picklist
+         value added later cannot silently mean "build it". */
+      if (outcome !== OUTCOME_REPRINT) {
+        return { created: false, reason: "unknown_outcome", outcome };
+      }
+    }
+
+    // ---------------------------------------------------------------------
     // 4. Read what we are cloning.
     // ---------------------------------------------------------------------
     const [orderRes, itemsRes, ppiRes] = await Promise.all([
@@ -301,7 +450,7 @@ export async function createReworkIfNeeded(env, orderId, by) {
     // 5. Build it.
     //
     // The tree is deeper than "an order with a method":
-    //   Order -> ProductionRequirements__c -> ProductionPlan__c
+    //   Order -> Production_Requirement__c -> Production_Plan__c
     //         -> Production_Method__c -> Pre_Production_Item__c
     // The first three are master-detail, so they must exist before their
     // children and cannot be reparented afterwards.
@@ -342,13 +491,13 @@ export async function createReworkIfNeeded(env, orderId, by) {
       { method: "POST", url: `${base}/Order`, referenceId: "order", body: orderBody },
       {
         method: "POST",
-        url: `${base}/ProductionRequirements__c`,
+        url: `${base}/Production_Requirement__c`,
         referenceId: "req",
         body: { Order__c: "@{order.id}" },
       },
       {
         method: "POST",
-        url: `${base}/ProductionPlan__c`,
+        url: `${base}/Production_Plan__c`,
         referenceId: "plan",
         body: { ProductionRequirement__c: "@{req.id}" },
       },
