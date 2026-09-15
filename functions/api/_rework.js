@@ -283,7 +283,7 @@ export async function createReworkIfNeeded(env, orderId, by) {
     const runs = await runQuery(
       env,
       `SELECT Id, Result_Status__c FROM Production_Run__c ` +
-        `WHERE PrintMethod__c IN (SELECT Id FROM Production_Method__c WHERE Order__c = ${q(orderId)})`,
+        `WHERE PrintMethod__c IN (SELECT Id FROM Decoration__c WHERE Order__c = ${q(orderId)})`,
     );
     if (!runs.ok) return fail("runs_query_failed", orderId);
     if (!runs.records.length) return { created: false, reason: "no_runs" };
@@ -316,7 +316,7 @@ export async function createReworkIfNeeded(env, orderId, by) {
     const methodsRes = await runQuery(
       env,
       `SELECT Id, Type__c, Status__c, Placements__c, Vendor__c ` +
-        `FROM Production_Method__c WHERE Order__c = ${q(orderId)}`,
+        `FROM Decoration__c WHERE Order__c = ${q(orderId)}`,
     );
     if (!methodsRes.ok) return fail("methods_query_failed", orderId);
 
