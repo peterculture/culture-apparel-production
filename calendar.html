@@ -573,7 +573,7 @@ window.__resources = Object.assign({}, window.__resources, {
         </sc-if>
 
         <sc-if value="{{d.hasRunErr}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:8px;font:600 10px/1.3 'Oswald';letter-spacing:.03em;text-transform:uppercase;color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:9px;padding:11px 13px;margin-top:9px"><i class="ti ti-alert-triangle"></i>{{d.runErr}}</div></sc-if>
-        <sc-if value="{{d.hasRunMsg}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:7px;font:600 10px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:#BBD382;background:#18230D;border:1px solid #3D5418;border-radius:9px;padding:10px 13px;margin-top:9px"><i class="ti ti-check"></i>{{d.runMsg}}</div></sc-if>
+        <sc-if value="{{d.hasRunMsg}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:flex-start;gap:7px;font:500 11px/1.5 'Archivo';color:#BBD382;background:#18230D;border:1px solid #3D5418;border-radius:9px;padding:10px 13px;margin-top:9px"><i class="ti ti-check"></i>{{d.runMsg}}</div></sc-if>
       </div>
 
       <sc-if value="{{d.hasNotes}}" hint-placeholder-val="{{ false }}">
@@ -1342,18 +1342,57 @@ class Component extends DCLogic {
     }
     // Never overwrite a real piece count with a blank.
     if(p.quantity!=null && Number(p.quantity)>0) patch.qty=String(p.quantity);
-    /* Carry the CAM's print location, but only if the method this run will
+    const carried=[], skipped=[];
+    if(patch.startDate) carried.push('time');
+    if(patch.qty) carried.push('quantity');
+
+    /* ── the decoration, and it has to happen BEFORE the location guard ──
+       The new-run form's decoration select defaults to the order's FIRST
+       decoration, and nothing here used to change it -- so a Heat Press
+       proposal on a Screen Print + Heat Press order booked press time against
+       Screen Print with every other field correctly filled in. A wrong run
+       that looks right is the worst shape this form can produce.
+
+       Order of operations is load-bearing: the print-location guard below
+       reads the decoration to decide which placements are allowed, so
+       resolving the decoration second would validate the AM's location
+       against whichever decoration happened to be first. */
+    const order=((this.state.data&&this.state.data.records)||[]).find(o=>o&&o.Id===this.state.openId);
+    const methods=((order&&order.ProductionMethods)||[]).filter(m=>m&&m.Id);
+    const pick=(api&&api.matchProposalMethod)
+      ? api.matchProposalMethod(methods, p.machineGroup, p.printLocation)
+      : {methodId:null, reason:'not-proposed'};
+    if(pick.methodId){
+      patch.methodId=pick.methodId;
+      carried.push('decoration');
+    } else if(pick.reason==='no-such-decoration'){
+      skipped.push('This order has no '+pick.type+' decoration, so the decoration was left as it was \u2014 check it before creating the run.');
+    } else if(pick.reason==='ambiguous'){
+      skipped.push('This order has '+pick.count+' '+pick.type+' decorations and the suggestion does not say which, so the decoration was left as it was.');
+    }
+
+    /* Carry the CAM's print location, but only if the decoration this run will
        attach to actually offers it. The CAM proposes before any
        Production_Method__c exists and so picks from all eleven -- prefilling
        a value the picker can't display would leave a blank select that
-       silently submits nothing. */
+       silently submits nothing. Evaluated against the decoration resolved
+       immediately above when there is one, falling back to whatever the form
+       is currently showing. */
+    const f=this.runForm('new', (this._runSeeds&&this._runSeeds['new'])||{});
+    const mId=patch.methodId||(f&&f.methodId)||((methods[0]||{}).Id)||null;
+    const chosen=methods.find(x=>x&&x.Id===mId)||null;
+    const allowed=(api&&api.locationsForMethod)?api.locationsForMethod(chosen&&chosen.Placements):[];
     if(p.printLocation){
-      const order=((this.state.data&&this.state.data.records)||[]).find(o=>o&&o.Id===this.state.openId);
-      const f=this.runForm('new', (this._runSeeds&&this._runSeeds['new'])||{});
-      const mId=(f&&f.methodId)||(((order&&order.ProductionMethods)||[])[0]||{}).Id||null;
-      const m=((order&&order.ProductionMethods)||[]).find(x=>x&&x.Id===mId);
-      const allowed=(api&&api.locationsForMethod)?api.locationsForMethod(m&&m.Placements):[];
-      if(allowed.indexOf(p.printLocation)!==-1) patch.printLocation=p.printLocation;
+      if(allowed.indexOf(p.printLocation)!==-1){ patch.printLocation=p.printLocation; carried.push('print location'); }
+      else skipped.push('Print location '+p.printLocation+" isn't offered by this decoration, so it was left blank.");
+    }
+    /* Switching the decoration can strand a location the form already held:
+       the seed defaults it from the FIRST decoration's placements, and the one
+       the proposal picked may not offer that value. Same wrong-decoration bug
+       as above, one field over, so it is cleared rather than left to submit. */
+    if(patch.methodId && patch.printLocation===undefined && f && f.printLocation
+       && allowed.indexOf(f.printLocation)===-1){
+      patch.printLocation='';
     }
     /* Carry the AM's press the same way, and under the same rule. The press
        select is built from this.presses() -- the org's real Account rows of
@@ -1365,14 +1404,19 @@ class Component extends DCLogic {
        /api/production-runs requires pressId, so that blank is a form that
        looks ready and 400s on submit. Prefill only what the picker can show;
        otherwise say nothing and let the manager choose. */
-    if(p.pressId && this.presses().some(pr=>pr && pr.Id===p.pressId)) patch.pressId=p.pressId;
+    if(p.pressId){
+      if(this.presses().some(pr=>pr && pr.Id===p.pressId)){ patch.pressId=p.pressId; carried.push('press'); }
+      else skipped.push('Press '+(p.pressName||'the one suggested')+' is not set up in this org, so it was left blank.');
+    }
     this.setRunField('new', patch);
     // Expand the form as part of filling it in. "Use this" silently writing
     // into a panel the manager cannot see would look like the button did
     // nothing at all.
     this.setState(st=>({proposalUsedId:p.id, runErr:'', newRunOpen:true,
       hiddenProposalIds: st.hiddenProposalIds.concat([p.id]),
-      runMsg:'Filled in from '+p.name+' — adjust anything that does not fit the floor, then create the run.'}));
+      runMsg:(api&&api.proposalFillMessage)
+        ? api.proposalFillMessage(p.name, carried, skipped, p.notes)
+        : ('Filled in from '+p.name+'.')}));
 
     // Demo mode has no server to tell; the panel still goes away so the
     // demo behaves like the real board.
