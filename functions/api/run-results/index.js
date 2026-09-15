@@ -40,7 +40,7 @@ import { createReworkIfNeeded } from "../_rework.js";
 import { runQueryOptionalField } from "../_placements.js";
 
 const RUN_OBJECT = "Production_Run__c";
-const LINE_OBJECT = "Production_Run_Line_Items__c";
+const LINE_OBJECT = "Production_Run_Line_Item__c";
 
 // Keep in sync with production-runs/index.js -- the org's Field Name really is
 // `Quantity_Planned_c`, so the automatic __c lands on top of an existing _c.
