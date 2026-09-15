@@ -83,7 +83,7 @@ import { runQuery, sfFetch, apiVersion, jsonError, soqlQuote, soqlQuoteList } fr
 import { requireCap } from "../_session.js";
 
 const RUN_OBJECT = "Production_Run__c";
-const LINE_OBJECT = "Production_Run_Line_Items__c";
+const LINE_OBJECT = "Production_Run_Line_Item__c";
 
 // The ONLY field this endpoint may write. See the header.
 const PLANNED_FIELD = "Planned_Qty__c";
