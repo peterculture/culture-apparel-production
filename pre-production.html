@@ -897,7 +897,7 @@ window.__resources = Object.assign({}, window.__resources, {
           <sc-if value="{{runHasQtyHint}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:5px;font:400 11px/1.3 'Archivo';color:var(--text-tertiary);margin-top:7px"><i class="ti ti-shirt" style="font-size:13px;color:var(--text-muted)"></i>{{runQtyHint}}</div></sc-if>
         </div>
 
-        <sc-if value="{{runHasMsg}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:7px;font:600 11px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:#BBD382;background:#18230D;border:1px solid #3D5418;border-radius:9px;padding:10px 13px"><i class="ti ti-check"></i>{{runMsg}}</div></sc-if>
+        <sc-if value="{{runHasMsg}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:flex-start;gap:7px;font:500 11px/1.5 'Archivo';color:#BBD382;background:#18230D;border:1px solid #3D5418;border-radius:9px;padding:10px 13px"><i class="ti ti-check"></i>{{runMsg}}</div></sc-if>
         <sc-if value="{{runHasErr}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:8px;font:600 11px/1.3 'Oswald';letter-spacing:.03em;text-transform:uppercase;color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:9px;padding:12px 14px"><i class="ti ti-alert-triangle"></i>{{runErr}}</div></sc-if>
 
         <div style="display:flex;gap:9px;flex-direction:column">
@@ -2089,6 +2089,26 @@ class Component extends DCLogic {
       }
     }
     if(p.quantity!=null && Number(p.quantity)>0) patch.qty=String(p.quantity);
+    const carried=[], skipped=[];
+    if(patch.startDate) carried.push('time');
+    if(patch.qty) carried.push('quantity');
+    /* The MIRROR of calendar.html's decoration match, and deliberately not the
+       same action. There the manager picks a decoration from a select, so the
+       proposal can choose it. Here the decoration is fixed by the panel that
+       was opened -- this modal exists under one Production_Method__c and its
+       runs can attach to no other -- so a mismatch is not something to resolve,
+       it is something to say out loud before press time gets booked against
+       the wrong pass. Warn only when we can positively tell they differ:
+       methodLabelIsType returns null when either side is unknown, and "we
+       cannot tell" must not render as "these differ". */
+    {
+      const a=this._api||window.CAApi;
+      const rt0=this.state.runTarget||this.state.createdPanel||{};
+      const isType=(a&&a.methodLabelIsType)?a.methodLabelIsType(rt0.methodLabel, p.machineGroup):null;
+      if(isType===false){
+        skipped.push('The suggestion is for a '+p.machineGroup+' decoration, but this run is being booked against '+rt0.methodLabel+'.');
+      }
+    }
     // Carry the CAM's print location across. Only when the method actually
     // offers it: the CAM proposes before any Production_Method__c exists and
     // therefore picks from all eleven, so a proposal can name a location this
@@ -2098,7 +2118,8 @@ class Component extends DCLogic {
       const api=this._api||window.CAApi;
       const rt=this.state.runTarget||this.state.createdPanel||{};
       const allowed=(api&&api.locationsForMethod)?api.locationsForMethod(rt.placements):[];
-      if(allowed.indexOf(p.printLocation)!==-1) patch.printLocation=p.printLocation;
+      if(allowed.indexOf(p.printLocation)!==-1){ patch.printLocation=p.printLocation; carried.push('print location'); }
+      else skipped.push('Print location '+p.printLocation+" isn't offered by this decoration, so it was left blank.");
     }
     /* Carry the AM's press. This picker is a TYPEAHEAD, not a select, so there
        is no option list to validate against -- but it has its own trap: the
@@ -2112,11 +2133,14 @@ class Component extends DCLogic {
       patch.pressId=p.pressId;
       patch.pressName=p.pressName||'';
       patch.pressQ=p.pressName||'';
+      carried.push('press');
     }
     this.setRunField(patch);
     this.setState(st=>({proposalUsedId:p.id, runErr:'',
       hiddenProposalIds: st.hiddenProposalIds.concat([p.id]),
-      runMsg:'Filled in from '+p.name+'. Change anything that does not fit the floor.'}));
+      runMsg:((this._api||window.CAApi)&&(this._api||window.CAApi).proposalFillMessage)
+        ? (this._api||window.CAApi).proposalFillMessage(p.name, carried, skipped, p.notes)
+        : ('Filled in from '+p.name+'.')}));
 
     if(this.state.connection!=='live' || !this._api || !this._api.patchProposedRun) return;
     try{
