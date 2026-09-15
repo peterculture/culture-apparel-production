@@ -212,7 +212,7 @@ export async function onRequestGet({ env, request }) {
     // NOT the same string as Production_Method__c.Status__c's 'Completed'.
     const soql =
       `SELECT ${PM_FIELDS.join(", ")}, ${ORDER_FIELDS.join(", ")} ` +
-      `FROM Production_Method__c ` +
+      `FROM Decoration__c ` +
       `WHERE Order__c != null ` +
       // The `= null OR` halves are not redundant padding. SOQL's null handling
       // on NOT IN is not something to be casually confident about, and the
@@ -569,7 +569,10 @@ export async function onRequestGet({ env, request }) {
           runQueryOptionalField(
             env,
             (withLocation) =>
-              `SELECT Id, Name, Order__c, Machine_Group__c, ` +
+              // Press__c/Press__r.Name added 2026-09-11 -- see the note in
+              // ../proposed-runs/index.js. Named here too so the calendar
+              // drawer can show which press the CAM proposed.
+              `SELECT Id, Name, Order__c, Machine_Group__c, Press__c, Press__r.Name, ` +
               (withLocation ? `${RUN_LOCATION_FIELD}, ` : "") +
               `Proposed_Start__c, Proposed_Hours__c, ` +
               `Quantity__c, Sequence__c, Notes__c, Status__c, CreatedBy.Name ` +
@@ -589,6 +592,8 @@ export async function onRequestGet({ env, request }) {
               id: p.Id,
               name: p.Name,
               machineGroup: p.Machine_Group__c || null,
+              pressId: p.Press__c || null,
+              pressName: (p.Press__r && p.Press__r.Name) || null,
               printLocation: p[RUN_LOCATION_FIELD] || null,
               proposedStart: p.Proposed_Start__c || null,
               proposedHours: p.Proposed_Hours__c == null ? null : Number(p.Proposed_Hours__c),
