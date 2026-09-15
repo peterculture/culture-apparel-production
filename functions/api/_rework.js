@@ -338,7 +338,7 @@ export async function createReworkIfNeeded(env, orderId, by) {
     const lines = await runQuery(
       env,
       `SELECT Id, Method__c, Order_Product__c, Damaged_Qty__c, Misprint_Qty__c ` +
-        `FROM Production_Run_Line_Items__c WHERE Method__c IN (${quoteList(methodIds)})`,
+        `FROM Production_Run_Line_Item__c WHERE Method__c IN (${quoteList(methodIds)})`,
     );
     if (!lines.ok) return fail("line_items_query_failed", orderId);
 
