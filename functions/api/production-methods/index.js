@@ -61,7 +61,7 @@ const REQ_ORDER_FIELD   = "Order__c";                 // master-detail: Requirem
 const PLAN_OBJECT       = "Production_Plan__c";
 const PLAN_REQ_FIELD    = "ProductionRequirement__c"; // master-detail: Plan -> Requirement
 
-const PM_OBJECT         = "Production_Method__c";
+const PM_OBJECT         = "Decoration__c";
 const PM_PLAN_FIELD     = "ProductionPlan__c";         // master-detail: Method -> Plan (required)
 const PM_ORDER_FIELD    = "Order__c";                  // also required on Method
 const PM_STATUS_FIELD   = "Status__c";                 // picklist (required, manager-set)
