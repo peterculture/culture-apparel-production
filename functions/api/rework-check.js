@@ -292,7 +292,7 @@ export async function onRequestGet({ request, env }) {
         "lineItems",
         `SELECT Id, Name, Method__c, Order_Product__c, Planned_Qty__c, ` +
           `Incomplete_Qty__c, Misprint_Qty__c, Damaged_Qty__c ` +
-          `FROM Production_Run_Line_Items__c WHERE Method__c IN (${quoteList(methodIds)})`,
+          `FROM Production_Run_Line_Item__c WHERE Method__c IN (${quoteList(methodIds)})`,
       );
       if (lines.ok) {
         report.lineItems = lines.records.map((l) => ({
@@ -324,7 +324,7 @@ export async function onRequestGet({ request, env }) {
           env,
           report,
           "lineItemsBareIdOnly",
-          `SELECT Id FROM Production_Run_Line_Items__c WHERE Method__c IN (${quoteList(methodIds)})`,
+          `SELECT Id FROM Production_Run_Line_Item__c WHERE Method__c IN (${quoteList(methodIds)})`,
         );
       }
     }
