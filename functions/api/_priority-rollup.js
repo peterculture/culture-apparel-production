@@ -28,7 +28,7 @@
 import { runQuery, sfFetch, apiVersion } from "./_sf.js";
 import { scoreOrder } from "./_priority.js";
 
-const PM_OBJECT = "Production_Method__c";
+const PM_OBJECT = "Decoration__c";
 
 /** Everything scoreOrder() needs, in one query. */
 const ORDER_FIELDS = [
