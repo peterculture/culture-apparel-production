@@ -190,7 +190,7 @@ export async function rollupItemToMethod(env, itemId) {
 
 async function writeMethodPayload(env, methodId, payload) {
   const v = apiVersion(env);
-  const rp = await sfFetch(env, `/services/data/${v}/sobjects/Production_Method__c/${methodId}`, {
+  const rp = await sfFetch(env, `/services/data/${v}/sobjects/Decoration__c/${methodId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
