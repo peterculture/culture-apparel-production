@@ -81,7 +81,7 @@ import { orderIdForMethod } from "../_print-date-rollup.js";
 import { createReworkIfNeeded } from "../_rework.js";
 import { requireCap } from "../_session.js";
 
-const PM_OBJECT = "Production_Method__c";
+const PM_OBJECT = "Decoration__c";
 
 // Exact Status__c picklist values, confirmed from Setup 2026-07-02. Keep in
 // sync with ALLOWED_STATUSES in production-methods/index.js.
