@@ -102,7 +102,7 @@ export async function onRequestGet({ env }) {
     // zero rows, which here would read as "no shortfalls anywhere".
     const methods = await runQuery(
       env,
-      `SELECT Id, Type__c, Status__c, Order__c FROM Production_Method__c ` +
+      `SELECT Id, Type__c, Status__c, Order__c FROM Decoration__c ` +
         `WHERE Id IN (${quoteList(methodIds)})`,
     );
     if (!methods.ok) return jsonError("methods_query_failed", 502);
