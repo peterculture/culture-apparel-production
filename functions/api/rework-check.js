@@ -199,7 +199,7 @@ export async function onRequestGet({ request, env }) {
       report,
       "methods",
       `SELECT Id, Name, Type__c, Status__c, Placements__c, Vendor__c ` +
-        `FROM Production_Method__c WHERE Order__c = ${q(orderId)}`,
+        `FROM Decoration__c WHERE Order__c = ${q(orderId)}`,
     );
 
     let expectedSubstatus = null;
@@ -268,7 +268,7 @@ export async function onRequestGet({ request, env }) {
       report,
       "runs",
       `SELECT Id, Name, Result_Status__c FROM Production_Run__c ` +
-        `WHERE PrintMethod__c IN (SELECT Id FROM Production_Method__c WHERE Order__c = ${q(orderId)})`,
+        `WHERE PrintMethod__c IN (SELECT Id FROM Decoration__c WHERE Order__c = ${q(orderId)})`,
     );
     if (runs.ok) {
       report.runs = runs.records.map((r) => ({
