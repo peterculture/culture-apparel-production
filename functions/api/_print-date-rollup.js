@@ -36,7 +36,7 @@
 import { runQuery, sfFetch, apiVersion } from "./_sf.js";
 
 const PR_OBJECT = "Production_Run__c";
-const PM_OBJECT = "Production_Method__c";
+const PM_OBJECT = "Decoration__c";
 
 /** Ids are validated by the callers before they reach us; this is belt and
  *  braces so a bad value can never be interpolated into SOQL. */
