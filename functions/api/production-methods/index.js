@@ -8,12 +8,12 @@
  *      Just the Method + Items are created, attached to that plan.
  *
  *   B) CREATE FRESH   — body omits planId.
- *      The chain Order → ProductionRequirements__c → ProductionPlan__c is
+ *      The chain Order → Production_Requirement__c → Production_Plan__c is
  *      created first, then the Method + Items hang off the new plan:
  *
  *        Order (exists)
- *          └─ ProductionRequirements__c   (Order__c master-detail)
- *               └─ ProductionPlan__c      (ProductionRequirement__c master-detail)
+ *          └─ Production_Requirement__c   (Order__c master-detail)
+ *               └─ Production_Plan__c      (ProductionRequirement__c master-detail)
  *                    └─ Production_Method__c
  *                         └─ Pre_Production_Item__c × N
  *
@@ -36,7 +36,7 @@
  *                                    //   created via separate calls to this endpoint --
  *                                    //   but multiple locations for the SAME method now
  *                                    //   live together on one record/one checklist.
- *     "planId":   "a0X...",          // OPTIONAL existing ProductionPlan__c Id.
+ *     "planId":   "a0X...",          // OPTIONAL existing Production_Plan__c Id.
  *                                    //   present -> path A (attach); absent -> path B (create chain)
  *     "items": [ { "type": "Screen" }, { "type": "Ink" } ]   // 0+ items
  *   }
@@ -55,10 +55,10 @@ import { requireCap } from "../_session.js";
 // A wrong name makes the Composite API name the exact bad field/object in its
 // error, which this handler forwards as `detail` — loud, never a silent no-op.
 // ---------------------------------------------------------------------------
-const REQ_OBJECT        = "ProductionRequirements__c";
+const REQ_OBJECT        = "Production_Requirement__c";
 const REQ_ORDER_FIELD   = "Order__c";                 // master-detail: Requirement -> Order
 
-const PLAN_OBJECT       = "ProductionPlan__c";
+const PLAN_OBJECT       = "Production_Plan__c";
 const PLAN_REQ_FIELD    = "ProductionRequirement__c"; // master-detail: Plan -> Requirement
 
 const PM_OBJECT         = "Production_Method__c";
