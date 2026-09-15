@@ -195,7 +195,7 @@ function methodCommittedTotal(lines) {
 async function orderIdForMethod(env, methodId) {
   const res = await runQuery(
     env,
-    `SELECT Order__c FROM Production_Method__c WHERE Id = ${q(methodId)}`,
+    `SELECT Order__c FROM Decoration__c WHERE Id = ${q(methodId)}`,
   );
   return (res.ok && res.records[0] && res.records[0].Order__c) || null;
 }
