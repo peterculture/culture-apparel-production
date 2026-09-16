@@ -504,7 +504,7 @@ window.__resources = Object.assign({}, window.__resources, {
               <i class="ti ti-calendar-exclamation" style="color:#E0B23C;font-size:16px;flex-shrink:0;margin-top:1px"></i>
               <div style="min-width:0">
                 <div style="font:600 12px/1.3 'Oswald';color:#ECEAE4">{{d.shortfallQty}} garments never made it to the press</div>
-                <div style="font:400 11px/1.55 'Archivo';color:#D8C79A;margin-top:5px">Counted on a finished run but never printed. They're intact and still on the shelf — schedule press time on the same method before the delivery date.</div>
+                <div style="font:400 11px/1.55 'Archivo';color:#D8C79A;margin-top:5px">Counted on a finished run but never printed. They're intact and still on the shelf — schedule press time on the same decoration before the delivery date.</div>
               </div>
             </div>
             <sc-if value="{{d.shortfallCanAct}}" hint-placeholder-val="{{ true }}">
@@ -2047,7 +2047,7 @@ class Component extends DCLogic {
         locationOptions: locationsFor(nf.methodId),
         printLocation: nf.printLocation||'',
         onPrintLocation:(e)=>this.setRunField('new',{printLocation:e.target.value}),
-        methodOptions:methods.map(m=>({id:m.Id, name:t(m.Type__c)||'Method'})),
+        methodOptions:methods.map(m=>({id:m.Id, name:t(m.Type__c)||'Decoration'})),
         manyMethods:methods.length>1,
         busy: st.runBusy==='new',
         saveLabel: st.runBusy==='new' ? 'Creating…' : 'Create Run',
