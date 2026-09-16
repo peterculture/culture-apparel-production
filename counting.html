@@ -127,7 +127,7 @@ window.__resources = Object.assign({}, window.__resources, {
          <span style="font:400 12px/1 'Archivo';color:var(--text-secondary)">{{g.customer}}</span>
          <span style="margin-left:auto;font:400 10px/1 'Archivo';color:var(--text-muted)">{{g.runLabel}}</span>
          <sc-if value="{{g.multiMethod}}" hint-placeholder-val="{{ true }}">
-           <span title="More than one print method on this order" style="font:600 9px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:var(--warn-soft);background:#241C0A;border:1px solid #5E4A14;border-radius:100px;padding:4px 9px">{{g.methodLabel}}</span>
+           <span title="More than one decoration on this order" style="font:600 9px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:var(--warn-soft);background:#241C0A;border:1px solid #5E4A14;border-radius:100px;padding:4px 9px">{{g.methodLabel}}</span>
          </sc-if>
        </div>
        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px">
@@ -204,7 +204,7 @@ window.__resources = Object.assign({}, window.__resources, {
             <sc-if value="{{hasMakeup}}" hint-placeholder-val="{{ true }}">
               <div style="display:flex;gap:10px;align-items:flex-start;background:#241C0A;border:1px solid #5E4A14;border-radius:10px;padding:11px 12px;margin-bottom:9px">
                 <i class="ti ti-refresh" style="color:var(--warn);font-size:16px;flex-shrink:0;margin-top:1px"></i>
-                <div style="font:400 12px/1.55 'Archivo';color:#C7BCA4"><strong style="color:var(--text-primary)">{{makeupLabel}}</strong> still to be made up. Those are intact and on a shelf — they need press time on that method, not new blanks.</div>
+                <div style="font:400 12px/1.55 'Archivo';color:#C7BCA4"><strong style="color:var(--text-primary)">{{makeupLabel}}</strong> still to be made up. Those are intact and on a shelf — they need press time on that decoration, not new blanks.</div>
               </div>
             </sc-if>
             <sc-if value="{{hasSiblingLoss}}" hint-placeholder-val="{{ true }}">
@@ -221,7 +221,7 @@ window.__resources = Object.assign({}, window.__resources, {
              about the other passes of this same method. Read-only. -->
         <sc-if value="{{hasPlacementSibs}}" hint-placeholder-val="{{ true }}">
           <div style="background:var(--surface-raised);border:1px solid var(--border-subtle);border-radius:13px;padding:14px 16px;margin-bottom:12px">
-            <div style="font:600 9px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px">Other passes on this method</div>
+            <div style="font:600 9px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px">Other passes on this decoration</div>
             <sc-for list="{{placementRows}}" as="p" hint-placeholder-count="2">
               <div style="display:flex;align-items:baseline;gap:10px;padding:6px 0;border-top:1px solid var(--border-card)">
                 <span style="font:600 11px/1.3 'Oswald';letter-spacing:.03em;color:var(--text-primary);min-width:104px">{{p.label}}</span>
@@ -804,7 +804,7 @@ class Component extends DCLogic {
     const sibMisprint=sibSum('totalMisprint'), sibDamaged=sibSum('totalDamaged');
     const incByMethod={};
     sibs.forEach(x=>{ const inc=Number(x.totalIncomplete)||0; if(!inc) return;
-      const m=txt(x.methodType)||'another method'; incByMethod[m]=(incByMethod[m]||0)+inc; });
+      const m=txt(x.methodType)||'another decoration'; incByMethod[m]=(incByMethod[m]||0)+inc; });
     const makeupLabel = Object.keys(incByMethod)
       .map(m=>incByMethod[m]+' '+m.toLowerCase()+' garment'+(incByMethod[m]===1?'':'s'))
       .join(' · ');
@@ -937,7 +937,7 @@ class Component extends DCLogic {
     // A reason that is not a failure is worth showing plainly: "no reprint yet"
     // has several innocent explanations and a blank screen implies none of them.
     const REWORK_NOTE={
-      methods_not_complete:'The other methods on this order are still running. The reprint gets built automatically once the last one is finished and counted.',
+      methods_not_complete:'The other decorations on this order are still running. The reprint gets built automatically once the last one is finished and counted.',
       runs_not_submitted:'Another run on this order still needs counting. The reprint gets built once every run has been submitted.',
       nothing_to_rework:'',
       already_reworked:'A reprint order for this job already exists.',
@@ -956,7 +956,7 @@ class Component extends DCLogic {
       reworkNote,
       needsReschedule: !!(res.needsReschedule),
       rescheduleTitle: (res.incompleteTotal||0)+' garment(s) never made it to the press',
-      rescheduleMsg: 'These are intact and still on the shelf — they need press time on this same method, not a reprint. A manager has to schedule a make-up run before the delivery date.',
+      rescheduleMsg: 'These are intact and still on the shelf — they need press time on this same decoration, not a reprint. A manager has to schedule a make-up run before the delivery date.',
       // Deep link into the Production Dashboard: opens THIS method's drawer with
       // the New Run form up and the shortfall quantity already filled in. This
       // used to be a bare link to calendar.html, which landed the manager on a
@@ -1001,7 +1001,7 @@ class Component extends DCLogic {
         : (countListState === 'empty')
           ? (st.tab==='done'
               ? 'Nothing has been counted yet. A run appears here once its counts are submitted.'
-              : 'No runs waiting to be counted. A run arrives here once it has been printed and its method reaches Production.')
+              : 'No runs waiting to be counted. A run arrives here once it has been printed and its decoration reaches Production.')
           : ((api && api.listNotice) ? api.listNotice(countListState, '') : ''),
 
       showRun: st.available && !!st.runId,
