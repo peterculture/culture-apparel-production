@@ -594,7 +594,7 @@ export async function onRequestPost({ request, env }) {
       if (rework && rework.created) {
         console.log(
           `rework: created order ${rework.orderId} from ${orderId} via run ${runId} -- ` +
-            `${rework.methodCount} method(s), ${rework.itemCount} product(s), ${rework.totalQty} garment(s)`,
+            `${rework.methodCount} decoration(s), ${rework.itemCount} product(s), ${rework.totalQty} garment(s)`,
         );
       }
     }
