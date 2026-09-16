@@ -28,7 +28,7 @@
  * filters on Status__c = 'Pre-Production' for the Pre-Production
  * Dashboard/Garment station. They're deliberately non-overlapping.
  */
-import { runQuery, jsonError } from "../_sf.js";
+import { runQuery, jsonError, runChunkedIdQuery } from "../_sf.js";
 import { runQueryOptionalField } from "../_placements.js";
 import { fetchMockupsByOpportunity } from "../_mockup.js";
 
@@ -206,11 +206,17 @@ export async function onRequestGet({ env }) {
     const orderIds = orders.map((o) => o.Id).filter(Boolean);
     if (orderIds.length) {
       try {
-        const quoted = orderIds.map((oid) => `'${oid}'`).join(",");
-        const soqlItems =
-          `SELECT OrderId, Product2.Name, Color__c, Size__c, Quantity ` +
-          `FROM OrderItem WHERE OrderId IN (${quoted})`;
-        const itemsResult = await runQuery(env, soqlItems);
+        // Chunked: SOQL caps an IN list at 200 Ids, and this list is one Id
+        // per pre-production order with no upper bound. Past 200 the whole
+        // query is a parse error, which fails open to blank size/qty on every
+        // card at exactly the moment the board is busiest.
+        const itemsResult = await runChunkedIdQuery(orderIds, (quoted) =>
+          runQuery(
+            env,
+            `SELECT OrderId, Product2.Name, Color__c, Size__c, Quantity ` +
+              `FROM OrderItem WHERE OrderId IN (${quoted})`,
+          ),
+        );
         if (itemsResult.ok) {
           const itemsByOrder = new Map();
           itemsResult.records.forEach((it) => {
