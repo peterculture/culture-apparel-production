@@ -124,6 +124,17 @@ const ALLOWED_STATUSES     = new Set([
   "Pre-Production", "Ready for Print", "In Production",
   "Post-Production", "Completed", "Cancelled", "On Hold",
 ]);
+// Pre_Production_Item__c.Status__c -- a DIFFERENT, much shorter picklist than
+// the method's. These are the three values this codebase writes: every
+// statusMap in _station.js rolls a sub-status up to one of them, and
+// _rework.js mirrors items using "Ready"/"Not Started". item.status arrives
+// straight off the browser and went into the composite unchecked, so a typo
+// or a stale client sent a restricted-picklist value the org rejects with
+// INVALID_OR_NULL_FOR_RESTRICTED_PICKLIST -- which fails the whole tail
+// composite AFTER the method has already been created. Validate here, the
+// same way the method's own status is validated above.
+// If Setup gains a fourth value, add it here as well as in Salesforce.
+const ALLOWED_ITEM_STATUSES = new Set(["Not Started", "In Progress", "Ready"]);
 
 /**
  * GET /api/production-methods?orderId=<id>
@@ -218,6 +229,11 @@ export async function onRequestPost({ env, request }) {
   for (const it of itemList) {
     if (!it || !ALLOWED_ITEM_TYPES.has(it.type)) {
       return Response.json({ error: "bad_item_type", detail: it && it.type }, { status: 400 });
+    }
+    // Absent/blank means "use ITEM_STATUS_DEFAULT" below, which is allowed;
+    // anything else present has to be a real picklist value.
+    if (it.status != null && it.status !== "" && !ALLOWED_ITEM_STATUSES.has(it.status)) {
+      return Response.json({ error: "bad_item_status", detail: it.status }, { status: 400 });
     }
     // Restricted picklists: reject bad values before they reach Salesforce.
     if (it.type === "Screen" && it.mesh != null && it.mesh !== "" && !ALLOWED_MESH.has(String(it.mesh))) {
