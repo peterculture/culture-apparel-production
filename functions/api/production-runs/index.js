@@ -77,6 +77,7 @@ import { rollupOrderSubstatus } from "../_pm-rollup.js";
 import { RUN_PLANNED, RUN_CONFIRMED } from "../_run-schedule-status.js";
 import { requireCap } from "../_session.js";
 import { parsePlacement, runQueryOptionalField } from "../_placements.js";
+import { checkApprovalGate, gateResponse } from "../_approval-gate.js";
 
 const PR_OBJECT = "Production_Run__c";
 const PR_PRINTMETHOD_FIELD = "PrintMethod__c";
@@ -300,6 +301,15 @@ export async function onRequestPost({ env, request }) {
   // INVALID_OR_NULL_FOR_RESTRICTED_PICKLIST.
   const loc = parsePlacement(printLocation);
   if (!loc.ok) return Response.json({ error: "bad_printLocation", detail: loc.detail }, { status: 400 });
+
+  // Artwork approval gate (S2 / D16). Booking press time IS starting to print,
+  // so an unapproved order is refused HERE, before the insert. There is
+  // deliberately no org-side rule on Production_Run__c: one failing the
+  // Planned -> Confirmed PATCH below would strand the run on Planned with no
+  // calendar Event (§2 trap 9). Off (allows) while the start date is blank.
+  // See ../_approval-gate.js.
+  const approval = await checkApprovalGate(env, { decorationId: printMethodId });
+  if (approval.blocked) return gateResponse(approval);
 
   const body = {
     [PR_PRINTMETHOD_FIELD]: printMethodId,
