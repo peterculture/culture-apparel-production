@@ -86,7 +86,7 @@ window.__resources = Object.assign({}, window.__resources, {
 
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0;border:1.5px solid #141210;border-radius:8px;overflow:hidden;margin-bottom:24px">
     <div style="padding:12px 14px;border-right:1px solid #d8d1c7">
-      <div style="font:600 9px/1 'Oswald';letter-spacing:.12em;text-transform:uppercase;color:#6b645c;margin-bottom:8px">Method</div>
+      <div style="font:600 9px/1 'Oswald';letter-spacing:.12em;text-transform:uppercase;color:#6b645c;margin-bottom:8px">Decoration</div>
       <div style="display:inline-flex;align-items:center;gap:7px;font:600 14px/1 'Oswald';color:#141210"><span style="width:9px;height:9px;border-radius:50%;background:{{methodColor}}"></span>{{methodLabel}}</div>
     </div>
     <div style="padding:12px 14px;border-right:1px solid #d8d1c7">
@@ -317,7 +317,7 @@ class Component extends DCLogic {
       // individually, and this sheet stays a correct reference regardless of
       // which method it was printed for.
       const methods = (api.methodsList ? api.methodsList(rec) : []).map(m => ({
-        id: m.id, type: m.type || 'Method', color: m.color || '#8a8378',
+        id: m.id, type: m.type || 'Decoration', color: m.color || '#8a8378',
         placementLabel: (m.placements && m.placements.length) ? m.placements.join(' + ') : '—',
         status: m.status || '—',
       }));
@@ -366,7 +366,7 @@ class Component extends DCLogic {
     const guess = M[o.method] || M.sp;
     const m = distinct.length === 1
       ? { label: distinct[0], color: (srcMethods.filter(x => x.type === distinct[0])[0] || {}).color || guess.color }
-      : distinct.length > 1 ? { label: 'Multiple methods', color: '#6b645c' }
+      : distinct.length > 1 ? { label: 'Multiple decorations', color: '#6b645c' }
       : guess;
     const grids = (o.grids||[]).map(g => ({
       colorLabel: g.colorLabel, garment: g.garment, total: String(g.total),
