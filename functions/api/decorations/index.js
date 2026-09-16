@@ -49,6 +49,7 @@ import { apiVersion, jsonError, runQuery } from "../_sf.js";
 import { rollupOrderSubstatus } from "../_pm-rollup.js";
 import { runComposite, runChunked, rollbackCreated } from "../_composite.js";
 import { requireCap } from "../_session.js";
+import { GATED_STATUSES, checkApprovalGate, gateResponse } from "../_approval-gate.js";
 
 // ---------------------------------------------------------------------------
 // ORG-SPECIFIC API NAMES  (confirmed against the sandbox 2026-07-02)
@@ -222,6 +223,15 @@ export async function onRequestPost({ env, request }) {
   // De-dupe, preserve first-seen order; Salesforce multi-select picklists are
   // written as a ";"-joined string of the selected values.
   const placementsValue = Array.from(new Set(placements)).join(";");
+
+  // Artwork approval gate (S2 / D16): a decoration cannot be CREATED already at
+  // Ready for Print or In Production for an unapproved order either. Checked
+  // before anything is written, so nothing needs rolling back. See
+  // ../_approval-gate.js.
+  if (GATED_STATUSES.has(status)) {
+    const approval = await checkApprovalGate(env, { orderId });
+    if (approval.blocked) return gateResponse(approval);
+  }
 
   const hasExistingPlan = typeof planId === "string" && planId.length > 0;
 
