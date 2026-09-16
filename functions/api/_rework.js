@@ -280,10 +280,17 @@ export async function createReworkIfNeeded(env, orderId, by) {
     // whole SELECT a parse error, which surfaces as zero rows rather than an
     // exception. _print-date-rollup.js walks Order -> runs the same way for the
     // same reason; match it rather than inventing a second idiom.
+    // The Cancelled filter has to be in the semi-join, not applied afterwards:
+    // a cancelled method's runs are never Submitted, so without it one cancelled
+    // method permanently pins this at runs_not_submitted and the reprint never
+    // builds. Step 3 below excludes cancelled methods the same way (and says so
+    // in its header) -- this is the other half of that promise.
     const runs = await runQuery(
       env,
       `SELECT Id, Result_Status__c FROM Production_Run__c ` +
-        `WHERE PrintMethod__c IN (SELECT Id FROM Decoration__c WHERE Order__c = ${q(orderId)})`,
+        `WHERE PrintMethod__c IN (` +
+        `SELECT Id FROM Decoration__c ` +
+        `WHERE Order__c = ${q(orderId)} AND Status__c != 'Cancelled')`,
     );
     if (!runs.ok) return fail("runs_query_failed", orderId);
     if (!runs.records.length) return { created: false, reason: "no_runs" };
@@ -521,7 +528,11 @@ export async function createReworkIfNeeded(env, orderId, by) {
       // undefined, so the field was silently omitted and everything passed. The
       // counting screen sends a real worker name, so the bug appeared the moment
       // a human path exercised it. Attribution for the method is CreatedBy.
-      head.push({ method: "POST", url: `${base}/Production_Method__c`, referenceId: `pm${i}`, body });
+      // Decoration__c is the object; Production_Method__c survives only as the
+      // FIELD name on Pre_Production_Item__c (ITEM_PM_FIELD). The object was
+      // renamed in both sandboxes and this was the one line still posting to
+      // the old endpoint -- every sibling above already uses the new names.
+      head.push({ method: "POST", url: `${base}/Decoration__c`, referenceId: `pm${i}`, body });
     });
 
     if (head.length > COMPOSITE_LIMIT) {
