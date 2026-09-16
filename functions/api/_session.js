@@ -283,6 +283,40 @@ export function hasCap(caps, cap) {
 }
 
 /**
+ * requireCap's silent sibling, for a GET whose READ must stay open but which
+ * has a write hanging off the side of it.
+ *
+ * Two routes are shaped that way and neither can use requireCap:
+ *
+ *   /api/inbox        -- the Management board polls it, and a waitUntil()
+ *                        after the response builds approved reprints (B9).
+ *   /api/mockup-proxy -- it is an <img> src, and a waitUntil() after the
+ *                        response uploads the fetched bytes into Salesforce
+ *                        and rewrites Design__c.Mockup_URL__c.
+ *
+ * Returning a 403 from either one breaks a board or a picture for a person who
+ * is entitled to see it. What must not happen is the WRITE firing for anybody
+ * who can reach the URL. So: serve the read to everyone, ask this before
+ * scheduling the write.
+ *
+ * Silent on purpose -- requireCap's console.warn per denial is right for a
+ * one-off action and wrong here, where a board polls and every tablet in the
+ * shop is on it. A denial is the ordinary case, not an incident.
+ *
+ * Report-only mode returns true, exactly like requireCap's `denied: false`.
+ * Wiring this in therefore changes NOTHING until ACCESS_ENFORCE=1 -- the
+ * sweep and the adoption keep running for everyone until you choose to
+ * enforce, and then they narrow to the people who could have done the same
+ * thing by hand.
+ */
+export async function allowsCap(request, env, cap) {
+  if (!isEnforcing(env)) return true;
+  const session = await readSession(request, env);
+  if (!session) return false;
+  return hasCap(capsFor(env, session.name), cap);
+}
+
+/**
  * The guard every protected endpoint calls:
  *
  *   const gate = await requireCap(request, env, "runs.confirm");
