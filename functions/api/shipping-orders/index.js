@@ -36,7 +36,7 @@
  * ../orders/[id].js). "Delivery" is the correct value to filter/write; never
  * add a literal "Local Dropoff" value expecting it to match live data.
  */
-import { runQuery, jsonError } from "../_sf.js";
+import { runQuery, jsonError, runChunkedIdQuery } from "../_sf.js";
 
 // Order fields the board list + drawer need. ShipToContact fields cover the
 // Pickup/Delivery/Order Fulfillment cases, which have no Zenkraft wizard step
@@ -114,9 +114,15 @@ export async function onRequestGet({ env }) {
     const orderIds = orders.map((o) => o.Id).filter(Boolean);
     if (orderIds.length) {
       try {
-        const quoted = orderIds.map((oid) => `'${oid}'`).join(",");
-        const soqlShip = `SELECT Order__c FROM zkmulti__MCShipment__c WHERE Order__c IN (${quoted})`;
-        const shipResult = await runQuery(env, soqlShip);
+        // Chunked at 200 Ids -- SOQL's IN-list cap. One Id per order on the
+        // shipping board, which is unbounded; past 200 the query is a parse
+        // error and every badge silently reads 0.
+        const shipResult = await runChunkedIdQuery(orderIds, (quoted) =>
+          runQuery(
+            env,
+            `SELECT Order__c FROM zkmulti__MCShipment__c WHERE Order__c IN (${quoted})`,
+          ),
+        );
         if (shipResult.ok) {
           const counts = new Map();
           shipResult.records.forEach((s) => {
