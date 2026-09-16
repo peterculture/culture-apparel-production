@@ -20,7 +20,7 @@
  *   weight was given) a linked zkmulti__MCPackage__c row underneath it.
  *   Body: { orderId, Carrier, ServiceType, TrackingNumber, Weight }
  */
-import { sfFetch, apiVersion, jsonError, runQuery } from "../_sf.js";
+import { sfFetch, apiVersion, jsonError, runQuery, runChunkedIdQuery } from "../_sf.js";
 import { requireCap } from "../_session.js";
 
 const SF_ID = /^[a-zA-Z0-9]{15,18}$/;
@@ -54,11 +54,18 @@ export async function onRequestGet({ env, request }) {
 
     const shipments = shipResult.records;
     if (shipments.length) {
-      const ids = shipments.map((s) => `'${s.Id}'`).join(",");
-      const pkgSoql =
-        `SELECT zkmulti__Shipment__c, zkmulti__Weight__c, zkmulti__Weight_Units__c ` +
-        `FROM zkmulti__MCPackage__c WHERE zkmulti__Shipment__c IN (${ids})`;
-      const pkgResult = await runQuery(env, pkgSoql);
+      // Chunked at 200 Ids. One order's shipments is normally a handful, but
+      // a split-heavy order has no ceiling and the failure mode is silent:
+      // past 200 the IN list is a parse error, so every weight reads null.
+      const pkgResult = await runChunkedIdQuery(
+        shipments.map((s) => s.Id),
+        (quoted) =>
+          runQuery(
+            env,
+            `SELECT zkmulti__Shipment__c, zkmulti__Weight__c, zkmulti__Weight_Units__c ` +
+              `FROM zkmulti__MCPackage__c WHERE zkmulti__Shipment__c IN (${quoted})`,
+          ),
+      );
       if (pkgResult.ok) {
         const byShipment = new Map();
         pkgResult.records.forEach((p) => {
