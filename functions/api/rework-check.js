@@ -348,7 +348,7 @@ export async function onRequestGet({ request, env }) {
         `already_reworked -- reprint ${report.existingReprints[0].orderNumber} exists, ` +
         `so the automation bails out first thing every time. Delete it to re-test.`;
     } else if (!report.runs || !report.runs.length) {
-      report.verdict = "no_runs -- no Production Runs hang off this order's methods.";
+      report.verdict = "no_runs -- no Production Runs hang off this order's decorations.";
     } else if (report.runs.some((r) => !r.submitted)) {
       report.verdict =
         `runs_not_submitted -- ` +
@@ -401,18 +401,18 @@ export async function onRequestGet({ request, env }) {
         `OUTCOME_DECLINED / OUTCOME_REPRINT in _rework.js about it.`;
     } else if (!report.hookGate.wouldFireOnNextMethodPatch) {
       report.verdict =
-        `GATES PASS but the hook never runs: the least-advanced method gives ` +
+        `GATES PASS but the hook never runs: the least-advanced decoration gives ` +
         `'${expectedSubstatus}', not 'Completed'. production-methods/[id].js only calls ` +
         `the rework when the substatus roll-up returns 'Completed'.`;
     } else if (report.hookGate.rollupWriteLooksBroken) {
       report.verdict =
-        `GATES PASS and the methods say 'Completed', but Order_Substatus__c on the ` +
+        `GATES PASS and the decorations say 'Completed', but Order_Substatus__c on the ` +
         `record reads '${order.Order_Substatus__c}' -- the roll-up's PATCH is not landing, ` +
         `so rollupOrderSubstatus() returns null and the rework is skipped.`;
     } else {
       report.verdict =
         `ALL GATES PASS (${report.totalReworkQty} garment(s) to rework). The next ` +
-        `method status PATCH that lands on Completed should build the reprint. If it ` +
+        `decoration status PATCH that lands on Completed should build the reprint. If it ` +
         `does not, the failure is inside the composite create, not the gates.`;
     }
 
