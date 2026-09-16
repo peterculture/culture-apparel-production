@@ -9,9 +9,17 @@
  * browser can't inject SOQL. Access is open (no login) — the real perimeter is
  * Cloudflare Access in front of /api/*.
  */
-import { runQuery, jsonError } from "../_sf.js";
+import { jsonError } from "../_sf.js";
+import { runQueryOptionalField } from "../_placements.js";
 import { STATION_CONFIG, normalizeSubStatus } from "../_station.js";
 import { fetchMockupsByOpportunity } from "../_mockup.js";
+
+// The one entry in STATION_CONFIG's selectFields that may not exist in every
+// org. OPTIONAL_FIELD is the exact string to drop from the SELECT list;
+// OPTIONAL_FIELD_NAME is what Salesforce names in "No such column '...'", so
+// it's what runQueryOptionalField matches the failure against.
+const OPTIONAL_FIELD = "Production_Method__r.Placement__c";
+const OPTIONAL_FIELD_NAME = "Placement__c";
 
 export async function onRequestGet({ env, request }) {
   try {
@@ -20,17 +28,34 @@ export async function onRequestGet({ env, request }) {
     const cfg = STATION_CONFIG[station];
     if (!cfg || !cfg.selectFields) return jsonError("station_not_configured", 400);
 
-    const soql =
-      `SELECT ${cfg.selectFields.join(", ")} ` +
-      `FROM Pre_Production_Item__c ` +
-      `WHERE Type__c = '${cfg.type}' AND Status__c != '${cfg.doneStatus}' ` +
-      `ORDER BY ${cfg.orderBy}`;
+    // Production_Method__r.Placement__c is in the ink/screen/transfer station
+    // field lists but is NOT deployed in every org -- and a missing or
+    // FLS-hidden field doesn't come back blank, it makes the whole SELECT a
+    // parse error, so the station board goes to zero rows and looks broken
+    // rather than just losing one column. Same guard, same reason, as the
+    // Print_Location__c one in _placements.js; build the query both ways and
+    // let runQueryOptionalField drop the field only if the org names it.
+    const buildSoql = (withPlacement) => {
+      const fields = withPlacement
+        ? cfg.selectFields
+        : cfg.selectFields.filter((f) => f !== OPTIONAL_FIELD);
+      return (
+        `SELECT ${fields.join(", ")} ` +
+        `FROM Pre_Production_Item__c ` +
+        `WHERE Type__c = '${cfg.type}' AND Status__c != '${cfg.doneStatus}' ` +
+        `ORDER BY ${cfg.orderBy}`
+      );
+    };
 
     // Not scoped to one order/method -- this is every not-done item of one
     // type across the whole shop, so of everything in this app it's one of
     // the more realistic candidates to eventually grow past one query batch.
     // runQuery follows Salesforce's nextRecordsUrl pagination -- see _sf.js.
-    const { ok, status, records } = await runQuery(env, soql);
+    const { ok, status, records } = await runQueryOptionalField(
+      env,
+      buildSoql,
+      OPTIONAL_FIELD_NAME,
+    );
     if (!ok) {
       console.error("station-items query failed", status);
       return jsonError("query_failed", status);
