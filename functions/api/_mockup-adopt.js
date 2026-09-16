@@ -50,9 +50,23 @@
  */
 import { getSalesforceToken, sfFetch, apiVersion, runQuery, soqlQuote } from "./_sf.js";
 
-/* A ContentVersion Id. Same prefix branch A requires -- if Mockup_URL__c
-   already contains one there is nothing to adopt. */
-const CV_ID_RE = /068[a-zA-Z0-9]{12,15}/;
+/* A ContentVersion Id at the END of the value, which is where the servlet URL
+   this code writes puts it:
+
+     https://<host>/sfc/servlet.shepherd/version/download/068ca000003q4ozAAA
+
+   ANCHORED, and it must stay anchored. Unanchored, this matched a 068-shaped
+   run ANYWHERE in the string, so an ordinary external link that happened to
+   contain one read as "already adopted" and that record was skipped forever --
+   while mockup-proxy's ID_RE, which IS anchored, kept routing the same value
+   down branch B. The two have to agree about what counts as a ContentVersion
+   Id or a record sits permanently in the gap between them: never adopted,
+   never served from Salesforce.
+
+   This is deliberately the same shape as ID_RE in mockup-proxy/index.js
+   (minus its capture group -- only .test() is used here). If one changes, the
+   other has to. */
+const CV_ID_RE = /068[a-zA-Z0-9]{12,15}(?:[/?#].*)?$/;
 
 /* Only images are adopted. A host answering 200 with an HTML error page is a
    real case, and writing that into Salesforce as the mockup would replace a
