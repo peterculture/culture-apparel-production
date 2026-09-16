@@ -80,6 +80,7 @@ import { cascadeChecklistToItems } from "../_ppi-checklist.js";
 import { orderIdForMethod } from "../_print-date-rollup.js";
 import { createReworkIfNeeded } from "../_rework.js";
 import { requireCap } from "../_session.js";
+import { GATED_STATUSES, checkApprovalGate, gateResponse, isApprovalRuleFailure, RULE_MESSAGE } from "../_approval-gate.js";
 
 const PM_OBJECT = "Decoration__c";
 
@@ -209,6 +210,16 @@ export async function onRequestPatch({ params, request, env }) {
 
     if (Object.keys(payload).length === 0) return jsonError("no_valid_fields", 400);
 
+    // Artwork approval gate (S2 / D16): no Ready for Print or In Production
+    // while the order's artwork is unapproved. Checked before the write so the
+    // worker gets a clear sentence; the Decoration validation rule enforces the
+    // same thing in the org. Off (allows) while the start date is blank. See
+    // ../_approval-gate.js.
+    if (payload.Status__c && GATED_STATUSES.has(payload.Status__c)) {
+      const approval = await checkApprovalGate(env, { orderId, decorationId: id });
+      if (approval.blocked) return gateResponse(approval);
+    }
+
     if (body.ifUnmodifiedSince) {
       const check = await checkNotModifiedSince(env, PM_OBJECT, id, body.ifUnmodifiedSince);
       if (check.conflict) {
@@ -229,6 +240,11 @@ export async function onRequestPatch({ params, request, env }) {
     if (resp.status !== 204) {
       const detail = await resp.text();
       console.error("Production method update failed", resp.status, detail);
+      // The org-side approval rule can still refuse (e.g. the start date was
+      // set less than a minute ago). Say so plainly rather than "update_failed".
+      if (isApprovalRuleFailure(detail)) {
+        return gateResponse({ message: RULE_MESSAGE });
+      }
       return jsonError("update_failed", resp.status);
     }
 
