@@ -184,9 +184,9 @@ window.__resources = Object.assign({}, window.__resources, {
     <div style="margin-top:9px;padding-left:2px;font:400 11px/1.5 'Archivo';color:var(--text-tertiary)">{{timingNote}}</div>
 
     <sc-if value="{{hasTimingRows}}" hint-placeholder-val="{{ true }}">
-      <div role="table" aria-label="Scheduled versus actual hours by print method, single-method orders only" style="display:table;width:100%;border-collapse:collapse;margin-top:14px;font:400 12px/1.4 'Archivo'">
+      <div role="table" aria-label="Scheduled versus actual hours by decoration, single-decoration orders only" style="display:table;width:100%;border-collapse:collapse;margin-top:14px;font:400 12px/1.4 'Archivo'">
         <div role="row" style="display:table-row">
-          <div role="columnheader" style="display:table-cell;text-align:left;padding:7px 8px;border-bottom:1px solid var(--border-card);font:600 10px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)">Method</div>
+          <div role="columnheader" style="display:table-cell;text-align:left;padding:7px 8px;border-bottom:1px solid var(--border-card);font:600 10px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)">Decoration</div>
           <div role="columnheader" style="display:table-cell;text-align:right;padding:7px 8px;border-bottom:1px solid var(--border-card);font:600 10px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)">Jobs</div>
           <div role="columnheader" style="display:table-cell;text-align:right;padding:7px 8px;border-bottom:1px solid var(--border-card);font:600 10px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)">Scheduled h</div>
           <div role="columnheader" style="display:table-cell;text-align:right;padding:7px 8px;border-bottom:1px solid var(--border-card);font:600 10px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)">Actual h</div>
@@ -202,7 +202,7 @@ window.__resources = Object.assign({}, window.__resources, {
           </div>
         </sc-for>
       </div>
-      <div style="margin-top:7px;padding-left:2px;font:400 10px/1.4 'Archivo';color:var(--text-faint)">Single-method orders only. Scheduled duration is one figure per order, so on a multi-method job there is no honest way to split it between the methods.</div>
+      <div style="margin-top:7px;padding-left:2px;font:400 10px/1.4 'Archivo';color:var(--text-faint)">Single-decoration orders only. Scheduled duration is one figure per order, so on a multi-method job there is no honest way to split it between the decorations.</div>
     </sc-if>
 
     <!-- Shipping -->
@@ -555,7 +555,7 @@ class Component extends DCLogic {
       { label:'Prep Buffer (Avg)', value:fmtDays(st.prep.avg), unit:'days', sub:kpiLoading ? 'orders in Pre-Production' : (st.prep.count+' orders in Pre-Production'), accent:'#ECEAE4', hasGlow:false },
     ];
     const preprodKpis = [
-      { label:'In Pre-Production', value:num(st.preprod.activeJobs), unit:'jobs', sub:'across all methods', accent:'#ECEAE4' },
+      { label:'In Pre-Production', value:num(st.preprod.activeJobs), unit:'jobs', sub:'across all decorations', accent:'#ECEAE4' },
       { label:'Garments Staged', value:num(st.preprod.staged), unit:'jobs', sub:'counted in & ready', accent:'#7FA644' },
       { label:'Awaiting Prep', value:num(st.preprod.awaiting), unit:'jobs', sub:'checklist incomplete', accent:'#C9923A' },
       { label:'Ready to Send', value:num(st.preprod.ready), unit:'jobs', sub:'clear for production', accent:'#C6372B' },
