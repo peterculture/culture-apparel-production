@@ -538,7 +538,7 @@ export async function createReworkIfNeeded(env, orderId, by) {
     if (head.length > COMPOSITE_LIMIT) {
       // Only reachable with ~22 damaged methods on one order, which would mean
       // something is very wrong upstream. Fail loudly rather than half-build.
-      return fail("too_many_methods", orderId, `${affectedMethods.length} affected methods`);
+      return fail("too_many_methods", orderId, `${affectedMethods.length} affected decorations`);
     }
 
     const headRes = await composite(env, head);
