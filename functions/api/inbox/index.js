@@ -15,6 +15,7 @@ import { runQuery, jsonError, runChunkedIdQuery } from "../_sf.js";
 import { runQueryOptionalField, splitPlacements } from "../_placements.js";
 import { fetchMockupsByOpportunity } from "../_mockup.js";
 import { createReworkIfNeeded } from "../_rework.js";
+import { allowsCap } from "../_session.js";
 const FIELDS = [
   "Id",
   "OrderNumber",
@@ -266,7 +267,7 @@ async function buildApprovedReprints(env) {
   }
 }
 
-export async function onRequestGet({ env, waitUntil }) {
+export async function onRequestGet({ request, env, waitUntil }) {
   try {
     const buildSoql = (withMulti) =>
       `SELECT ${FIELDS.concat(withMulti ? [MULTI_METHOD_FIELD] : []).join(", ")} FROM Order ` +
@@ -320,9 +321,26 @@ export async function onRequestGet({ env, waitUntil }) {
        on Salesforce -- and an approved reprint appearing on the next poll a few
        seconds later is a far better trade than every inbox load paying for a
        composite build. Fail-open in every sense: nothing here can affect what
-       is returned above. */
-    const sweeping = buildApprovedReprints(env).catch((e) => { console.error("B9 sweep failed", e); });
-    if (typeof waitUntil === "function") waitUntil(sweeping);
+       is returned above.
+
+       GATED, because this is a GET that WRITES. The sweep creates real Orders
+       in Salesforce, and until now anyone who could reach /api/inbox caused
+       that to happen just by loading the board -- which the 22-of-23
+       requireCap audit did not catch, because this file exports only
+       onRequestGet and so never looked like a mutating route.
+
+       The READ stays open: the Management board polls it and a 403 here is a
+       blank inbox, which reads as "no work" rather than as a permissions
+       problem. Only the write is gated, on orders.edit -- the capability a
+       person would need to create these Orders by hand. Managers and admins
+       have it, workers deliberately do not (see DEFAULT_WORKER_CAPS).
+
+       allowsCap is silent and report-only-aware, so this changes nothing at
+       all until ACCESS_ENFORCE=1. See _session.js. */
+    if (await allowsCap(request, env, "orders.edit")) {
+      const sweeping = buildApprovedReprints(env).catch((e) => { console.error("B9 sweep failed", e); });
+      if (typeof waitUntil === "function") waitUntil(sweeping);
+    }
 
     return Response.json(
       { totalSize: records.length, done: true, records, reprintsUnavailable },
