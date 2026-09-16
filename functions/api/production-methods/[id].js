@@ -147,6 +147,23 @@ export async function onRequestPatch({ params, request, env }) {
       return jsonError("invalid_orderId", 400);
     }
 
+    // Worker-name attribution, for the reprint this PATCH can trigger at the
+    // bottom of the handler. It is NOT written to the method itself -- nothing
+    // in this codebase writes Last_Updated_By__c to Decoration__c, and
+    // _rework.js documents that trying to made the head composite fail with
+    // PROCESSING_HALTED. It only rides along to createReworkIfNeeded, which
+    // stamps it on the new reprint Order.
+    //
+    // The old call site read payload.Last_Updated_By__c, which this handler
+    // never assigns (the payload is built from Status__c, Type__c,
+    // Placements__c, CHECKLIST_FIELDS and TIMER_FIELDS and nothing else), so
+    // the argument was always undefined and every reprint created from the
+    // board came out unattributed. ca-api.js's patchMethodStatus/-Fields don't
+    // send a name either, so the signed-in session is the only source there
+    // is -- body.by is honoured first so a future caller can override it, the
+    // same contract as ../production-methods/index.js.
+    const by = (body.by == null ? gate.name || "" : String(body.by)).trim().slice(0, 80);
+
     const payload = {};
 
     if ("Status__c" in body) {
@@ -287,7 +304,7 @@ export async function onRequestPatch({ params, request, env }) {
     // change would leave the board lying about where the order is.
     let rework = null;
     if (rolledUpSubstatus === "Completed") {
-      rework = await createReworkIfNeeded(env, orderId, payload.Last_Updated_By__c).catch((e) => {
+      rework = await createReworkIfNeeded(env, orderId, by).catch((e) => {
         console.error("rework creation failed", orderId, e);
         return null;
       });
