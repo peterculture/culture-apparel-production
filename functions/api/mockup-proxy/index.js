@@ -67,6 +67,7 @@
  */
 import { sfFetch, apiVersion, jsonError } from "../_sf.js";
 import { adoptMockup } from "../_mockup-adopt.js";
+import { allowsCap } from "../_session.js";
 
 /* Salesforce record Ids are 15 (case-sensitive) or 18 (case-insensitive,
    checksum-suffixed) alphanumeric characters. Matches the LAST such run in
@@ -274,9 +275,29 @@ export async function onRequestGet({ request, env, waitUntil }) {
          failure here must never turn a working image into a broken one. It is
          the same contract the rollups follow (CLAUDE.md) -- await it, ignore
          the result. */
-      const adopting = adoptMockup(env, current.toString(), bytes, contentType)
-        .catch((e) => { console.error("mockup-proxy: adopt threw", e); });
-      if (typeof waitUntil === "function") waitUntil(adopting);
+      /* GATED, because this is the write half of a GET. Adoption uploads a
+         ContentVersion and rewrites Design__c.Mockup_URL__c -- a real write,
+         from a route that exports only onRequestGet and so was not counted by
+         the requireCap audit.
+
+         The header above already says what bounds this: a URL matching no
+         Design record is fetched but never adopted. That is a narrower hole
+         than it sounds, not a closed one -- somebody who knows an existing
+         Mockup_URL__c value can point this at a URL they control and have the
+         server file those bytes as that design's mockup. Nobody in the shop
+         needs to be able to do that by loading a picture.
+
+         The IMAGE still serves to everyone: this endpoint is an <img> src on
+         every board, and gating the read would blank mockups for the workers
+         who most need to see them. Only adoption is gated, on orders.edit --
+         so a manager's view still adopts, and the record is fixed for
+         everybody's next load. Silent and report-only-aware; nothing changes
+         until ACCESS_ENFORCE=1. See _session.js. */
+      if (await allowsCap(request, env, "orders.edit")) {
+        const adopting = adoptMockup(env, current.toString(), bytes, contentType)
+          .catch((e) => { console.error("mockup-proxy: adopt threw", e); });
+        if (typeof waitUntil === "function") waitUntil(adopting);
+      }
 
       return new Response(bytes, {
         headers: {
