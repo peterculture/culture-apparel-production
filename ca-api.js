@@ -284,7 +284,7 @@
      already needs its own duplicate list before a role/name exists. */
   var NAV_BOARDS = [
     { key:'pre-production', label:'Pre-Production', sub:'Design · screens · receiving', href:'pre-production.html', color:'#C9923A', icon:'ti-clipboard-check' },
-    { key:'management', label:'Pre-Production Management', sub:'Order intake · methods · production runs', href:'pre-production.html?view=mgr', color:'#6C7686', icon:'ti-settings' },
+    { key:'management', label:'Pre-Production Management', sub:'Order intake · decorations · production runs', href:'pre-production.html?view=mgr', color:'#6C7686', icon:'ti-settings' },
     { key:'index', label:'Production Dashboard', sub:'Kanban · print → ship', href:'index.html', color:'#C6372B', icon:'ti-layout-kanban' },
     // Production Calendar (2026-08-17). Added HERE, in the shared list, rather
     // than as a one-off pill on each board -- that is what makes the same entry
@@ -2212,7 +2212,7 @@
   function methodsList(rec){
     var raw = (rec && rec.ProductionMethods) || [];
     return raw.map(function (pm) {
-      var meta = METHOD_META[pm.Type__c] || { key:'sp', short:pm.Type__c||'Method', color:'#8a8378' };
+      var meta = METHOD_META[pm.Type__c] || { key:'sp', short:pm.Type__c||'Decoration', color:'#8a8378' };
       // Placements (array, from the Placements__c multi-select field) is the
       // current shape; pm.Placement__c is a single-value fallback for any
       // record the server hasn't resolved into Placements yet.
@@ -2221,7 +2221,7 @@
       return {
         id: pm.Id, type: pm.Type__c, key: meta.key, color: meta.color,
         placements: placements, placement: placements[0] || null,
-        label: placements.length ? (pm.Type__c + ' – ' + placementLabel) : (pm.Type__c || 'Method'),
+        label: placements.length ? (pm.Type__c + ' – ' + placementLabel) : (pm.Type__c || 'Decoration'),
         status: pm.Status__c || null
       };
     });
@@ -2302,7 +2302,7 @@
     var note = parts.length ? (parts.join(' · ').charAt(0).toUpperCase() + parts.join(' · ').slice(1) + '.') : '';
     return {
       shown: true,
-      countLabel: counted.length + ' methods on this order',
+      countLabel: counted.length + ' decorations on this order',
       hasNote: !!note,
       note: note,
     };
@@ -2454,12 +2454,12 @@
       return false;
     }
     if (rw.failed) {
-      toast('warn', 'Run created, but the method could not be sent back to Ready for Print — it still reads '
+      toast('warn', 'Run created, but the decoration could not be sent back to Ready for Print — it still reads '
         + (rw.from || 'finished') + '. Change it by hand, or the new run has nothing telling anyone to print it.');
       return false;
     }
     if (rw.rewound) {
-      toast('info', 'Run added, so this method is back in Ready for Print (was ' + (rw.from || 'further along')
+      toast('info', 'Run added, so this decoration is back in Ready for Print (was ' + (rw.from || 'further along')
         + '). It moves to Post-Production again once the new run is finished.');
       return true;
     }
