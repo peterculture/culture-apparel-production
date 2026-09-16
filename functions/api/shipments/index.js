@@ -13,7 +13,28 @@
  *   Weight lives on a child `zkmulti__MCPackage__c` record
  *   (`zkmulti__Shipment__c` lookup back to the shipment) in Zenkraft's
  *   data model, not on the shipment itself, so this handler runs a second
- *   query and merges each shipment's package weight in before returning.
+ *   query and merges each shipment's package weights in before returning.
+ *
+ *   ONE SHIPMENT CAN HAVE MANY PACKAGES. This endpoint used to keep the
+ *   first package per shipment and drop the rest, so a three-box shipment
+ *   reported one box's weight as the shipment's weight -- a number that
+ *   looks perfectly reasonable and is simply wrong. THIS app only ever
+ *   creates one package per shipment (see POST below, and split.js /
+ *   combine.js), which is why it went unnoticed; the multi-box shipments
+ *   come from Zenkraft's own wizard, writing straight into Salesforce,
+ *   and those are exactly the ones the boards poll for afterwards.
+ *   ../shipments/[id].js already loops over every package when deleting,
+ *   so the data model was never in doubt -- only this read.
+ *
+ *   Each shipment therefore comes back with:
+ *     Packages          every package: { Id, Weight, WeightUnits }
+ *     PackageCount      how many
+ *     Weight            the SUM across packages (null if none carry one)
+ *     WeightUnits       the shared unit
+ *     MixedWeightUnits  true when packages disagree on units, in which
+ *                       case Weight is null rather than a fabricated total
+ *   For the one-package case -- everything this app creates -- Weight and
+ *   WeightUnits are exactly what they were before.
  *
  * POST /api/shipments
  *   Logs one shipment: creates a zkmulti__MCShipment__c row, then (if a
@@ -34,6 +55,45 @@ const SHIPMENT_FIELDS = [
   "zkmulti__Ship_Date__c",
   "CreatedDate",
 ];
+
+/**
+ * Total one shipment's packages.
+ *
+ * Adding weights only means anything when the packages agree on units, and
+ * Zenkraft's wizard is perfectly capable of writing a mix. Adding 2 lb to
+ * 3 kg gives 5 of nothing, so mixed units return a null total and say so --
+ * a consumer can then show the per-package list, which is why Packages is
+ * returned alongside. Refusing to answer is the correct answer here; a
+ * plausible wrong number on a shipping screen is how a box gets underpaid.
+ *
+ * A package with no weight is skipped rather than counted as zero: "two
+ * boxes, one weighed" is 6 lb of known weight, not a 6 lb shipment. The
+ * unit still comes back if any package names one.
+ */
+function totalPackageWeight(packages) {
+  let total = 0;
+  let weighed = 0;
+  let units = null;
+  let mixed = false;
+
+  for (const p of packages) {
+    const u = p.WeightUnits ? String(p.WeightUnits).trim() : "";
+    if (u) {
+      if (units === null) units = u;
+      else if (u.toLowerCase() !== units.toLowerCase()) mixed = true;
+    }
+    const n = Number(p.Weight);
+    if (p.Weight === null || p.Weight === undefined || p.Weight === "" || !Number.isFinite(n)) continue;
+    total += n;
+    weighed++;
+  }
+
+  if (mixed) return { weight: null, units: null, mixed: true };
+  if (!weighed) return { weight: null, units, mixed: false };
+  // Float addition: 1.1 + 2.2 is 3.3000000000000003, and that reaches a
+  // screen verbatim. Six decimals is far past any scale in the shop.
+  return { weight: Math.round(total * 1e6) / 1e6, units, mixed: false };
+}
 
 export async function onRequestGet({ env, request }) {
   try {
@@ -62,19 +122,34 @@ export async function onRequestGet({ env, request }) {
         (quoted) =>
           runQuery(
             env,
-            `SELECT zkmulti__Shipment__c, zkmulti__Weight__c, zkmulti__Weight_Units__c ` +
+            `SELECT Id, zkmulti__Shipment__c, zkmulti__Weight__c, zkmulti__Weight_Units__c ` +
               `FROM zkmulti__MCPackage__c WHERE zkmulti__Shipment__c IN (${quoted})`,
           ),
       );
       if (pkgResult.ok) {
+        /* EVERY package, not the first one. The old code set the map entry
+           only when the key was absent, which silently kept box 1 of 3. */
         const byShipment = new Map();
         pkgResult.records.forEach((p) => {
-          if (!byShipment.has(p.zkmulti__Shipment__c)) byShipment.set(p.zkmulti__Shipment__c, p);
+          const arr = byShipment.get(p.zkmulti__Shipment__c);
+          if (arr) arr.push(p);
+          else byShipment.set(p.zkmulti__Shipment__c, [p]);
         });
         shipments.forEach((s) => {
-          const pkg = byShipment.get(s.Id);
-          s.Weight = pkg ? pkg.zkmulti__Weight__c : null;
-          s.WeightUnits = pkg ? pkg.zkmulti__Weight_Units__c : null;
+          /* Renamed out of the zkmulti__ namespace on the way out, matching
+             how Weight/WeightUnits have always been presented on the
+             shipment itself -- the managed-package prefix is an
+             implementation detail of where the data lives. */
+          s.Packages = (byShipment.get(s.Id) || []).map((p) => ({
+            Id: p.Id,
+            Weight: p.zkmulti__Weight__c === undefined ? null : p.zkmulti__Weight__c,
+            WeightUnits: p.zkmulti__Weight_Units__c || null,
+          }));
+          s.PackageCount = s.Packages.length;
+          const total = totalPackageWeight(s.Packages);
+          s.Weight = total.weight;
+          s.WeightUnits = total.units;
+          s.MixedWeightUnits = total.mixed;
         });
       }
     }
