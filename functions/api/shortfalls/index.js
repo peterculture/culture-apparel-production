@@ -39,7 +39,7 @@
  * set by whoever schedules the make-up run; this endpoint would then read that
  * instead, and nothing on the client side would need to change.
  */
-import { runQuery, jsonError, soqlQuote, soqlQuoteList } from "../_sf.js";
+import { runQuery, jsonError, soqlQuote, soqlQuoteList, runChunkedIdQuery } from "../_sf.js";
 
 const RUN_OBJECT = "Production_Run__c";
 /* Escaping lives in _sf.js now. These were five diverging copies that
@@ -84,10 +84,16 @@ export async function onRequestGet({ env }) {
     }
 
     // 2. Every run on those same methods, so a later one can clear the flag.
-    const siblings = await runQuery(
-      env,
-      `SELECT Id, Name, PrintMethod__c, CreatedDate FROM ${RUN_OBJECT} ` +
-        `WHERE PrintMethod__c IN (${quoteList(methodIds)})`,
+    // Chunked at 200 Ids: this endpoint has neither a date bound nor a LIMIT,
+    // so methodIds grows with the whole history of shortfalls. Past 200 the
+    // IN list is a parse error -- zero rows behind an HTTP 200, which reads as
+    // "no shortfalls anywhere" rather than as a failure.
+    const siblings = await runChunkedIdQuery(methodIds, (quoted) =>
+      runQuery(
+        env,
+        `SELECT Id, Name, PrintMethod__c, CreatedDate FROM ${RUN_OBJECT} ` +
+          `WHERE PrintMethod__c IN (${quoted})`,
+      ),
     );
     if (!siblings.ok) return jsonError("sibling_runs_query_failed", 502);
 
@@ -100,20 +106,24 @@ export async function onRequestGet({ env }) {
     // 3. Order context, resolved by explicit queries rather than by guessing
     // __r relationship names -- a wrong guess is a parse error that surfaces as
     // zero rows, which here would read as "no shortfalls anywhere".
-    const methods = await runQuery(
-      env,
-      `SELECT Id, Type__c, Status__c, Order__c FROM Decoration__c ` +
-        `WHERE Id IN (${quoteList(methodIds)})`,
+    const methods = await runChunkedIdQuery(methodIds, (quoted) =>
+      runQuery(
+        env,
+        `SELECT Id, Type__c, Status__c, Order__c FROM Decoration__c ` +
+          `WHERE Id IN (${quoted})`,
+      ),
     );
     if (!methods.ok) return jsonError("methods_query_failed", 502);
     const methodById = new Map(methods.records.map((m) => [m.Id, m]));
 
     const orderIds = [...new Set(methods.records.map((m) => m.Order__c).filter(Boolean))];
     const orders = orderIds.length
-      ? await runQuery(
-          env,
-          `SELECT Id, OrderNumber, Customer_Order_Name__c, Account.Name, ` +
-            `Customer_Facing_Delivery_Date__c FROM Order WHERE Id IN (${quoteList(orderIds)})`,
+      ? await runChunkedIdQuery(orderIds, (quoted) =>
+          runQuery(
+            env,
+            `SELECT Id, OrderNumber, Customer_Order_Name__c, Account.Name, ` +
+              `Customer_Facing_Delivery_Date__c FROM Order WHERE Id IN (${quoted})`,
+          ),
         )
       : { ok: true, records: [] };
     if (!orders.ok) return jsonError("orders_query_failed", 502);
