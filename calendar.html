@@ -1144,7 +1144,10 @@ class Component extends DCLogic {
       // a server racing to set the same field.
     }catch(e){
       console.error('drop failed', e);
-      alert('Could not save that move — '+(e && e.message ? e.message : 'unknown error'));
+      // errText() first: it shows the server's own sentence (e.g. the S2
+      // "Artwork is not approved on order ..." refusal) instead of "POST ... -> 409".
+      const said=(api&&api.errText)?api.errText(e):'';
+      alert('Could not save that move — '+(said || (e && e.message ? e.message : 'unknown error')));
     }
     this.endDrag();
     this.load();
