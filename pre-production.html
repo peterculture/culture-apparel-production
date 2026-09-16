@@ -284,13 +284,13 @@ window.__resources = Object.assign({}, window.__resources, {
                   <span style="font:500 12px/1 'Archivo';color:#ECEAE4">{{pm.label}}</span>
                   <sc-if value="{{pm.isCurrent}}" hint-placeholder-val="{{ false }}"><span style="font:700 8px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#08080A;background:{{pm.color}};border-radius:6px;padding:4px 7px;flex-shrink:0">This card</span></sc-if>
                   <span style="font:600 8px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:var(--text-secondary);background:#1a1a1e;border-radius:6px;padding:4px 7px">{{pm.status}}</span>
-                  <button onClick="{{ pm.onEdit }}" title="Edit method" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:transparent;border:1px solid #2a2a2f;color:var(--text-tertiary);cursor:pointer;flex-shrink:0"><i class="ti ti-pencil" style="font-size:12px"></i></button>
-                  <button onClick="{{ pm.onRemove }}" title="Remove method" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:transparent;border:1px solid #2a2a2f;color:var(--text-tertiary);cursor:pointer;flex-shrink:0"><i class="ti ti-trash" style="font-size:12px"></i></button>
+                  <button onClick="{{ pm.onEdit }}" title="Edit decoration" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:transparent;border:1px solid #2a2a2f;color:var(--text-tertiary);cursor:pointer;flex-shrink:0"><i class="ti ti-pencil" style="font-size:12px"></i></button>
+                  <button onClick="{{ pm.onRemove }}" title="Remove decoration" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:transparent;border:1px solid #2a2a2f;color:var(--text-tertiary);cursor:pointer;flex-shrink:0"><i class="ti ti-trash" style="font-size:12px"></i></button>
                 </div>
                 <sc-if value="{{pm.editing}}" hint-placeholder-val="{{ false }}">
                   <div style="padding:11px 13px 13px;display:flex;flex-direction:column;gap:10px;border-top:1px dashed #232327">
                     <div>
-                      <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:6px">Method</div>
+                      <div style="font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:6px">Decoration</div>
                       <div style="display:flex;gap:6px;flex-wrap:wrap">
                         <sc-for list="{{pm.mf.methodOptions}}" as="m" hint-placeholder-count="4">
                           <button onClick="{{ m.onPick }}" style="font:600 10px/1 'Oswald';letter-spacing:.04em;color:{{m.color}};background:{{m.bg}};border:1px solid {{m.border}};border-radius:7px;padding:8px 10px;cursor:pointer">{{m.label}}</button>
@@ -320,7 +320,7 @@ window.__resources = Object.assign({}, window.__resources, {
               </div>
             </sc-for>
             <sc-if value="{{open.methodsEmpty}}" hint-placeholder-val="{{ false }}"><div style="font:400 11px/1.4 'Archivo';color:var(--text-faint);padding:2px">No decoration set up yet.</div></sc-if>
-            <sc-if value="{{open.canManage}}" hint-placeholder-val="{{ false }}"><button onClick="{{ open.onAddMethod }}" style="display:inline-flex;align-items:center;justify-content:center;gap:7px;font:600 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#5E9B9A;background:transparent;border:1px dashed #3D5418;border-radius:8px;padding:11px;cursor:pointer;margin-top:2px" style-hover="background:#18230D"><i class="ti ti-plus"></i>Add another method / location</button></sc-if>
+            <sc-if value="{{open.canManage}}" hint-placeholder-val="{{ false }}"><button onClick="{{ open.onAddMethod }}" style="display:inline-flex;align-items:center;justify-content:center;gap:7px;font:600 10px/1 'Oswald';letter-spacing:.06em;text-transform:uppercase;color:#5E9B9A;background:transparent;border:1px dashed #3D5418;border-radius:8px;padding:11px;cursor:pointer;margin-top:2px" style-hover="background:#18230D"><i class="ti ti-plus"></i>Add another decoration / location</button></sc-if>
           </div>
         </div>
 
@@ -471,7 +471,7 @@ window.__resources = Object.assign({}, window.__resources, {
                 </div>
               </div>
             </sc-for>
-            <sc-if value="{{open.runsEmpty}}" hint-placeholder-val="{{ true }}"><div style="font:400 11px/1.4 'Archivo';color:var(--text-faint);padding:2px">No production runs created for this method yet.</div></sc-if>
+            <sc-if value="{{open.runsEmpty}}" hint-placeholder-val="{{ true }}"><div style="font:400 11px/1.4 'Archivo';color:var(--text-faint);padding:2px">No production runs created for this decoration yet.</div></sc-if>
           </div>
         </div>
 
@@ -565,13 +565,13 @@ window.__resources = Object.assign({}, window.__resources, {
     <div style="max-width:920px;margin:0 auto;padding:24px 26px 70px">
       <sc-if value="{{mgrShowInbox}}" hint-placeholder-val="{{ true }}">
         <div style="font:600 12px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:6px">Incoming orders</div>
-        <div style="font:400 12px/1.4 'Archivo';color:var(--text-muted);margin-bottom:18px">Orders in pre-production with no decoration yet — plus reprints, which arrive with their method already mirrored and only need press time booked.</div>
+        <div style="font:400 12px/1.4 'Archivo';color:var(--text-muted);margin-bottom:18px">Orders in pre-production with no decoration yet — plus reprints, which arrive with their decoration already mirrored and only need press time booked.</div>
         <div style="position:relative;max-width:380px;margin-bottom:18px">
           <i class="ti ti-search" style="position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--text-faint);font-size:15px"></i>
           <input value="{{mgrQ}}" onInput="{{ onMgrSearch }}" placeholder="Search order #, customer, account…" style="width:100%;background:#121215;border:1px solid #242428;border-radius:9px;padding:11px 13px 11px 36px;font-size:13px;color:#ECEAE4;outline:none">
         </div>
         <sc-if value="{{mgrHasMsg}}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex;align-items:center;gap:7px;font:600 11px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:#BBD382;background:#18230D;border:1px solid #3D5418;border-radius:9px;padding:10px 13px;margin-bottom:16px"><i class="ti ti-check"></i>{{mgrMsg}}</div></sc-if>
-        <sc-if value="{{inboxReprintsUnavailable}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:flex-start;gap:9px;border:1px solid #5E4214;background:#241C0A;border-radius:10px;padding:11px 13px;margin-bottom:12px;font:400 11px/1.5 'Archivo';color:#C7BCA4"><i class="ti ti-alert-triangle" style="color:var(--warn);font-size:15px;flex-shrink:0;margin-top:1px"></i><div>Orders needing a method are listed below, but <strong style="color:var(--text-primary)">reprints could not be checked</strong> — if one is waiting for press time it will not appear here until this clears.</div></div></sc-if>
+        <sc-if value="{{inboxReprintsUnavailable}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:flex-start;gap:9px;border:1px solid #5E4214;background:#241C0A;border-radius:10px;padding:11px 13px;margin-bottom:12px;font:400 11px/1.5 'Archivo';color:#C7BCA4"><i class="ti ti-alert-triangle" style="color:var(--warn);font-size:15px;flex-shrink:0;margin-top:1px"></i><div>Orders needing a decoration are listed below, but <strong style="color:var(--text-primary)">reprints could not be checked</strong> — if one is waiting for press time it will not appear here until this clears.</div></div></sc-if>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
           <sc-for list="{{inbox}}" as="o" hint-placeholder-count="3">
             <div style="display:flex;background:{{o.cardBg}};border:1px solid {{o.cardBorder}};border-radius:12px;overflow:hidden">
@@ -584,7 +584,7 @@ window.__resources = Object.assign({}, window.__resources, {
                                 <sc-if value="{{o.isReprint}}" hint-placeholder-val="{{ false }}">
                   <div style="display:flex;align-items:flex-start;gap:7px;background:#241C0A;border:1px solid #5E4214;border-radius:9px;padding:8px 10px">
                     <i class="ti ti-refresh" style="color:var(--warn);font-size:14px;flex-shrink:0;margin-top:1px"></i>
-                    <div style="font:400 10px/1.45 'Archivo';color:#C7BCA4">Reprint — its method is already set up (<span style="color:var(--text-primary)">{{o.reprintMethodLabel}}</span>). It needs press time booked, not a new method.</div>
+                    <div style="font:400 10px/1.45 'Archivo';color:#C7BCA4">Reprint — its decoration is already set up (<span style="color:var(--text-primary)">{{o.reprintMethodLabel}}</span>). It needs press time booked, not a new decoration.</div>
                   </div>
                 </sc-if>
 <button onClick="{{ o.onPick }}" style="margin-top:2px;width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;font:700 11px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#fff;background:#C6372B;border:none;border-radius:9px;padding:12px;cursor:pointer" style-hover="filter:brightness(1.1)"><i class="ti {{o.pickIcon}}" style="font-size:14px"></i>{{o.pickLabel}}</button>
@@ -625,7 +625,7 @@ window.__resources = Object.assign({}, window.__resources, {
           </div>
           <div>
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:9px">
-              <span style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary)">Print Method</span>
+              <span style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary)">Decoration</span>
               <sc-if value="{{methodSuggested}}" hint-placeholder-val="{{ true }}"><span style="font:600 9px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#C9923A;border:1px solid #5E4214;background:#241B0B;border-radius:3px;padding:3px 7px">{{methodSuggestedFrom}}</span></sc-if>
             </div>
             <sc-if value="{{methodMissed}}" hint-placeholder-val="{{ false }}"><div style="font:400 10px/1.5 'Archivo';color:var(--text-muted);margin:-3px 0 9px">{{methodMissNote}}</div></sc-if>
@@ -638,7 +638,7 @@ window.__resources = Object.assign({}, window.__resources, {
 
           <div>
             <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:11px">Placements</div>
-            <div style="font:400 11px/1.4 'Archivo';color:var(--text-muted);margin-bottom:11px">Every location this method prints — pick as many as apply (e.g. front + back for one screen print plan). A genuinely different print method (like a heat-press tag) still gets its own plan — use "Add another method" from the order's drawer for that.</div>
+            <div style="font:400 11px/1.4 'Archivo';color:var(--text-muted);margin-bottom:11px">Every location this decoration prints — pick as many as apply (e.g. front + back for one screen print plan). A genuinely different decoration (like a heat-press tag) still gets its own plan — use "Add another decoration" from the order's drawer for that.</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <sc-for list="{{formPlacementOptions}}" as="p" hint-placeholder-count="4">
                 <button onClick="{{ p.onPick }}" style="font:600 12px/1 'Oswald';letter-spacing:.04em;color:{{p.color}};background:{{p.bg}};border:1px solid {{p.border}};border-radius:9px;padding:11px 15px;cursor:pointer">{{p.label}}</button>
@@ -665,7 +665,7 @@ window.__resources = Object.assign({}, window.__resources, {
           </div>
 
           <div>
-            <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:11px">Method Status</div>
+            <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:11px">Decoration Status</div>
             <select value="{{formStatus}}" onChange="{{ onStatus }}" style="width:100%;max-width:280px;background:#121215;border:1px solid #242428;border-radius:9px;padding:11px 13px;font-size:13px;color:#ECEAE4;outline:none">
               <sc-for list="{{statusOptions}}" as="s" hint-placeholder-count="7"><option value="{{s.value}}">{{s.label}}</option></sc-for>
             </select>
@@ -691,7 +691,7 @@ window.__resources = Object.assign({}, window.__resources, {
                   <button onClick="{{ it.onRemove }}" style="margin-left:auto;width:32px;height:32px;border-radius:7px;background:#16161a;border:1px solid #2a2a2f;color:var(--text-tertiary);cursor:pointer;font-size:14px" style-hover="color:#E8A89F;border-color:#7A241C"><i class="ti ti-x"></i></button>
                 </div>
               </sc-for>
-              <sc-if value="{{itemsEmpty}}" hint-placeholder-val="{{ true }}"><div style="font:400 11px/1.4 'Archivo';color:var(--text-faint);padding:2px">No items yet — add the screens, inks, threads, digitization or transfers this method needs (optional).</div></sc-if>
+              <sc-if value="{{itemsEmpty}}" hint-placeholder-val="{{ true }}"><div style="font:400 11px/1.4 'Archivo';color:var(--text-faint);padding:2px">No items yet — add the screens, inks, threads, digitization or transfers this decoration needs (optional).</div></sc-if>
             </div>
           </div>
 
@@ -706,7 +706,7 @@ window.__resources = Object.assign({}, window.__resources, {
             </sc-if>
           </div>
           <sc-if value="{{mgrCanSaveNew}}" hint-placeholder-val="{{ true }}">
-            <div style="font:400 11px/1.5 'Archivo';color:var(--text-faint);margin-top:-12px">Save and New creates this method and clears the form for the next one on the same order — print specs and special notes carry over.</div>
+            <div style="font:400 11px/1.5 'Archivo';color:var(--text-faint);margin-top:-12px">Save and New creates this decoration and clears the form for the next one on the same order — print specs and special notes carry over.</div>
           </sc-if>
         </div>
       </sc-if>
@@ -744,7 +744,7 @@ window.__resources = Object.assign({}, window.__resources, {
               <sc-if value="{{createdPanel.methodsLoading}}" hint-placeholder-val="{{ false }}"><span style="font:400 11px/1 'Archivo';color:var(--text-faint)">Loading…</span></sc-if>
             </div>
             <sc-if value="{{createdPanel.isMultiMethod}}" hint-placeholder-val="{{ false }}">
-              <div style="font:400 11px/1.5 'Archivo';color:var(--text-faint);margin:-4px 0 13px">This order is printed more than one way. Every method is listed below — book runs for all of them here, no need to exit to the board and reopen each one.</div>
+              <div style="font:400 11px/1.5 'Archivo';color:var(--text-faint);margin:-4px 0 13px">This order is printed more than one way. Every decoration is listed below — book runs for all of them here, no need to exit to the board and reopen each one.</div>
             </sc-if>
             <div style="display:flex;flex-direction:column;gap:13px">
               <sc-for list="{{createdPanel.methodsView}}" as="m" hint-placeholder-count="1">
@@ -755,7 +755,7 @@ window.__resources = Object.assign({}, window.__resources, {
                     <sc-if value="{{m.hasStatus}}" hint-placeholder-val="{{ false }}"><span style="margin-left:auto;font:600 8px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:var(--text-tertiary);background:#141417;border:1px solid #242428;border-radius:6px;padding:4px 7px">{{m.status}}</span></sc-if>
                   </div>
                   <sc-if value="{{m.runsEmpty}}" hint-placeholder-val="{{ true }}">
-                    <div style="border:1px dashed #2a2a2f;border-radius:9px;padding:15px 13px;text-align:center;font:400 11px/1.5 'Archivo';color:var(--text-faint)">No runs on this method yet. Create one below — it goes straight onto the shop calendar and will appear here.</div>
+                    <div style="border:1px dashed #2a2a2f;border-radius:9px;padding:15px 13px;text-align:center;font:400 11px/1.5 'Archivo';color:var(--text-faint)">No runs on this decoration yet. Create one below — it goes straight onto the shop calendar and will appear here.</div>
                   </sc-if>
                   <sc-if value="{{m.hasRuns}}" hint-placeholder-val="{{ false }}">
                     <div style="display:flex;flex-direction:column;gap:9px">
@@ -782,7 +782,7 @@ window.__resources = Object.assign({}, window.__resources, {
           </div>
           <sc-if value="{{createdPanel.canAddAnotherMethod}}" hint-placeholder-val="{{ true }}">
             <button onClick="{{ onCreateAnotherMethod }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:9px;font:700 13px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:#ECEAE4;background:transparent;border:1px solid #3a3a40;border-radius:11px;padding:16px;cursor:pointer;margin-top:-12px" style-hover="border-color:#C6372B;color:#C6372B"><i class="ti ti-layers-plus"></i>Create Another Method</button>
-            <div style="font:400 11px/1.5 'Archivo';color:var(--text-faint);margin-top:-14px">For an order printed more than one way — screen print on the front, embroidery on the back. Specs and notes carry over; the runs above stay on this method.</div>
+            <div style="font:400 11px/1.5 'Archivo';color:var(--text-faint);margin-top:-14px">For an order printed more than one way — screen print on the front, embroidery on the back. Specs and notes carry over; the runs above stay on this decoration.</div>
           </sc-if>
           <button onClick="{{ onExitToBoard }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:9px;font:700 13px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:var(--text-secondary);background:transparent;border:1px solid #2a2a2f;border-radius:11px;padding:16px;cursor:pointer;margin-top:-12px" style-hover="border-color:#5E9B9A;color:#5E9B9A"><i class="ti ti-arrow-left"></i>Exit to Pre-Production</button>
           <div style="font:400 11px/1.5 'Archivo';color:var(--text-faint);margin-top:-14px">Done with this order — back to the pre-production board. Everything above is already saved.</div>
@@ -850,7 +850,7 @@ window.__resources = Object.assign({}, window.__resources, {
         </sc-if>
 
         <div>
-          <div style="font:600 11px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:8px">Print Method</div>
+          <div style="font:600 11px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:8px">Decoration</div>
           <div style="font:600 14px/1.3 'Archivo';color:#ECEAE4;background:#121215;border:1px solid #232327;border-radius:9px;padding:11px 13px">{{runTargetLabel}}</div>
         </div>
 
@@ -887,7 +887,7 @@ window.__resources = Object.assign({}, window.__resources, {
               <option value="">— Not set —</option>
               <sc-for list="{{runLocationOptions}}" as="loc" hint-placeholder-count="3"><option value="{{loc}}">{{loc}}</option></sc-for>
             </select>
-            <div style="font:400 11px/1.5 'Archivo';letter-spacing:.02em;color:var(--text-faint);margin-top:7px;max-width:280px">One run prints one location — front and back are separate passes. Choices come from this method's placements.</div>
+            <div style="font:400 11px/1.5 'Archivo';letter-spacing:.02em;color:var(--text-faint);margin-top:7px;max-width:280px">One run prints one location — front and back are separate passes. Choices come from this decoration's placements.</div>
           </div>
         </sc-if>
 
@@ -1835,8 +1835,8 @@ class Component extends DCLogic {
      board drawer's "Add another method". */
   async submitMethod(mode){
     const st=this.state, f=st.form; if(!f) return; const oid=st.mgrId;
-    if(!f.method){ this.setState({mgrErr:'Pick a print method'}); return; }
-    if(!f.placements || !f.placements.length){ this.setState({mgrErr:'Pick at least one placement (where this method prints)'}); return; }
+    if(!f.method){ this.setState({mgrErr:'Pick a decoration'}); return; }
+    if(!f.placements || !f.placements.length){ this.setState({mgrErr:'Pick at least one placement (where this decoration prints)'}); return; }
     if(f.planMode==='existing' && !f.planId){ this.setState({mgrErr:'Pick an existing plan'}); return; }
     if(!this._api || this.state.connection!=='live'){ this.setState({mgrErr:'Not connected to Salesforce (demo mode) — deploy to create plans'}); return; }
     this.setState({submitting:true, mgrErr:''});
@@ -1915,7 +1915,7 @@ class Component extends DCLogic {
           mgrMultiMethod: multiMethod,
           form:Object.assign(this.defaultForm(),{ specs:f.specs, notes:f.notes }),
           planResults:[], mgrErr:'',
-          mgrMsg:methodLabel+' created. Add the next method for this order.',
+          mgrMsg:methodLabel+' created. Add the next decoration for this order.',
           createdPanel:null, runModalOpen:false,
         }));
         this.load();
@@ -2246,7 +2246,7 @@ class Component extends DCLogic {
         // proposalUsedId clears with the form. A second run under the same
         // method is a different run, and silently re-stamping the same
         // suggestion for it would make the accept trail lie.
-        this.setState({runSubmitting:false, runForm:this.defaultRunForm(), runPressResults:[], runErr:'', runMsg:'Run created and added to the shop calendar — add another for '+(rt.methodLabel||'this method')+', or close this window when done.', proposalUsedId:null});
+        this.setState({runSubmitting:false, runForm:this.defaultRunForm(), runPressResults:[], runErr:'', runMsg:'Run created and added to the shop calendar — add another for '+(rt.methodLabel||'this decoration')+', or close this window when done.', proposalUsedId:null});
         this.loadProposals(cp.orderId);
       }
     }catch(e){
@@ -2336,11 +2336,11 @@ class Component extends DCLogic {
         pickLabel: r.IsReprint ? 'Schedule Production Run' : 'Route This Order',
         pickIcon: r.IsReprint ? 'ti-calendar-plus' : 'ti-arrow-right',
         reprintMethodLabel: reprintMethod
-          ? (reprintMethod.Type__c || 'Method') + (reprintMethod.Placements && reprintMethod.Placements.length
+          ? (reprintMethod.Type__c || 'Decoration') + (reprintMethod.Placements && reprintMethod.Placements.length
               ? ' – ' + reprintMethod.Placements.join(' + ') : '')
           : '',
         onPick: (r.IsReprint && reprintMethod)
-          ? (()=>this.openRunModalForCard(reprintMethod.Id, id, (reprintMethod.Type__c||'Method')
+          ? (()=>this.openRunModalForCard(reprintMethod.Id, id, (reprintMethod.Type__c||'Decoration')
               + ((reprintMethod.Placements&&reprintMethod.Placements.length)?(' – '+reprintMethod.Placements.join(' + ')):''),
               (reprintMethod.Placements||[]).slice()))
           : (()=>this.pickInbox(id)) };
@@ -2459,7 +2459,7 @@ class Component extends DCLogic {
                    label:(r.Type__c||'Decoration')+(placements.length?(' – '+placements.join(' + ')):'') };
         })
       : [{ id:cpRaw.pmId, type:'', placements:(cpRaw.placements||[]).slice(), status:'',
-           label:cpRaw.methodLabel||'This method' }]);
+           label:cpRaw.methodLabel||'This decoration' }]);
     const cpMethodsView = cpMethodsBase.map(m=>{
       const meta=(api && api.METHOD_META && api.METHOD_META[m.type]) || { color:'var(--text-tertiary)' };
       const runs=runsViewFor(m.id);
@@ -2511,7 +2511,7 @@ class Component extends DCLogic {
          methods", which is never true here. */
       methodsView: cpMethodsView,
       isMultiMethod: cpMethodsView.length > 1,
-      methodsHeading: cpMethodsView.length > 1 ? 'Methods & Production Runs' : 'Production Runs',
+      methodsHeading: cpMethodsView.length > 1 ? 'Decorations & Production Runs' : 'Production Runs',
       methodsLoading: st.methodsLoadingFor === cpRaw.orderId,
     }) : { customer:'', num:'', qty:'', methodLabel:'', sizeCells:[], sizesEmpty:true, hasSizes:false, printSpecsDisplay:'', specialNotesDisplay:'', methodsView:[], isMultiMethod:false, methodsHeading:'Production Runs', methodsLoading:false };
     /* Spare garments on the method this panel's run belongs to. Same null rule
@@ -2555,8 +2555,8 @@ class Component extends DCLogic {
       methodMissed: !!(f && f.methodMiss),
       methodMissNote: (f && f.methodMiss)
         ? (f.methodMiss.reason === 'no-press-name'
-            ? 'No press on this order, so nothing to infer from — pick the method.'
-            : ('Press \u201C' + (f.methodMiss.from||'') + '\u201D doesn\u2019t say which method — pick one.'))
+            ? 'No press on this order, so nothing to infer from — pick the decoration.'
+            : ('Press \u201C' + (f.methodMiss.from||'') + '\u201D doesn\u2019t say which decoration — pick one.'))
         : '',
       mgrOrder, mgrSpecs:f?f.specs:'', onMgrSpecs:(e)=>this.setMgrSpecs(e.target.value), mgrNotes:f?f.notes:'', onMgrSpecial:(e)=>this.setMgrSpecial(e.target.value),
       formMethodOptions:methodOptions, formPlacementOptions:placementOptions, statusOptions, formStatus:f?f.status:'Pre-Production',
@@ -2789,7 +2789,7 @@ class Component extends DCLogic {
     const awaiting=active.filter(o=>!isReady(o)).length;
 
     const kpis=[
-      { label:'In Pre-Production', value:String(active.length), unit:'jobs', sub:'across three methods', accent:'#ECEAE4' },
+      { label:'In Pre-Production', value:String(active.length), unit:'jobs', sub:'across three decorations', accent:'#ECEAE4' },
       { label:'Garments Staged', value:String(staged), unit:'jobs', sub:'counted in & ready', accent:'#7FA644' },
       { label:'Awaiting Prep', value:String(awaiting), unit:'jobs', sub:'films · thread · transfers', accent:'#C9923A' },
       { label:'Ready to Send', value:String(ready), unit:'jobs', sub:'clear for production', accent:'#C6372B' },
