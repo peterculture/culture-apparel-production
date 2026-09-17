@@ -33,6 +33,7 @@
  */
 import { sfFetch, apiVersion, jsonError, runQuery } from "../_sf.js";
 import { requireCap } from "../_session.js";
+import { ALLOWED_TRANSFER_TYPE } from "../_placements.js";
 
 // Keep in sync with the same-named consts in production-methods/index.js --
 // this is the same restricted set of item types/picklists, just for adding
@@ -40,7 +41,7 @@ import { requireCap } from "../_session.js";
 // method+items chain at once.
 const ALLOWED_ITEM_TYPES   = new Set(["Screen", "Ink", "Thread", "Digitization", "Transfer"]);
 const ALLOWED_MESH          = new Set(["110", "125", "156", "180", "196", "230", "305"]);
-const ALLOWED_TRANSFER_TYPE = new Set(["Screen Transfer", "Digital Transfer", "Sublimation", "Vinyl"]);
+// Transfer types: ALLOWED_TRANSFER_TYPE in ../_placements.js (D25).
 const ITEM_STATUS_DEFAULT = "Not Started";
 
 // Everything the worker edit panel needs to display/edit.
