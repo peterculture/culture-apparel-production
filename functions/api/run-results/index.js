@@ -521,9 +521,17 @@ async function loadResults(env, runId) {
   }));
 }
 
-/** Does the active org have the Run Result layer? One cheap probe. */
+/**
+ * Does the active org have a WORKING Run Result layer?
+ *
+ * Deliberately the same field list loadResults() uses, not `SELECT Id`. Found in dev2 while
+ * testing T6: hiding ONE Run Result field from the dashboard's profile made the GET fall back to
+ * the old four-box form (right) while `SELECT Id` still succeeded, so the legacy POST kept
+ * refusing typed numbers as "use the new screen" (wrong) -- the page offered boxes nothing would
+ * accept. The two decisions have to be made on the same question.
+ */
 async function resultsLayerExists(env) {
-  const res = await runQuery(env, `SELECT Id FROM ${RESULT_OBJECT} LIMIT 1`);
+  const res = await runQuery(env, `SELECT ${RESULT_FIELDS.join(", ")} FROM ${RESULT_OBJECT} LIMIT 1`);
   return res.ok;
 }
 
