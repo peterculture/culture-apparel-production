@@ -148,6 +148,7 @@ window.__resources = Object.assign({}, window.__resources, {
           </div>
           <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid #1b1b1e;padding-top:10px">
             <span style="font:500 10px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)">{{c.qtyLabel}}</span>
+            <sc-if value="{{c.hasGood}}" hint-placeholder-val="{{ false }}"><span style="font:600 11px/1 'Oswald';color:#BBD382">{{c.goodLabel}}</span></sc-if>
             <sc-if value="{{c.hasLosses}}" hint-placeholder-val="{{ false }}"><span style="font:600 11px/1 'Oswald';color:#E8A89F">{{c.lossLabel}}</span></sc-if>
             <sc-if value="{{c.isClean}}" hint-placeholder-val="{{ false }}"><span style="font:600 11px/1 'Oswald';color:#7FA644">Clean</span></sc-if>
           </div>
@@ -234,25 +235,63 @@ window.__resources = Object.assign({}, window.__resources, {
           </div>
         </sc-if>
 
+        <sc-if value="{{lockedErr}}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;gap:9px;font:600 11px/1.4 'Oswald';letter-spacing:.03em;color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:11px;padding:14px 15px;margin-bottom:14px"><i class="ti ti-alert-triangle"></i>{{err}}</div>
+        </sc-if>
+        <!-- S6: counts are final -->
+        <sc-if value="{{locked}}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;gap:11px;align-items:center;flex-wrap:wrap;background:#18230D;border:1px solid #3D5418;border-radius:13px;padding:14px 16px;margin-bottom:14px">
+            <i class="ti ti-lock" style="color:#BBD382;font-size:17px;flex-shrink:0"></i>
+            <div style="flex:1;min-width:200px;font:400 12px/1.6 'Archivo';color:#C7D9A4">Counts are final (submitted by {{d.recordedBySafe}}). A manager can reopen the run to fix a count.</div>
+            <sc-if value="{{showReopen}}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ onReopen }}" style="min-height:44px;padding:0 16px;font:600 10px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#BBD382;background:transparent;border:1px solid #3D5418;border-radius:9px;cursor:pointer">{{reopenLabel}}</button>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <!-- S6: progress so far -->
+        <sc-if value="{{showProgress}}" hint-placeholder-val="{{ false }}">
+          <div style="background:#0D0D0F;border:1px solid #1f1f23;border-radius:13px;padding:14px 16px;margin-bottom:12px">
+            <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+              <span style="font:600 9px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)">Progress</span>
+              <span style="font:700 18px/1 'Oswald';color:#BBD382">{{progressLabel}}</span>
+              <span style="margin-left:auto;font:400 11px/1 'Archivo';color:var(--text-muted)">{{progressSub}}</span>
+            </div>
+            <div style="height:8px;background:#16161a;border-radius:6px;margin-top:10px;overflow:hidden"><div style="height:100%;width:{{progressPct}};background:#7FA644"></div></div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{resultsMode}}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;gap:11px;align-items:flex-start;background:#12100B;border:1px solid #3A2E12;border-radius:13px;padding:14px 16px;margin-bottom:14px">
+            <i class="ti ti-info-circle" style="color:#C9923A;font-size:17px;flex-shrink:0;margin-top:1px"></i>
+            <div style="font:400 12px/1.6 'Archivo';color:#C7BCA4">Log a count <strong style="color:#ECEAE4">each time you count</strong> — good pieces and any problems. Every count is kept with its time. <strong style="color:#ECEAE4">Incomplete</strong> means garments that never made it onto the press; those get rescheduled, not reordered.</div>
+          </div>
+        </sc-if>
+        <sc-if value="{{legacyMode}}" hint-placeholder-val="{{ true }}">
         <div style="display:flex;gap:11px;align-items:flex-start;background:#12100B;border:1px solid #3A2E12;border-radius:13px;padding:14px 16px;margin-bottom:14px">
           <i class="ti ti-info-circle" style="color:#C9923A;font-size:17px;flex-shrink:0;margin-top:1px"></i>
           <div style="font:400 12px/1.6 'Archivo';color:#C7BCA4">Record <strong style="color:#ECEAE4">only what went wrong</strong>. Leave a row blank if it came off the press fine — that's normal and expected. <strong style="color:#ECEAE4">Incomplete</strong> means garments that never made it onto the press; those get rescheduled, not reordered.</div>
         </div>
+        </sc-if>
 
+        <sc-if value="{{notLocked}}" hint-placeholder-val="{{ true }}">
         <div style="background:#0D0D0F;border:1px solid #1f1f23;border-radius:16px;overflow:hidden">
-          <div style="display:grid;grid-template-columns:1.25fr 1fr 1fr 1fr;gap:10px;padding:13px 16px;border-bottom:1px solid #1b1b1e;background:#0A0A0C">
+          <div style="display:grid;grid-template-columns:{{gridCols}};gap:10px;padding:13px 16px;border-bottom:1px solid #1b1b1e;background:#0A0A0C">
             <div style="font:600 9px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)">Garment</div>
+            <sc-if value="{{resultsMode}}" hint-placeholder-val="{{ false }}"><div style="font:600 9px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#BBD382;text-align:center">Good</div></sc-if>
             <div style="font:600 9px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#E8A89F;text-align:center">Misprint</div>
             <div style="font:600 9px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#E8A89F;text-align:center">Damaged</div>
             <div style="font:600 9px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#E0B23C;text-align:center">Incomplete</div>
           </div>
           <sc-for list="{{rows}}" as="r" hint-placeholder-count="3">
-            <div style="display:grid;grid-template-columns:1.25fr 1fr 1fr 1fr;gap:10px;padding:12px 16px;border-bottom:1px solid #141417;align-items:center;background:{{r.rowBg}}">
+            <div style="display:grid;grid-template-columns:{{gridCols}};gap:10px;padding:12px 16px;border-bottom:1px solid #141417;align-items:center;background:{{r.rowBg}}">
               <div style="min-width:0">
                 <div style="font:600 14px/1.2 'Oswald';color:#ECEAE4">{{r.label}}</div>
                 <div style="font:400 10px/1 'Archivo';color:var(--text-muted);margin-top:4px">Planned {{r.plannedLabel}}</div>
+                <sc-if value="{{r.hasSaved}}" hint-placeholder-val="{{ false }}"><div style="font:400 10px/1.35 'Archivo';color:#BBD382;margin-top:4px">{{r.savedLabel}}</div></sc-if>
                 <sc-if value="{{r.over}}" hint-placeholder-val="{{ false }}"><div style="font:600 10px/1.3 'Archivo';color:#E8A89F;margin-top:5px">{{r.overMsg}}</div></sc-if>
               </div>
+              <sc-if value="{{resultsMode}}" hint-placeholder-val="{{ false }}"><input class="ca-count-input" type="number" min="0" inputmode="numeric" value="{{r.good}}" onInput="{{ r.onGood }}" placeholder="0"></sc-if>
               <input class="ca-count-input" type="number" min="0" inputmode="numeric" value="{{r.misprint}}" onInput="{{ r.onMisprint }}" placeholder="0">
               <input class="ca-count-input" type="number" min="0" inputmode="numeric" value="{{r.damaged}}" onInput="{{ r.onDamaged }}" placeholder="0">
               <input class="ca-count-input" type="number" min="0" inputmode="numeric" value="{{r.incomplete}}" onInput="{{ r.onIncomplete }}" placeholder="0">
@@ -267,8 +306,33 @@ window.__resources = Object.assign({}, window.__resources, {
           <sc-if value="{{rowsEmpty}}" hint-placeholder-val="{{ false }}">
             <div style="padding:30px 20px;text-align:center;font:400 12px/1.6 'Archivo';color:var(--text-tertiary)">This run has no rows to count — it was created before the app started generating them.<br><strong style="color:#ECEAE4">Submit it anyway.</strong> That marks it counted so the rest of the order can finish; nothing is recorded against it.</div>
           </sc-if>
+          <sc-if value="{{showAddBar}}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 14px;border-top:1px solid #1b1b1e;background:#0A0A0C">
+              <span style="flex:1;min-width:180px;font:400 11px/1.4 'Archivo';color:var(--text-muted)">{{addHint}}</span>
+              <button onClick="{{ onAdd }}" disabled="{{addDisabled}}" style="min-height:48px;padding:0 20px;display:inline-flex;align-items:center;gap:8px;font:700 11px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#08080A;background:#C9923A;border:none;border-radius:10px;cursor:pointer"><i class="ti ti-plus"></i>{{addLabel}}</button>
+            </div>
+          </sc-if>
         </div>
+        </sc-if>
 
+        <!-- S6: every count, newest first. Plain divs (no <table>, see smoke). -->
+        <sc-if value="{{resultsMode}}" hint-placeholder-val="{{ false }}">
+          <div style="background:#0D0D0F;border:1px solid #1f1f23;border-radius:16px;padding:14px 16px;margin-top:14px">
+            <div style="font:600 9px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Counts logged</div>
+            <sc-if value="{{logEmpty}}" hint-placeholder-val="{{ false }}"><div style="font:400 12px/1.5 'Archivo';color:var(--text-tertiary)">Nothing logged on this run yet.</div></sc-if>
+            <sc-for list="{{logRows}}" as="x" hint-placeholder-count="2">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--border-card)">
+                <span style="font:600 11px/1.3 'Oswald';color:var(--text-primary);min-width:92px">{{x.line}}</span>
+                <span style="font:400 12px/1.4 'Archivo';color:var(--text-secondary)">{{x.what}}</span>
+                <sc-if value="{{x.hasNote}}" hint-placeholder-val="{{ false }}"><span style="font:400 11px/1.4 'Archivo';color:var(--text-muted)">“{{x.note}}”</span></sc-if>
+                <span style="margin-left:auto;font:400 10px/1.3 'Archivo';color:var(--text-muted)">{{x.when}}<sc-if value="{{x.hasWho}}" hint-placeholder-val="{{ true }}"> · {{x.who}}</sc-if></span>
+                <sc-if value="{{x.canRemove}}" hint-placeholder-val="{{ false }}"><button onClick="{{ x.onRemove }}" title="Remove this count" style="width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-tertiary);background:transparent;border:1px solid #232327;border-radius:8px;cursor:pointer"><i class="ti ti-trash"></i></button></sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{notLocked}}" hint-placeholder-val="{{ true }}">
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
           <sc-if value="{{showImplied}}" hint-placeholder-val="{{ true }}">
             <div style="flex:1;min-width:150px;background:#0D0D0F;border:1px solid #1f1f23;border-left:3px solid #3D5418;border-radius:12px;padding:13px 15px">
@@ -276,6 +340,12 @@ window.__resources = Object.assign({}, window.__resources, {
               <div style="font:700 21px/1 'Oswald';color:{{impliedColor}};margin-top:7px">{{impliedProduced}}</div>
               <div style="font:400 9px/1.4 'Archivo';color:var(--text-faint);margin-top:6px">{{impliedSub}} · not saved</div>
             </div>
+          </sc-if>
+          <sc-if value="{{resultsMode}}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1;min-width:120px;background:#0D0D0F;border:1px solid #1f1f23;border-left:3px solid #3D5418;border-radius:12px;padding:13px 15px">
+            <div style="font:600 9px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)">Good · typed</div>
+            <div style="font:700 21px/1 'Oswald';color:{{tallyGoodColor}};margin-top:7px">{{tallyGood}}</div>
+          </div>
           </sc-if>
           <div style="flex:1;min-width:120px;background:#0D0D0F;border:1px solid #1f1f23;border-radius:12px;padding:13px 15px">
             <div style="font:600 9px/1 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)">Misprint</div>
@@ -297,6 +367,7 @@ window.__resources = Object.assign({}, window.__resources, {
 
         <button onClick="{{ onSubmit }}" disabled="{{submitDisabled}}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:9px;font:700 13px/1 'Oswald';letter-spacing:.09em;text-transform:uppercase;color:{{submitFg}};background:{{submitBg}};border:none;border-radius:13px;padding:20px;cursor:pointer;margin-top:14px" style-hover="filter:brightness(1.1)"><i class="ti {{submitIcon}}" style="font-size:16px"></i>{{submitLabel}}</button>
         <div style="font:400 11px/1.5 'Archivo';color:var(--text-muted);text-align:center;margin-top:10px">{{submitHint}}</div>
+        </sc-if>
       </sc-if>
 
       <!-- ── after submit ── -->
@@ -428,6 +499,10 @@ class Component extends DCLogic {
       // comes back to the same run rather than the top of the list.
       runId: (_api && _api.readParam) ? (new URLSearchParams(location.search).get('runId')||null) : null,
       detail:null, rows:[], runLoading:false,
+      /* S6 (D17/D28). resultsMode = the org has Run_Result__c: each count is
+         logged as its own row and Submit only marks the counts final. False =
+         the old four-box form (production until S8). */
+      resultsMode:false, results:[], busy:'',
       /* Sizes this run is not printing (Planned_Qty__c === 0) are hidden from
          the counting grid by default. See zeroRows in renderVals(). */
       showAllSizes:false,
@@ -480,24 +555,99 @@ class Component extends DCLogic {
       const api=window.CAApi; if(!api) throw new Error('CAApi not loaded');
       const d = await api.getRunResults(id);
       if(d && d.available === false){ this.setState({ available:false, notAvailableDetail:d.detail||'', runLoading:false }); return; }
-      // Existing values seed the inputs as STRINGS. Empty string, not 0 --
-      // "nothing wrong here" and "exactly zero misprints" are the same fact,
-      // and pre-filling zeros would make every row look counted before anyone
-      // touched it, which is precisely the ambiguity this model is built to
-      // avoid everywhere else.
-      const rows=(d.lines||[]).map(l=>({
-        id:l.id, name:l.name, size:l.size, color:l.color, plannedQty:l.plannedQty,
-        misprint: l.misprintQty==null?'':String(l.misprintQty),
-        damaged:   l.damagedQty==null?'':String(l.damagedQty),
-        incomplete:l.incompleteQty==null?'':String(l.incompleteQty),
-      }));
-      this.setState({ detail:d.run||null, rows, runLoading:false });
+      this.applyRun(d);
     }catch(e){
       this.setState({ runLoading:false, err:'Could not load this run — check the connection and try again.' });
     }
   }
 
-  back(){ this.setState({ runId:null, detail:null, rows:[], err:'', result:null }, ()=>{ this.syncUrl(); this.load(); }); }
+  /* One run payload -> state. Used on open and after every S6 write, which
+     all answer with the refreshed run.
+
+     LEGACY FORM: existing values seed the inputs as STRINGS. Empty string, not
+     0 -- "nothing wrong here" and "exactly zero misprints" are the same fact,
+     and pre-filling zeros would make every row look counted before anyone
+     touched it.
+
+     RESULTS MODE: the inputs are the NEXT count and always start empty; what
+     is already logged is shown beside them (saved*), never in them. */
+  applyRun(d){
+    const resultsMode = !!(d && d.resultsAvailable);
+    const str=(v)=> v==null?'':String(v);
+    const rows=((d&&d.lines)||[]).map(l=>({
+      id:l.id, name:l.name, size:l.size, color:l.color, plannedQty:l.plannedQty,
+      good:'',
+      misprint: resultsMode?'':str(l.misprintQty),
+      damaged:   resultsMode?'':str(l.damagedQty),
+      incomplete:resultsMode?'':str(l.incompleteQty),
+      savedGood:l.goodQty, savedMisprint:l.misprintQty, savedDamaged:l.damagedQty, savedIncomplete:l.incompleteQty,
+    }));
+    this.setState({ detail:(d&&d.run)||null, rows, runLoading:false, resultsMode, results:(d&&d.results)||[], busy:'' });
+  }
+
+  /* Typed rows -> "add" payload. Only rows with at least one number. */
+  pendingCounts(){
+    const has=(v)=> v!=null && String(v)!=='';
+    return this.state.rows
+      .filter(r=>has(r.good)||has(r.misprint)||has(r.damaged)||has(r.incomplete))
+      .map(r=>({ lineId:r.id, goodQty:r.good, misprintQty:r.misprint, damagedQty:r.damaged, incompleteQty:r.incomplete }));
+  }
+
+  writeErr(prefix, e){
+    const a=window.CAApi; const det=(a&&a.errText)?a.errText(e):'';
+    return prefix+(det?(' — '+det):'')+'.';
+  }
+
+  /* S6: log what is typed as Run Results, then clear the boxes. */
+  async addCounts(){
+    if(this.state.busy||this.state.submitting) return false;
+    if(this.state.connection!=='live'){ this.setState({err:'Not connected to Salesforce (demo mode) — counts would not be saved.'}); return false; }
+    const counts=this.pendingCounts();
+    if(!counts.length){ this.setState({err:'Type at least one number first.'}); return false; }
+    this.setState({busy:'add', err:''});
+    try{
+      const d=await window.CAApi.addRunCounts(this.state.runId, counts);
+      this.applyRun(d);
+      this.bg(()=>this.load());
+      return true;
+    }catch(e){
+      this.setState({busy:'', err:this.writeErr('Could not save that count', e)+' The numbers are still in the boxes; try again.'});
+      return false;
+    }
+  }
+
+  async removeCount(resultId){
+    if(this.state.busy) return;
+    if(!window.confirm('Remove this count? The totals for that size go down by what it recorded.')) return;
+    this.setState({busy:'remove', err:''});
+    try{
+      const d=await window.CAApi.removeRunCount(this.state.runId, resultId);
+      this.applyRun(d);
+      this.bg(()=>this.load());
+    }catch(e){
+      this.setState({busy:'', err:this.writeErr('Could not remove that count', e)});
+    }
+  }
+
+  /* D28: a submitted run's counts are final; only a manager can reopen them. */
+  async reopenRun(){
+    const api=window.CAApi;
+    if(this.state.busy) return;
+    if(api && api.confirmManager && !(await api.confirmManager('Reopening counted results'))) return;
+    this.setState({busy:'reopen', err:''});
+    try{
+      const d=await api.reopenRunCounts(this.state.runId);
+      this.applyRun(d);
+      if(d && d.reprintExists){
+        this.setState({err:'Reopened. Note: a reprint order was already built from the earlier counts, and changing them here does not change that order.'});
+      }
+      this.bg(()=>this.load());
+    }catch(e){
+      this.setState({busy:'', err:this.writeErr('Could not reopen this run', e)});
+    }
+  }
+
+  back(){ this.setState({ runId:null, detail:null, rows:[], err:'', result:null, results:[], busy:'' }, ()=>{ this.syncUrl(); this.load(); }); }
 
   setRow(id, field, raw){
     // Keep it a string in state so the field can be emptied. Strip anything
@@ -511,8 +661,9 @@ class Component extends DCLogic {
   totals(){
     const n=(v)=>Number(v)||0;
     return this.state.rows.reduce((a,r)=>({
+      good:a.good+n(r.good),
       misprint:a.misprint+n(r.misprint), damaged:a.damaged+n(r.damaged), incomplete:a.incomplete+n(r.incomplete),
-    }),{misprint:0,damaged:0,incomplete:0});
+    }),{good:0,misprint:0,damaged:0,incomplete:0});
   }
 
   /* The make-up deep link, in ONE place (B5). The after-submit panel and the
@@ -550,9 +701,13 @@ class Component extends DCLogic {
     // Losses exceeding the plan is a typo far more often than it is real, and
     // it silently inflates the reprint. Warn, but do NOT block: a run really
     // can put more garments through the press than were planned.
+    const rm=this.state.resultsMode;
     const over = rows.filter(r=>{
       const p=Number(r.plannedQty); if(!p) return false;
-      return (Number(r.misprint)||0)+(Number(r.damaged)||0)+(Number(r.incomplete)||0) > p;
+      const typed=(Number(r.misprint)||0)+(Number(r.damaged)||0)+(Number(r.incomplete)||0);
+      // Results mode: what is already logged counts too, and so does good.
+      const saved = rm ? ((Number(r.savedGood)||0)+(Number(r.savedMisprint)||0)+(Number(r.savedDamaged)||0)+(Number(r.savedIncomplete)||0)+(Number(r.good)||0)) : 0;
+      return typed+saved > p;
     });
     if(over.length && !this._overAck){
       this._overAck = true;
@@ -563,8 +718,21 @@ class Component extends DCLogic {
     this.setState({submitting:true, err:''});
     try{
       const api=window.CAApi;
-      const payload = rows.map(r=>({ id:r.id, misprintQty:r.misprint, damagedQty:r.damaged, incompleteQty:r.incomplete }));
-      const res = await api.submitRunResults(this.state.runId, payload);
+      let res;
+      if(rm){
+        // Anything still in the boxes is logged first, so pressing Submit
+        // never throws typed numbers away.
+        if(this.pendingCounts().length){
+          this.setState({submitting:false});
+          const ok = await this.addCounts();
+          if(!ok) return;
+          this.setState({submitting:true});
+        }
+        res = await api.finalizeRunCounts(this.state.runId);
+      } else {
+        const payload = rows.map(r=>({ id:r.id, misprintQty:r.misprint, damagedQty:r.damaged, incompleteQty:r.incomplete }));
+        res = await api.submitRunResults(this.state.runId, payload);
+      }
       if(!res || res.ok===false) throw new Error((res&&res.error)||'submit_failed');
       this._overAck=false;
       /* setState BEFORE the navigation, deliberately. If the browser refuses to
@@ -718,6 +886,8 @@ class Component extends DCLogic {
           ? window.CAApi.runQtyHint(null, r.orderQty) : '',
         hasOrderQty: !!((window.CAApi && window.CAApi.runQtyHint)
           ? window.CAApi.runQtyHint(null, r.orderQty) : ''),
+        hasGood: r.totalGood!=null && Number(r.scheduledQty||0)>=0,
+        goodLabel: r.totalGood!=null ? (r.totalGood+' good') : '',
         hasLosses: counted && (loss>0||inc>0),
         lossLabel: [loss?loss+' ruined':null, inc?inc+' short':null].filter(Boolean).join(' · '),
         isClean: counted && loss===0 && inc===0,
@@ -888,12 +1058,25 @@ class Component extends DCLogic {
     const isZeroPlanned = (r)=> r.plannedQty!=null && r.plannedQty!=='' && Number(r.plannedQty)===0;
     const zeroRows = rowsSrc.filter(isZeroPlanned).length;
     const visibleSrc = st.showAllSizes ? rowsSrc : rowsSrc.filter(r=>!isZeroPlanned(r));
+    const rm=st.resultsMode;
+    const locked = rm && !!(d && d.resultStatus==='Submitted');
+    const nz=(v)=>Number(v)||0;
     const rows=visibleSrc.map(r=>{
       const planned=Number(r.plannedQty)||0;
-      const sum=(Number(r.misprint)||0)+(Number(r.damaged)||0)+(Number(r.incomplete)||0);
+      const savedAll = rm ? (nz(r.savedGood)+nz(r.savedMisprint)+nz(r.savedDamaged)+nz(r.savedIncomplete)) : 0;
+      const sum=(Number(r.misprint)||0)+(Number(r.damaged)||0)+(Number(r.incomplete)||0)+(rm?nz(r.good):0)+savedAll;
       const over=planned>0 && sum>planned;
       const bits=[txt(r.size), txt(r.color)].filter(Boolean);
+      const savedBits = [
+        r.savedGood!=null ? nz(r.savedGood)+' good' : null,
+        nz(r.savedMisprint) ? nz(r.savedMisprint)+' misprint' : null,
+        nz(r.savedDamaged) ? nz(r.savedDamaged)+' damaged' : null,
+        nz(r.savedIncomplete) ? nz(r.savedIncomplete)+' incomplete' : null,
+      ].filter(Boolean);
       return {
+        good:r.good, onGood:(e)=>this.setRow(r.id,'good',e.target.value),
+        hasSaved: rm && savedBits.length>0,
+        savedLabel: 'So far: '+savedBits.join(' · ')+(planned&&r.savedGood!=null?(' ('+Math.round(100*nz(r.savedGood)/planned)+'% of plan)'):''),
         label: bits.length?bits.join(' · '):txt(r.name),
         plannedLabel: r.plannedQty==null?'—':String(r.plannedQty),
         plannedRaw: planned,
@@ -901,12 +1084,34 @@ class Component extends DCLogic {
         onMisprint:(e)=>this.setRow(r.id,'misprint',e.target.value),
         onDamaged:(e)=>this.setRow(r.id,'damaged',e.target.value),
         onIncomplete:(e)=>this.setRow(r.id,'incomplete',e.target.value),
-        over, overMsg: over?(sum+' recorded against '+planned+' planned'):'',
+        over, overMsg: over?(sum+(rm?' counted in total against ':' recorded against ')+planned+' planned'):'',
         rowBg: over?'#160D0C':'transparent',
       };
     });
 
     const anything=t.misprint>0||t.damaged>0||t.incomplete>0;
+    const typedAny = anything || (rm && t.good>0);
+    /* S6: the run's logged totals, and the count log. */
+    const saved = rowsSrc.reduce((a,r)=>({ good:a.good+nz(r.savedGood), misprint:a.misprint+nz(r.savedMisprint),
+      damaged:a.damaged+nz(r.savedDamaged), incomplete:a.incomplete+nz(r.savedIncomplete) }),{good:0,misprint:0,damaged:0,incomplete:0});
+    const plannedAll = rowsSrc.reduce((a,r)=>a+nz(r.plannedQty),0);
+    const savedAnything = saved.good+saved.misprint+saved.damaged+saved.incomplete>0;
+    const lineLabel={}; rowsSrc.forEach(r=>{ lineLabel[r.id]=[txt(r.size), txt(r.color)].filter(Boolean).join(' · ')||txt(r.name); });
+    const fmtWhen=(iso)=>{ if(!iso) return ''; try{ const x=new Date(iso); return x.toLocaleDateString([],{month:'short',day:'numeric'})+' '+x.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}); }catch(_){ return ''; } };
+    const logRows = (st.results||[]).slice().reverse().map(x=>({
+      id:x.id,
+      when: fmtWhen(x.countedAt),
+      who: txt(x.countedBy)||'',
+      hasWho: !!x.countedBy,
+      line: lineLabel[x.lineId] || '—',
+      what: [x.goodQty!=null?(x.goodQty+' good'+(x.goodEstimated?' (estimated)':'')):null,
+             x.misprintQty!=null?x.misprintQty+' misprint':null,
+             x.damagedQty!=null?x.damagedQty+' damaged':null,
+             x.incompleteQty!=null?x.incompleteQty+' incomplete':null].filter(Boolean).join(' · ') || '—',
+      hasNote: !!x.note, note: txt(x.note),
+      canRemove: !locked && live,
+      onRemove: ()=>this.removeCount(x.id),
+    }));
 
     /* ── implied produced (D1, decided 2026-08-31) ────────────────────────
        planned - (incomplete + misprint + damaged), for the whole run.
@@ -947,8 +1152,8 @@ class Component extends DCLogic {
 
     const resVals = res ? {
       title: (res.totals && (res.totals.misprint||res.totals.damaged||res.totals.incomplete)) ? 'Counts recorded' : 'Clean run recorded',
-      summary: (res.totals && (res.totals.misprint||res.totals.damaged||res.totals.incomplete))
-        ? ([res.totals.misprint?res.totals.misprint+' misprinted':null, res.totals.damaged?res.totals.damaged+' damaged':null, res.totals.incomplete?res.totals.incomplete+' incomplete':null].filter(Boolean).join(' · '))
+      summary: (res.totals && (res.totals.misprint||res.totals.damaged||res.totals.incomplete||res.totals.good))
+        ? ([res.totals.good?res.totals.good+' good':null, res.totals.misprint?res.totals.misprint+' misprinted':null, res.totals.damaged?res.totals.damaged+' damaged':null, res.totals.incomplete?res.totals.incomplete+' incomplete':null].filter(Boolean).join(' · '))
         : 'Nothing went wrong on this run. It is now marked as counted.',
       hasReprint: reworkCreated,
       reprintMsg: reworkCreated ? ('A reprint order was created automatically for '+(rework.totalQty||0)+' replacement garment(s), with the same print settings, and is now sitting in Pre-Production.') : '',
@@ -1044,10 +1249,29 @@ class Component extends DCLogic {
         statusColor: d&&d.resultStatus==='Submitted'?'#BBD382':ACCENT,
         statusBg: d&&d.resultStatus==='Submitted'?'#18230D':'#241C0A',
         statusBorder: d&&d.resultStatus==='Submitted'?'#3D5418':'#5E4A14',
-        wasCounted: !!(d&&d.resultStatus==='Submitted'),
+        wasCounted: !rm && !!(d&&d.resultStatus==='Submitted'),
         recordedBy: d?(txt(d.recordedBy)||'someone'):'',
+        recordedBySafe: d?(txt(d.recordedBy)||'someone'):'',
         recordedAt: d&&d.recordedAt? new Date(d.recordedAt).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'',
       },
+      /* ── S6 ── */
+      resultsMode: rm, legacyMode: !rm,
+      gridCols: rm ? '1.25fr 1fr 1fr 1fr 1fr' : '1.25fr 1fr 1fr 1fr',
+      locked, notLocked: !locked,
+      showAddBar: rm && !locked,
+      addDisabled: !!st.busy || st.submitting,
+      addLabel: st.busy==='add' ? 'Saving…' : 'Add Count',
+      addHint: typedAny ? 'Saves what is typed as one count per size and clears the boxes. The run stays open.' : 'Type what you just counted, then Add Count. Add as many counts as you like.',
+      hasLog: rm && logRows.length>0, logRows, logEmpty: rm && logRows.length===0,
+      showProgress: rm && plannedAll>0,
+      progressLabel: saved.good+' of '+plannedAll+' good',
+      progressPct: String(plannedAll?Math.min(100,Math.round(100*saved.good/plannedAll)):0)+'%',
+      progressSub: [saved.misprint?saved.misprint+' misprint':null, saved.damaged?saved.damaged+' damaged':null, saved.incomplete?saved.incomplete+' incomplete':null].filter(Boolean).join(' · ') || 'no problems logged',
+      showReopen: locked && live,
+      reopenLabel: st.busy==='reopen' ? 'Reopening…' : 'Reopen (manager)',
+      onReopen: ()=>this.reopenRun(),
+      onAdd: ()=>this.addCounts(),
+      tallyGood: String(t.good), tallyGoodColor: t.good?'#BBD382':'#3a3a40',
       rows, rowsEmpty: !!d && !st.runLoading && rows.length===0,
       /* Sizes withheld from the grid, and the way back to them. Never silently
          dropped: the count is always shown when it is non-zero. */
@@ -1066,20 +1290,26 @@ class Component extends DCLogic {
          shown as-is: it means more losses were recorded than were planned,
          which the row-level warning has already flagged and which is a real
          thing that happens when a press runs extra garments. */
-      showImplied: plannedVisible > 0,
+      showImplied: !rm && plannedVisible > 0,
       impliedProduced: String(impliedProduced),
       impliedColor: impliedProduced < 0 ? '#E8A89F' : '#BBD382',
       impliedSub: plannedVisible + ' planned − ' + lossesVisible + ' recorded',
-      hasErr: !!st.err, err: st.err,
+      hasErr: !!st.err, err: st.err, lockedErr: locked && !!st.err,
       onSubmit:()=>this.submit(), onBack:()=>this.back(),
-      submitDisabled: st.submitting,
+      submitDisabled: st.submitting || !!st.busy,
+      showSubmit: !locked,
       submitLabel: st.submitting ? 'Saving…'
         : (rows.length===0 ? 'Submit — Nothing To Count'
-        : (anything ? 'Submit Counts' : 'Submit — Clean Run')),
+        : (rm ? (typedAny ? 'Add Count & Submit As Final' : 'Submit — Counts Are Final')
+        : (anything ? 'Submit Counts' : 'Submit — Clean Run'))),
       submitIcon: anything ? 'ti-clipboard-check' : 'ti-circle-check',
       submitBg: anything ? '#C6372B' : '#3D5418',
       submitFg: '#fff',
-      submitHint: anything
+      submitHint: rm
+        ? (savedAnything||typedAny
+            ? 'Submit when this run is finished. Counts become final (a manager can reopen them), and the reprint starts automatically if the whole order is done.'
+            : 'Nothing logged yet. Submitting now records a run where nothing needed counting.')
+        : anything
         ? 'Submitting marks this run counted and starts the reprint automatically if the whole order is finished.'
         : (rows.length===0
           ? 'This run has no rows. Submitting still marks it counted, which is what lets the rest of the order finish.'
