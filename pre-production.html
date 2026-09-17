@@ -224,6 +224,23 @@ window.__resources = Object.assign({}, window.__resources, {
           <textarea value="{{open.special}}" onInput="{{ open.onSpecial }}" placeholder="Rush notes, VIP handling, anything the floor needs to know…" style="width:100%;min-height:72px;font:400 13px/1.55 'Archivo';color:#E0B870;white-space:pre-wrap;background:#241a09;border:1px solid #5E4214;border-radius:9px;padding:12px 14px;outline:none;resize:vertical"></textarea>
         </div>
 
+        <sc-if value="{{open.hasArtSpecs}}" hint-placeholder-val="{{ false }}">
+          <div>
+            <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:11px">Print Recipe</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <sc-for list="{{open.artSpecView}}" as="sp" hint-placeholder-count="1">
+                <div style="background:#121215;border:1px solid #232327;border-radius:9px;padding:11px 13px;display:flex;flex-direction:column;gap:6px">
+                  <div style="font:600 10px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#5E9B9A">{{sp.title}}</div>
+                  <sc-for list="{{sp.lines}}" as="ln" hint-placeholder-count="2">
+                    <div style="display:flex;gap:10px;font:400 12px/1.4 'Archivo'"><span style="color:var(--text-tertiary);min-width:96px;flex-shrink:0">{{ln.label}}</span><span style="color:#ECEAE4;white-space:pre-wrap">{{ln.value}}</span></div>
+                  </sc-for>
+                  <sc-if value="{{sp.noLines}}" hint-placeholder-val="{{ false }}"><div style="font:400 11px/1.3 'Archivo';color:var(--text-faint)">Linked, but nothing is filled in on this recipe yet.</div></sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
         <div>
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px"><span style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary)">Production Items</span><button onClick="{{ open.onNewItem }}" style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;font:600 9px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#5E9B9A;background:transparent;border:1px solid #3D5418;border-radius:7px;padding:6px 9px;cursor:pointer" style-hover="background:#18230D"><i class="ti ti-plus"></i>Add Item</button></div>
           <sc-if value="{{open.itemCreateOpen}}" hint-placeholder-val="{{ false }}">
@@ -251,7 +268,7 @@ window.__resources = Object.assign({}, window.__resources, {
           <div style="display:flex;flex-direction:column;gap:8px">
             <sc-for list="{{open.ppItemsView}}" as="it" hint-placeholder-count="1">
               <div style="background:#121215;border:1px solid #232327;border-radius:9px;padding:11px 13px;display:flex;flex-direction:column;gap:9px">
-                <div style="display:flex;align-items:center;gap:10px"><span style="font:600 10px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#5E9B9A;min-width:74px">{{it.type}}</span><select value="{{it.status}}" onChange="{{ it.onStatus }}" style="margin-left:auto;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:7px 10px;font-size:12px;color:#ECEAE4;outline:none"><sc-for list="{{it.statusOptions}}" as="o" hint-placeholder-count="3"><option value="{{o.value}}">{{o.label}}</option></sc-for></select><button onClick="{{ it.onRemove }}" title="Remove item" style="width:28px;height:28px;flex-shrink:0;border-radius:7px;background:#16161a;border:1px solid #2a2a2f;color:var(--text-tertiary);cursor:pointer;font-size:13px" style-hover="color:#E8A89F;border-color:#7A241C"><i class="ti ti-trash"></i></button></div>
+                <div style="display:flex;align-items:center;gap:10px"><span style="font:600 10px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#5E9B9A;min-width:74px">{{it.type}}</span><sc-if value="{{it.hasRecipe}}" hint-placeholder-val="{{ false }}"><span style="font:500 10px/1 'Archivo';color:var(--text-tertiary)">{{it.recipe}}</span></sc-if><select value="{{it.status}}" onChange="{{ it.onStatus }}" style="margin-left:auto;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:7px 10px;font-size:12px;color:#ECEAE4;outline:none"><sc-for list="{{it.statusOptions}}" as="o" hint-placeholder-count="3"><option value="{{o.value}}">{{o.label}}</option></sc-for></select><button onClick="{{ it.onRemove }}" title="Remove item" style="width:28px;height:28px;flex-shrink:0;border-radius:7px;background:#16161a;border:1px solid #2a2a2f;color:var(--text-tertiary);cursor:pointer;font-size:13px" style-hover="color:#E8A89F;border-color:#7A241C"><i class="ti ti-trash"></i></button></div>
                 <sc-if value="{{it.isScreen}}" hint-placeholder-val="{{ false }}"><select value="{{it.mesh}}" onChange="{{ it.onMesh }}" style="background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:13px;color:#ECEAE4;outline:none"><option value="">Mesh count…</option><sc-for list="{{it.meshOptions}}" as="m" hint-placeholder-count="7"><option value="{{m.value}}">{{m.label}}</option></sc-for></select></sc-if>
                 <sc-if value="{{it.isInk}}" hint-placeholder-val="{{ false }}"><input value="{{it.pantone}}" onInput="{{ it.onPantone }}" placeholder="Pantone / color" style="background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:13px;color:#ECEAE4;outline:none"></sc-if>
                 <sc-if value="{{it.isThread}}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:7px"><input value="{{it.threadColor}}" onInput="{{ it.onThreadColor }}" placeholder="Thread color" style="flex:1;min-width:0;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:13px;color:#ECEAE4;outline:none"><input value="{{it.threadNumber}}" onInput="{{ it.onThreadNumber }}" placeholder="Thread #" style="width:96px;background:#16161a;border:1px solid #2a2a2f;border-radius:7px;padding:9px 11px;font-size:13px;color:#ECEAE4;outline:none"></div></sc-if>
@@ -921,6 +938,14 @@ window.__resources = Object.assign({}, window.__resources, {
 // to load, so the name gate doesn't silently show zero names.
 const VALID_NAMES = (window.CAApi && window.CAApi.VALID_NAMES) || ['Anthony','Asher','Alex','Parker','Titus','Gian','Isaac','Bronson','Zach','Logan','Avery','Jeff'];
 
+/* Transfer types a worker can pick (D25, 2026-09-17). The org maps the four old values to these on
+   save (CatalogSync), so offering the old ones would only show a value that changes under the
+   worker. An item still holding an old value keeps it in its own list so the select is not blank.
+   Mirrors TRANSFER_TYPES in functions/api/_placements.js. */
+function transferOptions(current){
+  const list=['DTF','HTV','Sublimation','Screened Transfer','Other'];
+  return (current && list.indexOf(current)<0) ? [current].concat(list) : list;
+}
 class Component extends DCLogic {
   constructor(props){
     super(props);
@@ -957,7 +982,7 @@ class Component extends DCLogic {
       // (and, for Gian/Anthony/Parker, manager rights) instantly; it now
       // requires that person's real PIN via POST /api/worker-login first.
       gatePin:'', gateErr:'', gateSubmitting:false, gateShake:false,
-      orders:[], connection:'loading', q:'', openId:null, ppItemsById:{}, weekMode:'all', pickDate:'',
+      orders:[], connection:'loading', q:'', openId:null, ppItemsById:{}, artSpecsById:{}, weekMode:'all', pickDate:'',
       view:'board', inbox:[], inboxLoaded:false, inboxFailed:false, inboxReprintsUnavailable:false, mgrId:null, mgrSource:null, mgrMultiMethod:false, form:null, planResults:[], submitting:false, mgrErr:'', mgrMsg:'',
       // Order name / order number search for the Management inbox list
       // (separate from the board's own `q` above -- different view, own
@@ -1441,6 +1466,9 @@ class Component extends DCLogic {
     if(!card || !this._api || this.state.connection!=='live') return;
     const orderId=card.orderId;
     this._api.getPreProductionItems(orderId).then(items=>{ this.setState(st=>({ppItemsById:Object.assign({},st.ppItemsById,{[orderId]:items})})); }).catch(()=>{});
+    // S5: the Art Spec ("print recipe") -- a separate call that resolves to {available:false}
+    // in an org without the spec layer, so the drawer just shows no recipe there.
+    if(this._api.getArtSpecs) this._api.getArtSpecs(orderId).then(d=>{ this.setState(st=>({artSpecsById:Object.assign({},st.artSpecsById,{[orderId]:d})})); });
     // cardId IS this card's Production_Method__c Id (one card == one method).
     this.loadRunsForCard(cardId);
     this.loadMethodsForOrder(orderId);
@@ -1796,6 +1824,8 @@ class Component extends DCLogic {
       if(res && (res.error || res.ok===false)) throw new Error(res.error||'create_failed');
       this.setState({itemCreateSubmitting:false, itemCreateOpen:false, itemCreateForm:null});
       this._api.getPreProductionItems(orderId).then(items=>{ this.setState(st=>({ppItemsById:Object.assign({},st.ppItemsById,{[orderId]:items})})); }).catch(()=>{});
+      // The new item may have picked up its decoration's recipe on save (S5).
+      if(this._api.getArtSpecs) this._api.getArtSpecs(orderId).then(d=>{ this.setState(st=>({artSpecsById:Object.assign({},st.artSpecsById,{[orderId]:d})})); });
     }catch(_){
       this.setState({itemCreateSubmitting:false, itemCreateErr:'Could not create item — try again'});
     }
@@ -1814,7 +1844,7 @@ class Component extends DCLogic {
       threadColor:f.threadColor||'', onThreadColor:(e)=>this.setItemCreateField({threadColor:e.target.value}),
       threadNumber:f.threadNumber||'', onThreadNumber:(e)=>this.setItemCreateField({threadNumber:e.target.value}),
       stitch:f.stitch||'', onStitch:(e)=>this.setItemCreateField({stitch:e.target.value}),
-      transferType:f.transferType||'', ttOptions:['Screen Transfer','Digital Transfer','Sublimation','Vinyl'].map(m=>({value:m,label:m})), onTransfer:(e)=>this.setItemCreateField({transferType:e.target.value}),
+      transferType:f.transferType||'', ttOptions:transferOptions(f.transferType).map(m=>({value:m,label:m})), onTransfer:(e)=>this.setItemCreateField({transferType:e.target.value}),
       hasErr:!!this.state.itemCreateErr, err:this.state.itemCreateErr||'',
       onCancel:()=>this.closeItemCreate(), onSubmit:()=>this.submitItemCreate(orderId, methodId),
       submitLabel: this.state.itemCreateSubmitting?'Adding…':'Add Item',
@@ -2408,7 +2438,7 @@ class Component extends DCLogic {
       placementOptions=(api&&api.PLACEMENTS?api.PLACEMENTS:['Front','Back','Left Sleeve','Right Sleeve','Left Chest','Right Chest','Full Front','Full Back','Tag','Hood','Pocket']).map(x=>{ const on=(f.placements||[]).includes(x); return { label:x, onPick:()=>this.togglePlacement(x), bg:on?'#2a1210':'#121215', border:on?'#C6372B':'#242428', color:on?'#ECEAE4':'var(--text-tertiary)' }; });
       statusOptions=['Pre-Production','Ready for Print','In Production','Post-Production','Completed','Cancelled','On Hold'].map(s=>({ value:s, label:s }));
       planResults=(st.planResults||[]).map(p=>({ id:p.Id, name:p.Name, onPick:()=>this.pickPlan(p.Id,p.Name) }));
-      const MESH=['110','125','156','180','196','230','305'], TT=['Screen Transfer','Digital Transfer','Sublimation','Vinyl'];
+      const MESH=['110','125','156','180','196','230','305'], TT=transferOptions('');
       itemsView=(f.items||[]).map((it,i)=>({
         type:it.type, isScreen:it.type==='Screen', isInk:it.type==='Ink', isThread:it.type==='Thread', isDigit:it.type==='Digitization', isTransfer:it.type==='Transfer',
         mesh:it.mesh||'', pantone:it.pantone||'', threadColor:it.threadColor||'', threadNumber:it.threadNumber||'', stitch:it.stitchCount||'', transferType:it.transferType||'',
@@ -2941,6 +2971,11 @@ class Component extends DCLogic {
         onReject:()=>this.rejectProposal(p, src.orderId),
       }));
 
+      // S5: this card's print recipe (Art Spec), per location. [] when the org has none.
+      const specData=(st.artSpecsById||{})[src.orderId];
+      const artSpecView=((window.CAApi&&window.CAApi.artSpecsForDecoration)?window.CAApi.artSpecsForDecoration(specData, src.id):[])
+        .map(sp=>({ title:(sp.placement?sp.placement+' · ':'')+sp.name, lines:sp.lines, noLines:sp.lines.length===0 }));
+      const itemRecipe=(itemId)=>{ const sid=specData&&specData.byItem&&specData.byItem[itemId]; const sp=sid&&specData.specs[sid]; return sp?('Recipe '+sp.name+(sp.placement?' · '+sp.placement:'')):''; };
       open=Object.assign({},d,{ checklist, recvSteps, assignees, sizeCells, hasSizes:sizeCells.length>0, methodsView, methodsEmpty:methodsView.length===0, siblings,
         drawerProposals, hasDrawerProposals:drawerProposals.length>0, onAddMethod:()=>this.openMgrForOrder(src.orderId), canManage:!!(window.CAApi&&window.CAApi.canAccessManagement&&window.CAApi.canAccessManagement()), runsView, runsEmpty:runsView.length===0, runsLoading: st.runsLoadingFor===src.id,
         // "Create Production Run" button in the drawer footer -- reuses
@@ -2951,7 +2986,8 @@ class Component extends DCLogic {
         specs:d.printSpecs||'', onSpecs:(e)=>this.setSpecs(src.orderId,e.target.value), special:d.specialNotes||'', onSpecial:(e)=>this.setSpecial(src.orderId,e.target.value),
         // Items come back per ORDER (all sibling methods' items together);
         // filter down to just this card's own Production_Method__c.
-        ppItemsView:(st.ppItemsById[src.orderId]||[]).filter(it=>it.Production_Method__c===src.id).map(it=>{ const ty=it.Type__c||'Item'; return { id:it.Id, type:ty, isScreen:ty==='Screen', isInk:ty==='Ink', isThread:ty==='Thread', isDigit:ty==='Digitization', isTransfer:ty==='Transfer', status:it.Status__c||'Not Started', statusOptions:[{value:'Not Started',label:'Not Started'},{value:'In Progress',label:'In Progress'},{value:'Ready',label:'Ready'}], onStatus:(e)=>this.setItemField(src.orderId,it.Id,'Status__c',e.target.value), mesh:it.Mesh_Count__c||'', meshOptions:['110','125','156','180','196','230','305'].map(m=>({value:m,label:m+' mesh'})), onMesh:(e)=>this.setItemField(src.orderId,it.Id,'Mesh_Count__c',e.target.value), pantone:it.Pantone_Color__c||'', onPantone:(e)=>this.setItemField(src.orderId,it.Id,'Pantone_Color__c',e.target.value), threadColor:it.Thread_Color__c||'', onThreadColor:(e)=>this.setItemField(src.orderId,it.Id,'Thread_Color__c',e.target.value), threadNumber:it.Thread_Number__c||'', onThreadNumber:(e)=>this.setItemField(src.orderId,it.Id,'Thread_Number__c',e.target.value), stitch:it.Stitch_Count__c||'', onStitch:(e)=>this.setItemField(src.orderId,it.Id,'Stitch_Count__c',e.target.value), transferType:it.Transfer_Type__c||'', ttOptions:['Screen Transfer','Digital Transfer','Sublimation','Vinyl'].map(m=>({value:m,label:m})), onTransfer:(e)=>this.setItemField(src.orderId,it.Id,'Transfer_Type__c',e.target.value), onRemove:()=>this.removePPItem(src.orderId,it.Id) }; }), ppItemsEmpty:(st.ppItemsById[src.orderId]||[]).filter(it=>it.Production_Method__c===src.id).length===0,
+        artSpecView, hasArtSpecs:artSpecView.length>0,
+        ppItemsView:(st.ppItemsById[src.orderId]||[]).filter(it=>it.Production_Method__c===src.id).map(it=>{ const ty=it.Type__c||'Item'; return { id:it.Id, type:ty, isScreen:ty==='Screen', isInk:ty==='Ink', isThread:ty==='Thread', isDigit:ty==='Digitization', isTransfer:ty==='Transfer', status:it.Status__c||'Not Started', statusOptions:[{value:'Not Started',label:'Not Started'},{value:'In Progress',label:'In Progress'},{value:'Ready',label:'Ready'}], onStatus:(e)=>this.setItemField(src.orderId,it.Id,'Status__c',e.target.value), mesh:it.Mesh_Count__c||'', meshOptions:['110','125','156','180','196','230','305'].map(m=>({value:m,label:m+' mesh'})), onMesh:(e)=>this.setItemField(src.orderId,it.Id,'Mesh_Count__c',e.target.value), pantone:it.Pantone_Color__c||'', onPantone:(e)=>this.setItemField(src.orderId,it.Id,'Pantone_Color__c',e.target.value), threadColor:it.Thread_Color__c||'', onThreadColor:(e)=>this.setItemField(src.orderId,it.Id,'Thread_Color__c',e.target.value), threadNumber:it.Thread_Number__c||'', onThreadNumber:(e)=>this.setItemField(src.orderId,it.Id,'Thread_Number__c',e.target.value), stitch:it.Stitch_Count__c||'', onStitch:(e)=>this.setItemField(src.orderId,it.Id,'Stitch_Count__c',e.target.value), transferType:it.Transfer_Type__c||'', ttOptions:transferOptions(it.Transfer_Type__c).map(m=>({value:m,label:m})), recipe:itemRecipe(it.Id), hasRecipe:!!itemRecipe(it.Id), onTransfer:(e)=>this.setItemField(src.orderId,it.Id,'Transfer_Type__c',e.target.value), onRemove:()=>this.removePPItem(src.orderId,it.Id) }; }), ppItemsEmpty:(st.ppItemsById[src.orderId]||[]).filter(it=>it.Production_Method__c===src.id).length===0,
         itemCreateOpen:!!st.itemCreateOpen, onNewItem:()=> st.itemCreateOpen ? this.closeItemCreate() : this.openItemCreate(),
         itemCreate: this.itemCreateView(src.orderId, src.id) });
     }
