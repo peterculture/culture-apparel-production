@@ -1209,6 +1209,49 @@
       return { records: (d && d.records) || [], reprintsUnavailable: !!(d && d.reprintsUnavailable) };
     });
   }
+  /* Target model S5 (D18, D23): the Art Spec ("print recipe") for each decoration on an order.
+     A follow-up call on purpose (build rule 3) -- /api/art-specs answers {available:false} in an
+     org without the Art Spec layer, and a failed call resolves the same way, so a page that shows
+     specs never breaks because of them. */
+  var ART_SPEC_NONE = { available:false, specs:{}, byDecoration:{}, byItem:{}, itemsAvailable:false };
+  function getArtSpecs(orderId){
+    return jget('/api/art-specs?orderId=' + encodeURIComponent(orderId))
+      .then(function (d) { return (d && d.available) ? d : ART_SPEC_NONE; })
+      .catch(function () { return ART_SPEC_NONE; });
+  }
+  /* Which spec facts to show, per decoration method (Anthony, 2026-09-17). Returns
+     [{label, value}] with blanks left out, so an empty spec renders as nothing. A method this
+     list does not know gets every screen, embroidery and heat press fact that is filled in. */
+  var ART_SPEC_FIELDS = {
+    'Screen Print': [['inkColors','Ink colors'],['colorOrder','Color order'],['meshCounts','Mesh'],['inkType','Ink type'],['flashNotes','Flash'],['dryerSettings','Dryer']],
+    'Embroidery':   [['threadColors','Thread colors'],['stitchCount','Stitch count']],
+    'Heat Press':   [['transferType','Transfer'],['pressTempF','Temp (°F)'],['pressSeconds','Time (s)'],['pressPressure','Pressure']]
+  };
+  var ART_SPEC_COMMON = [['sizeLocation','Size / location'],['printSpecs','Print specs'],['notes','Notes']];
+  function artSpecLines(spec, method){
+    if (!spec) return [];
+    var list = ART_SPEC_FIELDS[method || spec.method];
+    if (!list) list = [].concat(ART_SPEC_FIELDS['Screen Print'], ART_SPEC_FIELDS['Embroidery'], ART_SPEC_FIELDS['Heat Press']);
+    return list.concat(ART_SPEC_COMMON).map(function (f) {
+      var v = spec[f[0]];
+      return (v === null || v === undefined || v === '') ? null : { label: f[1], value: String(v) };
+    }).filter(Boolean);
+  }
+  /* One decoration's specs as [{placement, name, lines}] -- one entry per location that has a
+     spec, or a single entry (placement null) for a spec set on the whole decoration. */
+  function artSpecsForDecoration(data, decorationId, method){
+    if (!data || !data.available || !decorationId) return [];
+    var rows = (data.byDecoration || {})[decorationId];
+    if (!rows) {
+      // Salesforce Ids arrive as 15 or 18 characters depending on the source.
+      var k15 = String(decorationId).slice(0, 15);
+      Object.keys(data.byDecoration || {}).forEach(function (k) { if (!rows && k.slice(0, 15) === k15) rows = data.byDecoration[k]; });
+    }
+    return (rows || []).filter(function (r) { return r.specId && data.specs[r.specId]; }).map(function (r) {
+      var sp = data.specs[r.specId];
+      return { placement: r.placement, name: sp.name, lines: artSpecLines(sp, method) };
+    });
+  }
   function getPreProductionItems(orderId){ return jget('/api/pre-production-items?orderId=' + encodeURIComponent(orderId)).then(function (d) { return d.records || []; }); }
   function patchItem(itemId, fields){ var b = Object.assign({}, fields); var by = workerName(); if (by) b.Last_Updated_By__c = by; return jsend('/api/pre-production-items/' + encodeURIComponent(itemId), 'PATCH', b); }
   function deleteItem(itemId){ return jdel('/api/pre-production-items/' + encodeURIComponent(itemId)); }
@@ -2553,7 +2596,7 @@
     methodSiblings: methodSiblings, sameMethodId: sameMethodId,
     matchProposalMethod: matchProposalMethod, methodLabelIsType: methodLabelIsType,
     proposalFillMessage: proposalFillMessage,
-    getOrders: getOrders, getProductionOrders: getProductionOrders, getInbox: getInbox, getPreProductionItems: getPreProductionItems, patchItem: patchItem, deleteItem: deleteItem, createItem: createItem, searchPlans: searchPlans, searchPresses: searchPresses, createMethod: createMethod, createProductionRun: createProductionRun, getProductionRuns: getProductionRuns, patchProductionRun: patchProductionRun, deleteProductionRun: deleteProductionRun, getProposedRuns: getProposedRuns, patchProposedRun: patchProposedRun, patchMethodStatus: patchMethodStatus, patchMethodChecklist: patchMethodChecklist, getMethodsForOrder: getMethodsForOrder, patchMethodFields: patchMethodFields, deleteMethod: deleteMethod, patchOrder: patchOrder, getOrderSizes: getOrderSizes,
+    getOrders: getOrders, getProductionOrders: getProductionOrders, getInbox: getInbox, getPreProductionItems: getPreProductionItems, getArtSpecs: getArtSpecs, artSpecLines: artSpecLines, artSpecsForDecoration: artSpecsForDecoration, patchItem: patchItem, deleteItem: deleteItem, createItem: createItem, searchPlans: searchPlans, searchPresses: searchPresses, createMethod: createMethod, createProductionRun: createProductionRun, getProductionRuns: getProductionRuns, patchProductionRun: patchProductionRun, deleteProductionRun: deleteProductionRun, getProposedRuns: getProposedRuns, patchProposedRun: patchProposedRun, patchMethodStatus: patchMethodStatus, patchMethodChecklist: patchMethodChecklist, getMethodsForOrder: getMethodsForOrder, patchMethodFields: patchMethodFields, deleteMethod: deleteMethod, patchOrder: patchOrder, getOrderSizes: getOrderSizes,
     getCountableRuns: getCountableRuns, getRunResults: getRunResults, submitRunResults: submitRunResults,
     getRunLineItems: getRunLineItems, getMethodAllocation: getMethodAllocation, patchRunLineItems: patchRunLineItems,
     getShortfalls: getShortfalls,
