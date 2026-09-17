@@ -1626,6 +1626,23 @@
   function submitRunResults(runId, lines){
     return jsend('/api/run-results', 'POST', { runId: runId, lines: lines, by: workerName() });
   }
+  /* S6 (D17/D28): each count is its own Run Result. counts:
+     [{ lineId, goodQty, misprintQty, damagedQty, incompleteQty, note }] -- blanks are skipped.
+     Each call answers with the refreshed run payload (same shape as getRunResults). */
+  function addRunCounts(runId, counts){
+    return jsend('/api/run-results', 'POST', { action: 'add', runId: runId, counts: counts, by: workerName() });
+  }
+  function removeRunCount(runId, resultId){
+    return jsend('/api/run-results', 'POST', { action: 'remove', runId: runId, resultId: resultId, by: workerName() });
+  }
+  // Marks the counts final (Result_Status__c = Submitted) and runs the reprint check.
+  function finalizeRunCounts(runId){
+    return jsend('/api/run-results', 'POST', { action: 'submit', runId: runId, by: workerName() });
+  }
+  // Manager only (the page asks for a manager PIN first): Submitted -> Draft.
+  function reopenRunCounts(runId){
+    return jsend('/api/run-results', 'POST', { action: 'reopen', runId: runId, by: workerName() });
+  }
 
   /* ── mockup thumbnails ──
      Build the <img> as a React node instead of putting its URL in a template
@@ -2597,7 +2614,7 @@
     matchProposalMethod: matchProposalMethod, methodLabelIsType: methodLabelIsType,
     proposalFillMessage: proposalFillMessage,
     getOrders: getOrders, getProductionOrders: getProductionOrders, getInbox: getInbox, getPreProductionItems: getPreProductionItems, getArtSpecs: getArtSpecs, artSpecLines: artSpecLines, artSpecsForDecoration: artSpecsForDecoration, patchItem: patchItem, deleteItem: deleteItem, createItem: createItem, searchPlans: searchPlans, searchPresses: searchPresses, createMethod: createMethod, createProductionRun: createProductionRun, getProductionRuns: getProductionRuns, patchProductionRun: patchProductionRun, deleteProductionRun: deleteProductionRun, getProposedRuns: getProposedRuns, patchProposedRun: patchProposedRun, patchMethodStatus: patchMethodStatus, patchMethodChecklist: patchMethodChecklist, getMethodsForOrder: getMethodsForOrder, patchMethodFields: patchMethodFields, deleteMethod: deleteMethod, patchOrder: patchOrder, getOrderSizes: getOrderSizes,
-    getCountableRuns: getCountableRuns, getRunResults: getRunResults, submitRunResults: submitRunResults,
+    getCountableRuns: getCountableRuns, getRunResults: getRunResults, submitRunResults: submitRunResults, addRunCounts: addRunCounts, removeRunCount: removeRunCount, finalizeRunCounts: finalizeRunCounts, reopenRunCounts: reopenRunCounts,
     getRunLineItems: getRunLineItems, getMethodAllocation: getMethodAllocation, patchRunLineItems: patchRunLineItems,
     getShortfalls: getShortfalls,
     mockupThumb: mockupThumb, THUMB_CARD: THUMB_CARD, THUMB_PANEL: THUMB_PANEL,
