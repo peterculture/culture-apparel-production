@@ -80,6 +80,7 @@ import { cascadeChecklistToItems } from "../_ppi-checklist.js";
 import { orderIdForMethod } from "../_print-date-rollup.js";
 import { createReworkIfNeeded } from "../_rework.js";
 import { requireCap } from "../_session.js";
+import { ALLOWED_METHOD_TYPES, ALLOWED_PLACEMENTS } from "../_placements.js";
 import { GATED_STATUSES, checkApprovalGate, gateResponse, isApprovalRuleFailure, RULE_MESSAGE } from "../_approval-gate.js";
 
 const PM_OBJECT = "Decoration__c";
@@ -91,14 +92,7 @@ const ALLOWED_STATUSES = new Set([
   "Post-Production", "Completed", "Cancelled", "On Hold",
 ]);
 
-// Keep these two in sync with the same-named consts in
-// production-methods/index.js -- see that file for provenance notes.
-const ALLOWED_METHOD_TYPES = new Set(["Screen Print", "Embroidery", "Heat Press", "Promotional Items"]);
-const ALLOWED_PLACEMENTS = new Set([
-  "Front", "Back", "Left Sleeve", "Right Sleeve",
-  "Left Chest", "Right Chest", "Full Front", "Full Back",
-  "Tag", "Hood", "Pocket",
-]);
+// Method and placement allow-lists live in ../_placements.js (S4, build rule 4).
 
 // Per-method pre-production checklist booleans (mirrors the Order-level
 // fields of the same name -- see orders/[id].js ALLOWED_FIELDS). All 7
