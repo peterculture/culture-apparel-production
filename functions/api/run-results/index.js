@@ -1,7 +1,26 @@
 /**
  * GET  /api/run-results                 -> runs that can be counted
- * GET  /api/run-results?runId=<id>      -> one run + its line-item rows
- * POST /api/run-results                 -> record the counts and submit the run
+ * GET  /api/run-results?runId=<id>      -> one run + its line-item rows (+ its Run Results)
+ * POST /api/run-results                 -> record the counts and submit the run (legacy form)
+ * POST /api/run-results {action:"add"}     -> log counts as Run Result rows (S6, D17/D28)
+ * POST /api/run-results {action:"remove"}  -> delete one Run Result (run not submitted)
+ * POST /api/run-results {action:"submit"}  -> mark the run's counts final (+ reprint check)
+ * POST /api/run-results {action:"reopen"}  -> manager: back to Draft so counts can be fixed
+ *
+ * ── S6 (2026-09-17): "add a count" ─────────────────────────────────────────
+ * D17 supersedes the paragraph below. Each count is now a Run_Result__c row
+ * (good / misprint / damaged / incomplete + when + who) under its line item,
+ * and Apex RunResultRollup keeps the line item's Misprint/Damaged/Incomplete
+ * (and new Good_Qty__c) equal to the SUM of its Run Results (D28), so every
+ * reader of those fields -- the run roll-ups, _rework.js gate 4, rework-check,
+ * shortfalls, the skeleton flow, B9's email -- is untouched. The org also
+ * refuses any Run Result change on a Submitted run; a manager reopens it.
+ *
+ * Build rule 3: in an org WITHOUT Run_Result__c (production today) GET answers
+ * `resultsAvailable:false` and the counting screen keeps the old four-box form,
+ * which still posts to the legacy path below. In an org WITH it, the legacy
+ * path refuses typed numbers (409 counting_screen_updated) -- writing the line
+ * fields directly would be silently overwritten by the next Run Result.
  *
  * This is the write path for the four-quantity production result model. Until
  * this file existed, NOTHING in the app wrote Planned/Incomplete/Misprint/
@@ -41,6 +60,30 @@ import { runQueryOptionalField } from "../_placements.js";
 
 const RUN_OBJECT = "Production_Run__c";
 const LINE_OBJECT = "Production_Run_Line_Item__c";
+const RESULT_OBJECT = "Run_Result__c";
+
+// Client key -> Run_Result__c field for the "add a count" path. Good is new
+// with D17 and optional (D28); the other three mean what they always meant.
+const RESULT_COUNT_FIELDS = {
+  goodQty: "Good_Qty__c",
+  misprintQty: "Misprint_Qty__c",
+  damagedQty: "Damaged_Qty__c",
+  incompleteQty: "Incomplete_Qty__c",
+};
+const RESULT_FIELDS = [
+  "Id",
+  "Name",
+  "Line_Item__c",
+  "Good_Qty__c",
+  "Misprint_Qty__c",
+  "Damaged_Qty__c",
+  "Incomplete_Qty__c",
+  "Counted_At__c",
+  "Counted_By__c",
+  "Note__c",
+  "Good_Qty_Estimated__c",
+];
+const NOTE_MAX = 255;
 
 // Keep in sync with production-runs/index.js -- the org's Field Name really is
 // `Quantity_Planned_c`, so the automatic __c lands on top of an existing _c.
@@ -296,6 +339,7 @@ async function getCountableRuns(env, url) {
 
   const orderById = new Map(orders.records.map((o) => [o.Id, o]));
   const qtyByOrder = await garmentCountByOrder(env, orderIds);
+  const goodByRun = await totalGoodByRun(env, runs.records.map((r) => r.Id));
 
   const records = runs.records.map((r) => {
     const m = methodById.get(r.PrintMethod__c) || null;
@@ -335,6 +379,8 @@ async function getCountableRuns(env, url) {
       totalIncomplete: r.Total_Incomplete_Qty__c,
       totalMisprint: r.Total_Misprint_Qty__c,
       totalDamaged: r.Total_Damaged_Qty__c,
+      // S6. Absent (null) when the org has no Total_Good_Qty__c yet.
+      totalGood: goodByRun.has(r.Id) ? goodByRun.get(r.Id) : null,
       // Computed, not stored. A stored "needs rescheduling" checkbox is one
       // more thing that can drift out of step with the numbers underneath it;
       // the roll-up already knows. Same argument _priority.js makes for
@@ -363,6 +409,17 @@ async function getOneRun(env, runId) {
       `WHERE ProductionRun__c = ${q(runId)} ORDER BY Name ASC`,
   );
   if (!linesRes.ok) return notAvailable(describeQueryFailure(linesRes));
+
+  // S6. Separate and fail-open: an org without Run_Result__c (or with it
+  // FLS-hidden) keeps the old form rather than losing the run.
+  const results = await loadResults(env, runId);
+  const goodByLine = new Map();
+  if (results) {
+    for (const x of results) {
+      if (x.goodQty == null) continue;
+      goodByLine.set(x.lineId, (goodByLine.get(x.lineId) || 0) + x.goodQty);
+    }
+  }
 
   let method = null;
   let order = null;
@@ -423,10 +480,73 @@ async function getOneRun(env, runId) {
         incompleteQty: l.Incomplete_Qty__c,
         misprintQty: l.Misprint_Qty__c,
         damagedQty: l.Damaged_Qty__c,
+        // Summed from the Run Results, not read from Good_Qty__c: naming that
+        // field in LINE_FIELDS would break this whole query in production.
+        goodQty: goodByLine.has(l.Id) ? goodByLine.get(l.Id) : null,
       })),
+      resultsAvailable: !!results,
+      results: results || [],
     },
     { headers: { "Cache-Control": "no-store" } },
   );
+}
+
+/**
+ * The Run Results under one run, oldest first, or null when the org cannot
+ * answer (no Run_Result__c, or FLS). Null is what switches the screen back to
+ * the old form.
+ */
+async function loadResults(env, runId) {
+  const res = await runQuery(
+    env,
+    `SELECT ${RESULT_FIELDS.join(", ")} FROM ${RESULT_OBJECT} ` +
+      `WHERE Line_Item__r.ProductionRun__c = ${q(runId)} ORDER BY Counted_At__c ASC, Name ASC`,
+  );
+  if (!res.ok) {
+    console.warn("[run-results] Run_Result__c not queryable; using the legacy form", res.status);
+    return null;
+  }
+  return res.records.map((x) => ({
+    id: x.Id,
+    name: x.Name,
+    lineId: x.Line_Item__c,
+    goodQty: x.Good_Qty__c,
+    misprintQty: x.Misprint_Qty__c,
+    damagedQty: x.Damaged_Qty__c,
+    incompleteQty: x.Incomplete_Qty__c,
+    countedAt: x.Counted_At__c,
+    countedBy: x.Counted_By__c,
+    note: x.Note__c,
+    goodEstimated: !!x.Good_Qty_Estimated__c,
+  }));
+}
+
+/** Does the active org have the Run Result layer? One cheap probe. */
+async function resultsLayerExists(env) {
+  const res = await runQuery(env, `SELECT Id FROM ${RESULT_OBJECT} LIMIT 1`);
+  return res.ok;
+}
+
+/**
+ * Production_Run__c.Total_Good_Qty__c per run, fail-open (S6). A separate query
+ * so an org without the roll-up keeps the whole list (trap 1).
+ */
+async function totalGoodByRun(env, runIds) {
+  const out = new Map();
+  const ids = [...new Set((runIds || []).filter(Boolean))];
+  if (!ids.length) return out;
+  try {
+    const res = await runChunkedIdQuery(ids, (quoted) =>
+      runQuery(env, `SELECT Id, Total_Good_Qty__c FROM ${RUN_OBJECT} WHERE Id IN (${quoted})`),
+    );
+    if (!res.ok) return out;
+    for (const r of res.records) {
+      if (r.Total_Good_Qty__c != null) out.set(r.Id, Number(r.Total_Good_Qty__c));
+    }
+  } catch (e) {
+    console.error("run-results total good error", e);
+  }
+  return out;
 }
 
 /** Turn a failed query into something a human can act on. */
@@ -462,6 +582,18 @@ export async function onRequestPost({ request, env }) {
     if (!runId || !SF_ID.test(runId)) return jsonError("missing_runId", 400);
 
     const by = typeof body.by === "string" && body.by.trim() ? body.by.trim().slice(0, 80) : null;
+
+    // ── S6 actions ──
+    if (body.action === "add") return await addCounts(env, runId, body, by);
+    if (body.action === "remove") return await removeCount(env, runId, body);
+    if (body.action === "submit") return await submitRun(env, runId, by, 0);
+    if (body.action === "reopen") {
+      // A manager's power: it un-finalises counts the reprint builder trusts.
+      const mgr = await requireCap(request, env, "runs.schedule");
+      if (mgr.denied) return mgr.response;
+      return await reopenRun(env, runId, by);
+    }
+    if (body.action !== undefined) return jsonError("unknown_action", 400);
 
     if (!Array.isArray(body.lines)) return jsonError("missing_lines", 400);
     if (body.lines.length > 500) return jsonError("too_many_lines", 400);
@@ -507,6 +639,19 @@ export async function onRequestPost({ request, env }) {
       );
     }
 
+    // S6: in an org with Run Results, typed numbers must go through "add".
+    // The line fields are sums there, and a direct write would be overwritten
+    // by the next Run Result without anyone noticing. An empty submit is fine.
+    if (parsed.length && (await resultsLayerExists(env))) {
+      return Response.json(
+        {
+          error: "counting_screen_updated",
+          detail: "This org logs each count as a Run Result. Reload the counting screen and add the counts again.",
+        },
+        { status: 409 },
+      );
+    }
+
     const v = apiVersion(env);
     const base = `/services/data/${v}/sobjects`;
 
@@ -526,101 +671,269 @@ export async function onRequestPost({ request, env }) {
     }
 
     // 2. Only now stamp the run. See this file's header on write order.
-    const runPayload = {
-      Result_Status__c: RESULT_SUBMITTED,
-      Result_Recorded_At__c: new Date().toISOString(),
-    };
-    if (by) runPayload.Result_Recorded_By__c = by;
-
-    const runResp = await sfFetch(env, `${base}/${RUN_OBJECT}/${runId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(runPayload),
-    });
-    if (runResp.status !== 204) {
-      const detail = await runResp.text().catch(() => "");
-      console.error("run-results: run submit failed", runId, runResp.status, detail);
-      return Response.json({ error: "submit_failed", detail }, { status: 502 });
-    }
-
-    // 3. Re-read the line items so the totals reported back are what Salesforce
-    // actually holds, not what this request believed it wrote. The roll-ups on
-    // the run are recalculated asynchronously and are not safe to read here.
-    const afterRes = await runQuery(
-      env,
-      `SELECT Id, Planned_Qty__c, Incomplete_Qty__c, Misprint_Qty__c, Damaged_Qty__c ` +
-        `FROM ${LINE_OBJECT} WHERE ProductionRun__c = ${q(runId)}`,
-    );
-    const totals = { planned: 0, incomplete: 0, misprint: 0, damaged: 0 };
-    if (afterRes.ok) {
-      for (const l of afterRes.records) {
-        totals.planned += Number(l.Planned_Qty__c) || 0;
-        totals.incomplete += Number(l.Incomplete_Qty__c) || 0;
-        totals.misprint += Number(l.Misprint_Qty__c) || 0;
-        totals.damaged += Number(l.Damaged_Qty__c) || 0;
-      }
-    }
-
-    // 4. Resolve the order, then give the rework its second chance to fire.
-    //
-    // THIS IS THE HALF OF THE TRIGGER THAT WAS MISSING. The other call site is
-    // the method-status PATCH, which fires when the last method reaches
-    // Completed -- but in the real sequence, printing finishing is what
-    // completes the method and counting happens AFTER that, so by the time the
-    // numbers exist the triggering event has already gone by. Submitting a run
-    // is the other moment where "complete" and "counted" can both become true,
-    // so the check belongs here too. createReworkIfNeeded re-checks all of its
-    // own preconditions -- including, as of this build, that every method on
-    // the order is actually Completed -- so calling it eagerly is safe and
-    // returns a named reason when there is nothing to do.
-    let orderId = null;
-    let rework = null;
-    const runMethod = await runQuery(
-      env,
-      `SELECT PrintMethod__c FROM ${RUN_OBJECT} WHERE Id = ${q(runId)}`,
-    );
-    const methodId = runMethod.ok && runMethod.records.length ? runMethod.records[0].PrintMethod__c : null;
-    if (methodId) {
-      orderId = await orderIdForMethod(env, methodId).catch((e) => {
-        console.error("run-results: orderIdForMethod failed", methodId, e);
-        return null;
-      });
-    }
-    if (orderId) {
-      rework = await createReworkIfNeeded(env, orderId, by).catch((e) => {
-        console.error("run-results: rework creation failed", orderId, e);
-        return null;
-      });
-      if (rework && rework.created) {
-        console.log(
-          `rework: created order ${rework.orderId} from ${orderId} via run ${runId} -- ` +
-            `${rework.methodCount} decoration(s), ${rework.itemCount} product(s), ${rework.totalQty} garment(s)`,
-        );
-      }
-    }
-
-    return Response.json(
-      {
-        ok: true,
-        runId,
-        methodId,
-        orderId,
-        resultStatus: RESULT_SUBMITTED,
-        linesUpdated: parsed.length,
-        totals,
-        // The client uses this to route the counter to run creation on the SAME
-        // method. Incomplete garments are intact and just need press time --
-        // they must never become a reprint order.
-        incompleteTotal: totals.incomplete,
-        needsReschedule: totals.incomplete > 0,
-        rework,
-      },
-      { headers: { "Cache-Control": "no-store" } },
-    );
+    return await submitRun(env, runId, by, parsed.length);
   } catch (err) {
     console.error("run-results POST failed", err);
     return jsonError("internal_error", 500);
   }
+}
+
+/**
+ * Stamp the run Submitted, report the totals Salesforce holds, and give the
+ * reprint its chance to build. Shared by the legacy POST and action "submit".
+ * Moved out of the legacy handler unchanged (S6); see the comments inside.
+ */
+async function submitRun(env, runId, by, linesUpdated) {
+  const base = `/services/data/${apiVersion(env)}/sobjects`;
+  const runPayload = {
+    Result_Status__c: RESULT_SUBMITTED,
+    Result_Recorded_At__c: new Date().toISOString(),
+  };
+  if (by) runPayload.Result_Recorded_By__c = by;
+
+  const runResp = await sfFetch(env, `${base}/${RUN_OBJECT}/${runId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(runPayload),
+  });
+  if (runResp.status !== 204) {
+    const detail = await runResp.text().catch(() => "");
+    console.error("run-results: run submit failed", runId, runResp.status, detail);
+    return Response.json({ error: "submit_failed", detail }, { status: 502 });
+  }
+
+  // 3. Re-read the line items so the totals reported back are what Salesforce
+  // actually holds, not what this request believed it wrote. The roll-ups on
+  // the run are recalculated asynchronously and are not safe to read here.
+  const afterRes = await runQuery(
+    env,
+    `SELECT Id, Planned_Qty__c, Incomplete_Qty__c, Misprint_Qty__c, Damaged_Qty__c ` +
+      `FROM ${LINE_OBJECT} WHERE ProductionRun__c = ${q(runId)}`,
+  );
+  const totals = { planned: 0, incomplete: 0, misprint: 0, damaged: 0 };
+  if (afterRes.ok) {
+    for (const l of afterRes.records) {
+      totals.planned += Number(l.Planned_Qty__c) || 0;
+      totals.incomplete += Number(l.Incomplete_Qty__c) || 0;
+      totals.misprint += Number(l.Misprint_Qty__c) || 0;
+      totals.damaged += Number(l.Damaged_Qty__c) || 0;
+    }
+  }
+  // S6: good pieces, from the Run Results. Absent in an org without them.
+  const results = await loadResults(env, runId);
+  if (results) {
+    totals.good = results.reduce((a, x) => a + (Number(x.goodQty) || 0), 0);
+  }
+
+  // 4. Resolve the order, then give the rework its second chance to fire.
+  //
+  // THIS IS THE HALF OF THE TRIGGER THAT WAS MISSING. The other call site is
+  // the method-status PATCH, which fires when the last method reaches
+  // Completed -- but in the real sequence, printing finishing is what
+  // completes the method and counting happens AFTER that, so by the time the
+  // numbers exist the triggering event has already gone by. Submitting a run
+  // is the other moment where "complete" and "counted" can both become true,
+  // so the check belongs here too. createReworkIfNeeded re-checks all of its
+  // own preconditions -- including, as of this build, that every method on
+  // the order is actually Completed -- so calling it eagerly is safe and
+  // returns a named reason when there is nothing to do.
+  const { methodId, orderId } = await methodAndOrderForRun(env, runId);
+  let rework = null;
+  if (orderId) {
+    rework = await createReworkIfNeeded(env, orderId, by).catch((e) => {
+      console.error("run-results: rework creation failed", orderId, e);
+      return null;
+    });
+    if (rework && rework.created) {
+      console.log(
+        `rework: created order ${rework.orderId} from ${orderId} via run ${runId} -- ` +
+          `${rework.methodCount} decoration(s), ${rework.itemCount} product(s), ${rework.totalQty} garment(s)`,
+      );
+    }
+  }
+
+  return Response.json(
+    {
+      ok: true,
+      runId,
+      methodId,
+      orderId,
+      resultStatus: RESULT_SUBMITTED,
+      linesUpdated,
+      totals,
+      // The client uses this to route the counter to run creation on the SAME
+      // method. Incomplete garments are intact and just need press time --
+      // they must never become a reprint order.
+      incompleteTotal: totals.incomplete,
+      needsReschedule: totals.incomplete > 0,
+      rework,
+    },
+    { headers: { "Cache-Control": "no-store" } },
+  );
+}
+
+async function methodAndOrderForRun(env, runId) {
+  const runMethod = await runQuery(env, `SELECT PrintMethod__c FROM ${RUN_OBJECT} WHERE Id = ${q(runId)}`);
+  const methodId = runMethod.ok && runMethod.records.length ? runMethod.records[0].PrintMethod__c : null;
+  let orderId = null;
+  if (methodId) {
+    orderId = await orderIdForMethod(env, methodId).catch((e) => {
+      console.error("run-results: orderIdForMethod failed", methodId, e);
+      return null;
+    });
+  }
+  return { methodId, orderId };
+}
+
+/** Salesforce REST error body -> {code, message}. */
+function sfError(body) {
+  const first = Array.isArray(body) && body[0] ? body[0] : null;
+  return first ? { code: first.errorCode || "ERROR", message: first.message || "" } : { code: "ERROR", message: "" };
+}
+
+/** The run's status and its line-item Ids, or an error Response. */
+async function runForWrite(env, runId) {
+  const runRes = await runQuery(env, `SELECT Id, Result_Status__c FROM ${RUN_OBJECT} WHERE Id = ${q(runId)}`);
+  if (!runRes.ok) return { error: jsonError("run_query_failed", 502) };
+  if (!runRes.records.length) return { error: jsonError("run_not_found", 404) };
+  const linesRes = await runQuery(env, `SELECT Id FROM ${LINE_OBJECT} WHERE ProductionRun__c = ${q(runId)}`);
+  if (!linesRes.ok) return { error: jsonError("line_items_query_failed", 502) };
+  const ids = linesRes.records.map((l) => l.Id);
+  const find = (id) => ids.find((o) => o === id || o.slice(0, 15) === String(id).slice(0, 15)) || null;
+  return { status: runRes.records[0].Result_Status__c || RESULT_DRAFT, findLine: find };
+}
+
+function submittedResponse() {
+  return Response.json(
+    {
+      error: "run_submitted",
+      detail: "This run's counts are final. A manager has to reopen the run before counts can change.",
+    },
+    { status: 409 },
+  );
+}
+
+/** The one-run payload, re-read after a write so the screen shows what Salesforce holds. */
+async function freshRun(env, runId, extra) {
+  const resp = await getOneRun(env, runId);
+  const data = await resp.json().catch(() => null);
+  return Response.json(Object.assign({ ok: true }, data || {}, extra || {}), {
+    headers: { "Cache-Control": "no-store" },
+  });
+}
+
+/**
+ * action "add": {runId, counts:[{lineId, goodQty, misprintQty, damagedQty, incompleteQty, note}], by}
+ * One Run_Result__c per entry that carries at least one number. All-or-nothing.
+ */
+async function addCounts(env, runId, body, by) {
+  if (!Array.isArray(body.counts) || !body.counts.length) return jsonError("missing_counts", 400);
+  if (body.counts.length > 200) return jsonError("too_many_counts", 400);
+  if (!(await resultsLayerExists(env))) return jsonError("results_not_available", 409);
+
+  const run = await runForWrite(env, runId);
+  if (run.error) return run.error;
+  if (run.status === RESULT_SUBMITTED) return submittedResponse();
+
+  const records = [];
+  for (const c of body.counts) {
+    if (!c || typeof c !== "object" || !c.lineId || !SF_ID.test(c.lineId)) return jsonError("bad_line_id", 400);
+    const lineId = run.findLine(c.lineId);
+    if (!lineId) return Response.json({ error: "line_not_on_run", detail: c.lineId }, { status: 400 });
+    const rec = { attributes: { type: RESULT_OBJECT }, Line_Item__c: lineId };
+    let any = false;
+    for (const [key, field] of Object.entries(RESULT_COUNT_FIELDS)) {
+      const p = parseQty(c[key]);
+      if (!p.ok) return Response.json({ error: "bad_quantity", detail: `${c.lineId}.${key}` }, { status: 400 });
+      if (p.value != null) {
+        rec[field] = p.value;
+        any = true;
+      }
+    }
+    if (!any) continue;
+    if (typeof c.note === "string" && c.note.trim()) rec.Note__c = c.note.trim().slice(0, NOTE_MAX);
+    if (by) rec.Counted_By__c = by;
+    rec.Counted_At__c = new Date().toISOString();
+    records.push(rec);
+  }
+  if (!records.length) return jsonError("nothing_to_add", 400);
+
+  // sObject Collections: one call, all-or-none, up to 200 records.
+  const resp = await sfFetch(env, `/services/data/${apiVersion(env)}/composite/sobjects`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ allOrNone: true, records }),
+  });
+  const data = await resp.json().catch(() => null);
+  const failed = !resp.ok || !Array.isArray(data) || data.some((x) => !x || !x.success);
+  if (failed) {
+    const errs = Array.isArray(data) ? data.flatMap((x) => (x && x.errors) || []) : [];
+    const real = errs.find((e) => e.statusCode !== "ALL_OR_NONE_OPERATION_ROLLED_BACK") || errs[0];
+    const msg = real ? `${real.statusCode}: ${real.message}` : `HTTP ${resp.status}`;
+    console.error("run-results: add failed", runId, JSON.stringify(data));
+    // The org's own lock (RunResultRollup) answers in words; keep them.
+    if (real && /submitted/i.test(real.message || "")) return submittedResponse();
+    return Response.json({ error: "add_failed", detail: msg }, { status: 502 });
+  }
+  return freshRun(env, runId, { added: records.length });
+}
+
+/** action "remove": {runId, resultId} */
+async function removeCount(env, runId, body) {
+  const resultId = body.resultId;
+  if (!resultId || !SF_ID.test(resultId)) return jsonError("missing_resultId", 400);
+  const run = await runForWrite(env, runId);
+  if (run.error) return run.error;
+  if (run.status === RESULT_SUBMITTED) return submittedResponse();
+
+  const own = await runQuery(
+    env,
+    `SELECT Id, Line_Item__c FROM ${RESULT_OBJECT} WHERE Id = ${q(resultId)}`,
+  );
+  if (!own.ok) return jsonError("results_not_available", 409);
+  if (!own.records.length) return jsonError("result_not_found", 404);
+  if (!run.findLine(own.records[0].Line_Item__c)) return jsonError("result_not_on_run", 400);
+
+  const resp = await sfFetch(env, `/services/data/${apiVersion(env)}/sobjects/${RESULT_OBJECT}/${own.records[0].Id}`, {
+    method: "DELETE",
+  });
+  if (resp.status !== 204) {
+    const e = sfError(await resp.json().catch(() => null));
+    console.error("run-results: remove failed", resultId, resp.status, e.code, e.message);
+    if (/submitted/i.test(e.message)) return submittedResponse();
+    return Response.json({ error: "remove_failed", detail: `${e.code}: ${e.message}` }, { status: 502 });
+  }
+  return freshRun(env, runId, { removed: resultId });
+}
+
+/**
+ * action "reopen": Submitted -> Draft (D28). Says whether a reprint was already
+ * built from the old counts: reopening does not change that order.
+ */
+async function reopenRun(env, runId, by) {
+  const run = await runForWrite(env, runId);
+  if (run.error) return run.error;
+  if (run.status !== RESULT_SUBMITTED) return freshRun(env, runId, { reopened: false });
+
+  const resp = await sfFetch(env, `/services/data/${apiVersion(env)}/sobjects/${RUN_OBJECT}/${runId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ Result_Status__c: RESULT_DRAFT }),
+  });
+  if (resp.status !== 204) {
+    const e = sfError(await resp.json().catch(() => null));
+    console.error("run-results: reopen failed", runId, resp.status, e.code, e.message);
+    return Response.json({ error: "reopen_failed", detail: `${e.code}: ${e.message}` }, { status: 502 });
+  }
+  console.log(`run-results: run ${runId} reopened by ${by || "unknown"}`);
+
+  let reprintExists = false;
+  const { orderId } = await methodAndOrderForRun(env, runId);
+  if (orderId) {
+    const rx = await runQuery(env, `SELECT Id FROM Order WHERE Original_Production_Order__c = ${q(orderId)} LIMIT 1`);
+    reprintExists = !!(rx.ok && rx.records.length);
+  }
+  return freshRun(env, runId, { reopened: true, reprintExists });
 }
 
 /**
