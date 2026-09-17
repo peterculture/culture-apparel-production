@@ -39,6 +39,30 @@ export const PLACEMENTS = [
 
 export const ALLOWED_PLACEMENTS = new Set(PLACEMENTS);
 
+/**
+ * Decoration__c.Type__c (the decoration method), in one place. Added
+ * 2026-09-17 (target model S4, build rule 4): decorations/index.js and
+ * decorations/[id].js each carried a private copy. Client-side counterparts
+ * are the method maps in ca-api.js, index.html and pre-production.html.
+ * S4 also mirrors these as Decoration_Method__c records in the org; the
+ * picklist stays the value the app writes until production has the object.
+ */
+export const DECORATION_METHODS = ["Screen Print", "Embroidery", "Heat Press", "Promotional Items"];
+export const ALLOWED_METHOD_TYPES = new Set(DECORATION_METHODS);
+
+/**
+ * Pre_Production_Item__c.Transfer_Type__c. D25 (2026-09-17): the Decoration
+ * list is canonical -- DTF / HTV / Sublimation / Screened Transfer / Other.
+ * The pages still send the old PPI values (Screen Transfer / Digital Transfer /
+ * Sublimation / Vinyl). In the sandboxes both sets are active on the PPI
+ * picklist and an org trigger maps old -> new on save; production still has
+ * only the old set (D22), so the pages keep sending old values until S8.
+ * A value copied from an existing item (_rework.js) may be either.
+ */
+export const TRANSFER_TYPES_LEGACY = ["Screen Transfer", "Digital Transfer", "Sublimation", "Vinyl"];
+export const TRANSFER_TYPES = ["DTF", "HTV", "Sublimation", "Screened Transfer", "Other"];
+export const ALLOWED_TRANSFER_TYPE = new Set([...TRANSFER_TYPES_LEGACY, ...TRANSFER_TYPES]);
+
 /** True if `v` is exactly one of the eleven values. */
 export function isPlacement(v) {
   return typeof v === "string" && ALLOWED_PLACEMENTS.has(v);
