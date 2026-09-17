@@ -81,8 +81,9 @@ up three findings that change how tests are read; see S1. **S2 (the approval gat
 and switched OFF** (blank start date) until Anthony confirms the date at the end of S7. **S3 (the art layer)
 is done in both sandboxes** (2026-09-17); its findings became D23–D26. **S4 (the catalog layer) is done in both
 sandboxes** (2026-09-17): catalog objects, in-org dual-write Apex, backfill. **S5 (Decoration and
-Pre-Production Item → Art Spec) is built and backfilled in dev2** (2026-09-17); the staging change set
-**"S5 Art Spec Link 2026-09-17"** and the dashboard code (uncommitted on the Mac) are waiting on Anthony.
+Pre-Production Item → Art Spec) is done in both sandboxes and live** (2026-09-17). **S6 (Run Result, "add a count")
+is built, tested and migrated in dev2** (2026-09-17, D28); change set **"S6 Run Result 2026-09-17"** and the code
+(uncommitted on the Mac) wait on Anthony.
 D17 **supersedes D1**: the counting model is being replaced, but not until S6. The 2026-09-15 handoff
 below is still accurate for everything it covers.
 
@@ -1830,7 +1831,7 @@ values** until production has the objects. Only then do the picklists freeze.
 in both orgs; confirm no `INVALID_OR_NULL_FOR_RESTRICTED_PICKLIST`; confirm lookups filled;
 `calendar.html` press lanes unchanged.
 
-#### S5 · Wiring: Decoration → Art Spec, Pre-Production Item → Art Spec (D18) — ✅ BUILT IN DEV2 2026-09-17, staging waits on the change set
+#### S5 · Wiring: Decoration → Art Spec, Pre-Production Item → Art Spec (D18) — ✅ DONE IN BOTH SANDBOXES 2026-09-17
 
 **Decided with Anthony (2026-09-17), D27:** the pages show the recipe facts **for that decoration's method**;
 a location is linked automatically **only when exactly one spec fits**; the same rule keeps running for new
@@ -1885,12 +1886,30 @@ served). Both pages rendered headless against fixtures: the order sheet printed 
 grid still drew its 20 cells; with `available:false` and with a 500 the sheet printed exactly as before; the
 drawer showed the recipe and the item note. **Not yet:** T5/T6 against a live org — needs the code pushed.
 
-**To finish S5.**
-1. Anthony: upload change set **"S5 Art Spec Link 2026-09-17"** (dev2 → staging), deploy it in staging.
-2. Claude: run `ArtSpecLinkTest` in staging, dry-run then run the backfill there, record counts here.
-3. Anthony: commit and push the code; Claude: T5 on dev2 and staging (`/api/art-specs` 200, recipe visible on an
-   order with a linked spec), T6 (hide FLS on `Decoration_Placement__c.Art_Spec__c` in dev2 → `available:false`,
-   pages unchanged, restore).
+**Staging and live pages (2026-09-17, after Anthony deployed the change set and pushed).**
+- Change set deployed; `ArtSpecLinkTest` **7/7** and `CatalogSyncTest` **8/8** pass in staging.
+- **Backfill: nothing to link.** Staging has **0 Art Specs** (the S3 samples were only made in dev2), so all 74
+  location rows stay blank until someone creates recipes; the triggers will link them as they are made.
+- **Live T7 on staging with two throwaway recipes, then deleted:** a Screen Print/Back recipe on order 00009480
+  linked PM-00009/Back and both its items within seconds; an Embroidery/Front recipe on 00009515 linked
+  PM-00071/Front and both its items, touching nothing else on the same job (dry run first). On the live
+  dashboard, the **Pre-Production drawer for "Walkthrough Embroidery" showed the Print Recipe** (thread colors,
+  stitch count, size/location, notes) and "Recipe AS-00002 · Front" on its items. Deleting the recipes cleared
+  every link (lookup delete = clear value); staging is back to 0 specs, 0 links.
+- T5/T8 on staging: `/api/art-specs` 200 (400 on a bad id); production-orders, calendar, inbox, orders, presses,
+  shortfalls, decorations, pre-production-items all 200; rework-check all OK.
+- 🚩 **`order-sheet.html` did not deploy.** The live file is the pre-S5 version (no `getArtSpecs`), while
+  `pre-production.html`, `ca-api.js` and `/api/art-specs` are live. The Mac copy is correct (30,292 bytes). It
+  was most likely left out of the commit — re-commit and push it, then re-check the sheet.
+- Staging's Art Spec auto-number started at AS-00000 (cosmetic).
+
+**Closed out (2026-09-17, dashboard on dev2).** `order-sheet.html` re-pushed and live. dev2: `/api/art-specs` finds
+recipes on orders 00013474, 00013513 and 00013518; the live order sheet for 00013513 prints both recipes
+(AS-00001 from the decoration-level link, AS-00002 · Tag) and the size grid draws (14 cells). **T6:** System
+Administrator's visibility of `Decoration_Placement__c.Art_Spec__c` switched off → `/api/art-specs` 200
+`available:false`; production-orders, orders, decorations, pre-production-items, calendar, inbox all 200; the order
+sheet printed without recipes and Ink Colors fell back to the items' Pantones; Pre-Production live, no demo chip.
+Visibility restored (visible, not read-only) and recipes came back (2 specs, 7 item links).
 
 **The original plan, kept for reference.**
 
@@ -1904,7 +1923,100 @@ its 48 `Production_Method__r` traversals stay exactly as they are (trap 12).
 
 **Test.** T1–T8. The order sheet prints the spec, and the size grid still renders (the `<table>` rule).
 
-#### S6 · Run Result (D17) — the counting screen is rebuilt
+#### S6 · Run Result (D17) — the counting screen is rebuilt — 🔧 BUILT IN DEV2 2026-09-17, staging waits on the change set
+
+**Decided with Anthony (2026-09-17), D28:** Salesforce keeps the old per-size boxes as auto-totals of the Run
+Results (nothing downstream changes); a manager can reopen a submitted run to fix counts; migrated counts get
+good = planned − problems (flagged as estimated); good is optional on a count.
+
+**What exists now (dev2).**
+- **`Run_Result__c`** (RR-{00000}; dev2 object `01Ica000000WtEH`): `Line_Item__c` (Master-Detail → Run Line Item,
+  child relationship `Run_Results`), `Good_Qty__c`, `Misprint_Qty__c`, `Damaged_Qty__c`, `Incomplete_Qty__c`
+  (Number 18,0), `Counted_At__c` (Date/Time, default `NOW()`), `Counted_By__c` (Text 80), `Note__c` (Text 255),
+  `Good_Qty_Estimated__c` (Checkbox; set only by the migration). System Administrator has full access.
+- **`Production_Run_Line_Item__c.Good_Qty__c`** (Number, written by Apex) and **`Production_Run__c.Total_Good_Qty__c`**
+  (roll-up SUM of it). The four old `Total_*_Qty__c` roll-ups were **not touched** — they keep summing the line
+  fields, which now hold the Run Result totals. (So the "can a roll-up summarise a roll-up" question never came up.)
+- **Apex (source in `New Apex Classes/`):** `RunResultRollup` + `RunResultRollupTest` (**5/5 pass**) and
+  `RunResultTrigger` (all seven events). After any Run Result change it sets the line item's Good / Misprint /
+  Damaged / Incomplete to the SUM of its Run Results (blank when there are none). Before any change it **refuses**
+  (on purpose, unlike the S4/S5 classes) a Run Result on a run whose `Result_Status__c` is Submitted, and
+  negative numbers. `bypassLock` exists only for the migration.
+- 🪤 **Every Run Result save updates the line item → the run roll-ups → the run's triggers**, including
+  `ProductionRunTrigger` → the auto-scheduler for that press. The old counting POST did exactly the same, so
+  nothing new — and the migration moved **0** runs. The skeleton flow is safe (Confirmed-only entry).
+- **Migration (dev2, 2026-09-17):** one Run Result per line item that had any count (62) **or** sat on a
+  Submitted run with a planned quantity (70 "clean" lines — a submitted run with blanks meant "all good"):
+  **132 Run Results**. Good = planned − misprint − damaged − incomplete (floor 0), `Good_Qty_Estimated__c` ticked
+  (1 line had no planned qty → good blank). `Counted_At__c` = the run's `Result_Recorded_At__c` (else the line's
+  LastModifiedDate), `Counted_By__c` = `Result_Recorded_By__c`. Dry run first (rolled back): old values
+  unchanged on every line, 0 runs rescheduled. After: line sums = Run Result sums exactly
+  (good 5,606 · misprint 70 · damaged 23 · incomplete 590). Script: see "Migration script" below.
+- **Change set "S6 Run Result 2026-09-17"** (dev2 → staging): the object, its 9 fields, the two good fields, the 3
+  Apex parts, and System Administrator + the two integration profiles. **Not yet uploaded.**
+
+**Dashboard (uncommitted on the Mac).**
+- **`functions/api/run-results/index.js`:** GET one run now also returns `resultsAvailable`, `results[]` (every
+  count, oldest first) and `lines[].goodQty` (summed from the results — `Good_Qty__c` is deliberately not in the
+  main SELECT). The list adds `totalGood` via a separate fail-open query. POST gains `action`:
+  `add` (sObject Collections insert, all-or-none, ownership-checked, stamps who/when), `remove`, `submit` (the old
+  stamp + totals + reprint tail, moved into `submitRun()` unchanged, now also reporting `totals.good`) and
+  `reopen` (manager: `runs.schedule`; answers `reprintExists` when a reprint was already built from the old
+  counts). In an org without `Run_Result__c` every S6 read answers `resultsAvailable:false` and the legacy POST
+  still works; in an org **with** it, the legacy POST refuses typed numbers (409 `counting_screen_updated`) so a
+  stale tab cannot write around the Run Results.
+- **`ca-api.js`:** `addRunCounts`, `removeRunCount`, `finalizeRunCounts`, `reopenRunCounts`.
+- **`counting.html`:** in results mode the grid gains a **Good** column; the boxes are the *next* count and start
+  empty; each size shows "So far: … (x% of plan)"; a **Progress** bar (good ÷ planned); **Add Count** logs the typed
+  rows and clears them; a **Counts logged** list (newest first, time · who, remove button while open); Submit
+  becomes "Submit — Counts Are Final" (typed numbers are added first). A submitted run shows a lock banner and
+  **Reopen (manager)** (manager PIN). Without the layer the page is the old four-box form, unchanged (T6 path).
+
+**Tested (before push).** T1 smoke 7/7. Apex 5/5 plus S4/S5 suites still 15/15. **Endpoint against a stateful
+fake Salesforce that enforces the lock and the sums: 24/24** (add/sum, who/when, blanks skipped, negative/decimal/
+foreign-line refused, 15-char ids, remove, legacy refused, submit totals + reprint call, add/remove after submit
+409, reopen + reprint warning + manager cap, list `totalGood`, and the no-layer org: `resultsAvailable:false`,
+add 409, legacy submit still writes). **Counting screen, headless, stateful mock:** add → so-far/progress/log,
+second add, remove, type + Submit (add then final), locked view (no inputs, no remove), Reopen → editable; legacy
+mode posts the old payload. No page errors.
+
+**To finish S6.**
+1. Anthony: upload + deploy **"S6 Run Result 2026-09-17"** to staging.
+2. Claude: run the tests in staging, dry-run then run the migration there (14 lines; 3 with counts, 0 submitted
+   runs today), record counts.
+3. Anthony: commit + push the code. Claude: T5 on both orgs (counting screen live: add, remove, submit, reopen on
+   a throwaway run), the §4 S6 scenarios (a)–(f) below, T6 (hide `Run_Result__c` for System Administrator →
+   old form), T8 (`rework-check` on a reprint order).
+4. Production (S8): the change set, then this migration **after counting the runs the scheduler could touch**.
+
+**Migration script** (anonymous Apex; replace the last line with `System.assert(false, msg);` for a dry run):
+```
+RunResultRollup.bypassLock = true;
+List<Production_Run_Line_Item__c> lines = [SELECT Id, Planned_Qty__c, Misprint_Qty__c, Damaged_Qty__c, Incomplete_Qty__c,
+  LastModifiedDate, ProductionRun__r.Result_Status__c, ProductionRun__r.Result_Recorded_At__c,
+  ProductionRun__r.Result_Recorded_By__c, (SELECT Id FROM Run_Results__r LIMIT 1) FROM Production_Run_Line_Item__c];
+List<Run_Result__c> ins = new List<Run_Result__c>();
+for (Production_Run_Line_Item__c l : lines) {
+  if (!l.Run_Results__r.isEmpty()) continue;
+  Boolean has = l.Misprint_Qty__c != null || l.Damaged_Qty__c != null || l.Incomplete_Qty__c != null;
+  Boolean sub = l.ProductionRun__r.Result_Status__c == 'Submitted';
+  if (!has && !(sub && l.Planned_Qty__c != null && l.Planned_Qty__c > 0)) continue;
+  Decimal good = null;
+  if (l.Planned_Qty__c != null) good = Math.max(0, l.Planned_Qty__c
+    - (l.Misprint_Qty__c == null ? 0 : l.Misprint_Qty__c) - (l.Damaged_Qty__c == null ? 0 : l.Damaged_Qty__c)
+    - (l.Incomplete_Qty__c == null ? 0 : l.Incomplete_Qty__c));
+  ins.add(new Run_Result__c(Line_Item__c = l.Id, Good_Qty__c = good, Good_Qty_Estimated__c = good != null,
+    Misprint_Qty__c = l.Misprint_Qty__c, Damaged_Qty__c = l.Damaged_Qty__c, Incomplete_Qty__c = l.Incomplete_Qty__c,
+    Counted_At__c = l.ProductionRun__r.Result_Recorded_At__c != null ? l.ProductionRun__r.Result_Recorded_At__c : l.LastModifiedDate,
+    Counted_By__c = l.ProductionRun__r.Result_Recorded_By__c,
+    Note__c = 'Migrated from the old counting model (S6, 2026-09-17)'));
+}
+insert ins;
+System.debug(LoggingLevel.ERROR, 'S6MIG inserted ' + ins.size());
+```
+The dev2 run also snapshotted every run's schedule before/after and compared the old line values (both clean).
+
+**The original plan, kept for reference.**
 
 **Salesforce.**
 - `Run_Result__c`, Master-Detail → `Production_Run_Line_Item__c`: `Good_Qty__c`, `Misprint_Qty__c`,
@@ -5534,6 +5646,8 @@ build against this until it carries a decision date.
 
 **D27 — how Art Specs are linked and shown. DECIDED 2026-09-17 (Anthony).** (1) The order sheet and the Pre-Production drawer show the recipe facts that belong to the decoration's method (screen print: ink colors, color order, mesh, ink type, flash, dryer; embroidery: thread colors, stitch count; heat press: transfer, temperature, time, pressure; plus size/location, print specs and notes for all). (2) A location is linked to a spec automatically **only when exactly one spec fits** — same job, method and location; a spec with no location only for a single-location decoration. (3) That rule keeps running on new and edited records, not just once. Hand-set links are never overwritten. **Rules out:** guessing between two candidate recipes, and copying recipe facts onto the item (D18). See **S5**.
 
+**D28 — how counting works under Run Result. DECIDED 2026-09-17 (Anthony).** (1) Salesforce totals the Run Results into the line item's existing Misprint / Damaged / Incomplete fields (plus a new Good_Qty__c), so the reprint builder, shortfalls, the skeleton flow and the damage email keep reading what they read today. (2) Submit still means "counts are final"; the org refuses count changes on a submitted run, and a **manager can reopen** it (manager PIN). (3) Migrated counts get **good = planned − problems**, ticked as estimated. (4) **Good is optional** on a count. **Rules out:** rewiring every reader onto new roll-ups, deleting counts after submit without a reopen, and forcing a good number on every count. See **S6**.
+
 **D26 — the order-creation flow keeps writing `Order.Design__c`. DECIDED 2026-09-17 (Anthony); amends D20.** Flow *Order and Order Items Subflow Design* (active v48) sets `Order.Design__c` from its `DesignID` input when it creates an Order. It stays, unless it would cause a critical failure. Checked 2026-09-17: it writes only on **create** (a `recordCreates` element; no update of an existing Order), so it never overwrites a design a person later chose, and after S3 a design no longer disappears with its Opportunity (lookup, clear on delete), so the link it writes stays valid. No critical failure found. A person still attaches the design on orders made by hand. **Rules out:** removing that assignment from the flow.
 
 **Still open — cleared allocation rows.** Today a cleared size is set to `Planned_Qty__c = 0` and the
@@ -7542,9 +7656,17 @@ dev2 also grants the two integration profiles and the GOA / Modified admin profi
 (cosmetic). **Records and FLS were set by hand in each org**, because neither travels on a change set.
 Production has none of this (D22). ⚠️ See §4 S1 for why earlier parity reads of this object were wrong.
 
-### Art Spec wiring (S5) — ⚠️ dev2 only, 2026-09-17
+### Run Result (S6) — ⚠️ dev2 only, 2026-09-17
 
-dev2 has `ArtSpecLink`, `ArtSpecLinkTest` and triggers `ArtSpecLinkPlacement`, `ArtSpecLinkArtSpec`,
+dev2 has `Run_Result__c` (9 fields), `Production_Run_Line_Item__c.Good_Qty__c`, `Production_Run__c.Total_Good_Qty__c`,
+`RunResultRollup` + test + `RunResultTrigger`, and 132 migrated Run Results. Change set **"S6 Run Result 2026-09-17"**
+(15 components + 3 profiles) is built, not uploaded. Records do not travel: staging and production each need the
+migration script (§4 S6). ⚠️ staging's line item also has `Actual_Good_Qty__c` / `Reprint_Qty_Needed__c` — unused, do
+not confuse with the new `Good_Qty__c`.
+
+### Art Spec wiring (S5) — aligned 2026-09-17
+
+Change set deployed to staging (tests 7/7 there). Staging has no Art Spec records, so no links yet. dev2 has `ArtSpecLink`, `ArtSpecLinkTest` and triggers `ArtSpecLinkPlacement`, `ArtSpecLinkArtSpec`,
 `ArtSpecLinkItem` (all Active), and 3 backfilled location links. staging gets the same five components by change
 set **"S5 Art Spec Link 2026-09-17"** (no fields, so no profiles needed), then its own backfill. For production:
 the same components, and the backfill after S4's.
@@ -8279,6 +8401,9 @@ Newest first. One line per change; link to the story that carries the detail.
 
 | Date | What | Where |
 |---|---|---|
+| 2026-09-17 | 🔧 **S6 RUN RESULT BUILT in dev2** (D28). New `Run_Result__c` + `Good_Qty__c` / `Total_Good_Qty__c`; Apex `RunResultRollup` keeps the old line boxes = sums of Run Results and locks submitted runs; tests 5/5. dev2 migrated: 132 Run Results, sums match, 0 runs rescheduled. **Code, uncommitted on the Mac:** `run-results` actions add/remove/submit/reopen + results in GET (fail-open), `ca-api.js` wrappers, `counting.html` "add a count" screen with progress, log and manager reopen (old form kept when the org lacks Run Result). Rig 24/24, headless screen walk clean, smoke green. Change set "S6 Run Result 2026-09-17" built, not uploaded | §0, §4 S6, §5, §9 |
+| 2026-09-17 | ✅ **S5 CLOSED.** Order sheet re-pushed and live; dev2 live check passed (recipes print on 00013513); T6 passed (field hidden → `available:false`, boards unchanged; restored) | §0, §4 S5 |
+| 2026-09-17 | ✅ **S5 in staging + live.** Change set deployed; tests 7/7 + 8/8 in staging. Backfill linked nothing (staging has 0 Art Specs). Live test with two throwaway recipes: triggers linked only the intended location and items; the Pre-Production drawer showed the recipe on the live dashboard; deleting them cleared all links. 🚩 `order-sheet.html` is still the pre-S5 version live — re-commit/push. Open: dev2 live check and T6 (need the dashboard on dev2) | §4 S5, §9 |
 | 2026-09-17 | 🔧 **S5 ART SPEC WIRING BUILT in dev2; staging waits on change set "S5 Art Spec Link 2026-09-17".** Decision **D27** (Anthony): per-method recipe facts; auto-link only on one clear match; keeps running. Apex `ArtSpecLink` + 3 triggers fill blank `Decoration_Placement__c.Art_Spec__c` (and `Pre_Production_Item__c.Art_Spec__c` when a decoration has one spec) — never `Decoration__c`, whose save re-runs the scheduler. Tests 7/7, 97%; closes S4's 0%-coverage item. dev2 backfill: 3 of 108 rows linked, PM-00129 left blank on purpose. **Code, uncommitted on the Mac:** new `functions/api/art-specs/index.js` (follow-up endpoint, `available:false` fallback); `ca-api.js` spec helpers; recipe on `order-sheet.html` and in the `pre-production.html` drawer; transfer pickers moved to the D25 list. Smoke green; headless renders with and without specs. Also: **T5 walk on staging passed** (S4's last open test) | §0, §4 S4/S5, §5, §9 |
 | 2026-09-17 | ✅ **S4 CATALOG LAYER DONE in dev2 + staging.** New `Decoration_Method__c` (4), `Placement__c` (11) and `Decoration_Placement__c` (per-placement junction with an Art Spec lookup, D23); lookups on Decoration, Production Run, Proposed Run and Art Spec; Apex `CatalogSync` + 5 triggers keep them filled from the picklists the app still writes (dual-write in the org), tests 8/8. Backfilled both orgs. PPI transfer types gained the Decoration list and legacy values map on save (D25). `Run_Minutes_Per_Unit__c` → decimals. Change set **S4 Catalog 2026-09-17** with profiles. 🪤 Required lookup ⇒ "don't allow parent delete", handled by a before-delete; the dev2 backfill re-slotted 8 stale proposal runs through the auto-scheduler (staging: 0 changed). **Code, uncommitted on the Mac:** method/placement/transfer allow-lists moved into `_placements.js`; Apex source added to `New Apex Classes/` | §0, §4 S4, §9 |
 | 2026-09-17 | **Decisions D23–D26 (Anthony), answering S3's findings.** D23 one Art Spec per design + method + **placement** (front art differs from back), so S4 adds a placement to Art Spec and S5's Decoration → Art Spec join is per placement. D24 no uniqueness rule on Art Spec (the same art is run differently between jobs). D25 the Decoration transfer-type list is canonical; PPI's list converges in S4 (mapping proposed, to confirm). D26 flow *Order and Order Items Subflow Design* keeps setting `Order.Design__c` on create (amends D20); checked: create-only, no critical failure. Docs only | §4 S3/S4, §5 |
