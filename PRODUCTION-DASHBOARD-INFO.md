@@ -4,7 +4,7 @@
 system reference, trap list, task tracking, validation checklists and change history — one file, so
 there is one place to look and one place to update.
 
-**Last updated: 2026-09-11.** Replaces `ROADMAP.md`, `CLAUDE-CODE-QUEUE.md`, `CLAUDE.md`,
+**Last updated: 2026-09-16** (target object model adopted, §4). Replaces `ROADMAP.md`, `CLAUDE-CODE-QUEUE.md`, `CLAUDE.md`,
 `HANDOFF.md`, `VALIDATION-INTEGRATIONS.md`, `VALIDATION-SCENARIOS.md`, `SELECTOR-CHANGE.md` and
 `README.md`. See §12 for what happened to each of the old files and which ones were deliberately not
 carried over.
@@ -72,7 +72,173 @@ staging was at V35. Version numbers do not line up between orgs; do not use them
 in dev2 resolves in staging and production too. That is why the hardcoded `0055e000005tFYfAAM` in
 `CreateCalendarEvent` is not a promotion blocker — it has been checked in both.
 
-### ⏭️ RESUME HERE — HANDOFF, written 2026-09-14
+### 🧭 NEWEST — 2026-09-16: the target object model was adopted. Read §4 "Target model build" first.
+
+Anthony's boss handed over a new Salesforce object design (OBJECT-GUIDE). Its decisions are
+**D14–D22** in §5. Its plan, build rules and **test protocol (T1–T8)** are at the top of §4, as stages
+S0–S8. S0 (measurement and decisions) is done. **S1 (Work Center parity) is done** in both sandboxes. It turned
+up three findings that change how tests are read; see S1. **S2 (the approval gate) is built and tested,
+and switched OFF** (blank start date) until Anthony confirms the date at the end of S7. **S3 (the art layer)
+is done in both sandboxes** (2026-09-17); its findings became D23–D26. **S4 (the catalog layer) is done in both
+sandboxes** (2026-09-17): catalog objects, in-org dual-write Apex, backfill. **S5 (Decoration and
+Pre-Production Item → Art Spec) is built and backfilled in dev2** (2026-09-17); the staging change set
+**"S5 Art Spec Link 2026-09-17"** and the dashboard code (uncommitted on the Mac) are waiting on Anthony.
+D17 **supersedes D1**: the counting model is being replaced, but not until S6. The 2026-09-15 handoff
+below is still accurate for everything it covers.
+
+### ⏭️ RESUME HERE — HANDOFF, written 2026-09-15
+
+**Everything below was verified in dev2, in staging, or on disk on 2026-09-15.** This supersedes the
+2026-09-14 handoff that follows it — but that one's **open items 1–6 are all still open**, so read
+both. Then §2 The traps, then §4 wave 0c, then §9.
+
+---
+
+#### ✅ WAVE 0c IS DONE IN BOTH SANDBOXES — `Production_Method__c` is now `Decoration__c`
+
+**The object was renamed for real, in dev2 and in staging.** Not the label this time — the API name.
+🚩 **This inverts trap 12, which said for a week that `Decoration__c` does not exist.** It exists. It
+is the most-used object in the system. Every SOQL query, Apex class, flow and file under `functions/`
+now reads `Decoration__c`.
+
+⛔ **The field `Pre_Production_Item__c.Production_Method__c` was NOT renamed and never will be.**
+Object and field API names are separate namespaces. That field still reads `Production_Method__c`,
+still labels as "Production Method", and now types as `Lookup(Decoration)`. **48 `Production_Method__r`
+traversals across the repo are therefore still correct.** A find-and-replace on the old name breaks
+every one of them — see §4 wave 0c for the two guard lines and the full change list.
+
+**The cost of this wave was four Apex classes.** Salesforce refuses to rename an object any Apex
+references, so the referencing classes were emptied to stubs first — and the originals were never
+downloaded. `OrderPrintDateRollup`, `ProductionAutoSchedulerSelector`, `ProductionEventPublisher` and
+`ProductionAutoSchedulerService` were **rebuilt from measurement, not restored from source.** What was
+measured and what was assumed is now in §4 wave 0c, in full. Read it before you trust any scheduling
+behaviour.
+
+---
+
+#### ✅ WHAT ELSE LANDED TODAY
+
+| | dev2 | staging |
+|---|---|---|
+| `Decoration__c` object rename | ✅ | ✅ |
+| 7 Apex artifacts deployed | ✅ | ✅ **7/7 byte-identical to dev2** |
+| `ProductionAutoSchedulerServiceTest` | ✅ **5 of 6 pass** | ✅ same |
+| `ProductionEventPublisher` coverage | **20.5% → 89.3%** | same class, same test |
+| Org-wide Apex coverage | **82%** | **85%** |
+| Local (deploy-blocking) test failures | **2** | **14** |
+| `shippingBuffer()` real numbers | ✅ | ✅ |
+| BFF 21 object edits + 5 line-item edits | ✅ committed by Anthony | — (one deployment, three orgs) |
+| Press `MALFORMED_ID` flow fault | ✅ fixed | ⛔ **not yet — in the change set** |
+| Line-item skeleton flow fault | ✅ fixed | ⛔ **not yet — in the change set** |
+
+📌 **Two production bugs were reported today and turned out to be ONE cause.** Runs stopped reaching
+the shop calendar *and* stopped getting Run Line Items. Both were the skeleton flow faulting on a
+stale object reference and **rolling back the whole `Planned → Confirmed` PATCH**. §4 wave 0c has the
+diagnosis; the lesson is in trap 17.
+
+---
+
+#### ⛔ OPEN — in the order the next session should take them, and the order matters
+
+**1. ✅ CLOSED 2026-09-16 — staging's run line item object ALREADY reads
+`Production_Run_Line_Item__c`.** ❌ **This item said the opposite on 2026-09-15 and it was wrong.**
+Read live in staging on 09-16: API name `Production_Run_Line_Item__c`, label "Run Line Item",
+**14 live records in it** — so it is the real object carrying its data, not an empty duplicate. It
+matches dev2 exactly.
+
+⚠️ **Whether Anthony renamed it overnight or the 09-15 reading was simply wrong is not knowable from
+here, and it is not worth chasing.** What matters is the method: the 09-15 claim was read once, late
+in a long session, and written up as 🔴 blocking. **One re-query closed it.** This is §0's own rule
+paying for itself — a ⛔ line is a snapshot of the moment it was written, and the org is the only
+source of truth.
+
+📌 **Consequence: steps 2 and 3 below are NO LONGER GATED ON ANYTHING.** The BFF's 5 line-item edits
+are correct for both sandboxes, and production has none of these objects at all, so nothing there can
+break.
+
+**2. 🔴 Upload the change set `0c Flow Fixes 2026-09-15` to staging — NOW UNBLOCKED.** It is already
+built in dev2 and holds both repaired flows. 📌 **Flows arrive INACTIVE.** Activate both by hand after
+deployment; a Flow Quick Action cannot reference an inactive flow.
+
+**3. Deploy the BFF — gated only on step 2 now.** ✅ The repo is committed and correct for **both**
+sandboxes: the 5 line-item edits match staging as well as dev2 (item 1), and production has none of
+these objects. Deploy after the flows are live in staging, and verify in the network tab.
+
+**4. Housekeeping in dev2's `Order and Order Items Subflow Design`: delete V47 and V48.** Both are junk
+produced by the failed Flow Builder edits described in trap 16. **V47 is ACTIVE and behaviourally
+identical to V46**; V48 is a draft. Neither contains the real fix, which Anthony made a different way.
+
+**5. Orphan records left by the two faults.** Order **00013516** was created and rolled back mid-flow.
+Runs **PR-0115, PR-0116, PR-0117** are stuck on `Auto_Scheduling_Status__c = 'Planned'` — 🚩 and per
+trap 9 **a run left on `Planned` IS the failed-publish signal**, so these three are the fingerprints of
+the bug, not new breakage. Clean them up once step 2 is verified.
+
+**6. Recover `SELECTOR-CHANGE.md` before committing the markdown deletions.** It is deleted from disk
+but still in history: `git show HEAD:SELECTOR-CHANGE.md`. 🚩 **It is the document
+`ProductionAutoSchedulerSelector`'s two WHERE clauses were reproduced from verbatim** — the provenance
+for a rebuilt class goes with it. (§9 holds a copy of the selector change itself; the original file is
+the evidence.)
+
+**7. Five iCloud-evicted files still block git's view of the tree** (trap 14): `tokens.css`,
+`wrangler.toml`, `tools/smoke.mjs`, `tools/contrast.mjs`, `tools/check-dc-templates.mjs`.
+
+**8. Close the try/catch gap in `ProductionAutoSchedulerService.scheduleFromOrders()`.** It swallows its
+own exceptions, which is why the two flow faults today surfaced as "nothing happened" rather than an
+error. Best-effort is the right design for a calendar publish; **silent** is not.
+
+**9. Still unchecked in staging:** `Production_Calendar_Setting__c.Calendar_Owner_Id__c` (E7.1) and the
+`Run_Print_Location__c` formula field. dev2 has both.
+
+**10. Two flows are diverged and were NOT part of today's work — do not "fix" them by reflex.**
+`OrderScheduling` is **dev2 V24 vs staging V37**. `Create_Multi_Orders_with_Design_Name` is **V21 in
+both, modified ten months apart**. §0 already warns that version numbers do not imply parity.
+
+---
+
+#### 📌 WHAT THIS SESSION LEARNED THAT CHANGES HOW THE NEXT ONE SHOULD WORK
+
+**1. 🚩 An object rename destroys every Apex class that references it, and the Download button is the
+only backup.** There is no version history for Apex in the UI. The four classes lost today were
+emptied on the strength of a runbook step that said "back them up first" — and the backups were never
+taken. **They were rebuilt from live data, and they are reimplementations.** See §4 wave 0c for the
+measured-vs-assumed table, which is the honest label on every line of scheduling behaviour in the org
+right now.
+
+**2. 🎯 A rebuilt class is only as good as the evidence it was rebuilt from, and the evidence expires.**
+The 11 surviving `Proposal` runs were the *only* surviving output of the original scheduler — and
+restoring a working scheduler re-slots them, destroying the evidence. They were exported first. **That
+CSV is now embedded in §4 wave 0c**, because it is the sole record of the lead-time rule.
+
+**3. 🎯 Ask for the real numbers instead of inventing plausible ones.** `shippingBuffer()` shipped as a
+rebuilt guess — Pickup 0, Delivery 1, Split Ship 5, Shipping 2/4/3. **Every number was wrong.** Anthony
+supplied the real table in about ninety seconds when asked directly. **The lesson is not "the guess was
+bad"; it is that a guess dressed as code reads as fact to the next session.** Assumptions belong behind
+an `// ASSUMPTION:` comment naming who has to confirm them.
+
+**4. 🎯 Two symptoms with one cause is the common case, not the rare one.** "Runs won't hit the
+calendar" and "no Run Line Items are created" were reported as two bugs and investigated as two bugs.
+They were one faulting flow rolling back one transaction. **Check whether the symptoms share a
+transaction before you split the investigation.**
+
+**5. A frightening failure count is usually managed packages.** dev2's Run All Tests shows **264
+failures** and staging's **306**. Split by `ApexClass.NamespacePrefix`, only **2** and **14** are local.
+Managed-package tests are excluded from deploy runs and cannot block anything. 📌 **Always split by
+namespace before reacting to a test count** — the recipe is in §8.
+
+**6. 🪤 Flow Builder can accept an edit, display it correctly, and discard it on commit.** Setting the
+`PressChoices` record-choice-set **Choice Value to `Id`** failed three times — mouse, keyboard, and
+save-without-reopening — each time showing the right value and each time writing `valueField: null` to
+metadata. **Three attempts is the limit; after that the answer is a different mechanism, not a fourth
+click.** Trap 16.
+
+**7. The Developer Console can be driven reliably, and the recipe is now written down** — including the
+two things that silently do not work (`textarea.value`, the first click after load) and the SOQL rule
+that cost a query today (**field aliases are legal only on aggregate expressions**). §2, browser
+recipes.
+
+---
+
+### PREVIOUS HANDOFF — 2026-09-14 (superseded by the one above; its open items 1–6 are STILL OPEN)
 
 **This is a clean handoff at the end of a working session. Everything below was verified in the org
 or on disk on 2026-09-14, not carried forward from an earlier note.** Read this, then §2 The traps,
@@ -271,7 +437,7 @@ somewhere outside the repo before switching branches. See §11 for the incident.
 2. **The traps** — the hard rules, each of which has cost a real afternoon
 3. **What the system is** — shape, boards, orgs, auth, the data model
 4. **Where things stand** — blocking work, phases, closed items, progress to deployment
-5. **Decisions** — D1 through D13, and the open ones
+5. **Decisions** — D1 through D22, and the open ones
 6. **Who owns what, and the rules of engagement**
 7. **Work queue** — what can be handed to Claude Code right now
 8. **Validation** — the integration checklist and the end-to-end scenarios
@@ -518,8 +684,19 @@ already-Confirmed may publish no calendar Event at all. See `publishRun()` in
 `ProductionAutoSchedulerService` silently overwrites `Scheduled_Start__c`/`Scheduled_End__c` on any
 run that isn't pinned.
 
-**10. Nothing in this app ever deletes a `Production_Run_Line_Items__c` row.** To un-allocate a
-size, set `Planned_Qty__c` to **0** — never delete, and never null.
+**10. Nothing in this app ever deletes a run line item row.** To un-allocate a size, set
+`Planned_Qty__c` to **0** — never delete, and never null.
+
+✅ **BOTH ORGS AGREE, RE-VERIFIED 2026-09-16.**
+
+| Org | API name | Label | Records |
+|---|---|---|---|
+| dev2 | `Production_Run_Line_Item__c` | Run Line Item | — |
+| staging | `Production_Run_Line_Item__c` | Run Line Item | 14 |
+
+❌ **This rule carried a 🚩 "the orgs disagree" table on 2026-09-15 naming staging as
+`Run_Line_Items__c`. That was wrong**, and one re-query closed it. The repo's 5 edits (§4 wave 0c) are
+correct for both sandboxes; production has none of these objects.
 
 The Salesforce Flow `Production_Run_Generate_Line_Item_Skeleton` (dev2 + staging) creates these
 rows and fires on create OR update. Its only guard is **"does this run have any rows"** — not "were
@@ -544,21 +721,34 @@ a manager's decision not to print that size on this run, and should read as one.
 
 📌 And the rule behind all three: **a flow that completes is not a flow that works.** Every one of these ran green, on a complete canvas, producing a wrong email. Open the action's **resolved input values** in the debug log — that is the only place the real output exists.
 
-**12. "Decoration" is `Production_Method__c`.** The object's **label** was changed to Decoration on
-2026-09-14; its **API name was not, and is not going to be** — Salesforce blocks that rename outright
-(§11). So Setup, every page layout, the related lists on Order and Production Plan, report types, list
-views and all five boards now read **Decoration**, while every SOQL query, Apex class, flow and file
-under `functions/` still reads **`Production_Method__c`**.
+**12. "Decoration" IS `Decoration__c` — the object really was renamed on 2026-09-15.**
+❌ **CORRECTION.** This rule said for a week that the API name "was not, and is not going to be"
+changed, and that `Decoration__c` does not exist. **Both halves were wrong by the end of 2026-09-15.**
+The label changed on 09-14; the **API name changed on 09-15, in dev2 and staging**, at the cost of four
+Apex classes (§4 wave 0c).
 
-⛔ **`Decoration__c` does not exist.** `Decoration_Method__c` is an unrelated **field on Order**, live
-in `_rework.js`'s `CLONED_ORDER_FIELDS`. Reaching for either because a layout said "Decoration" is the
-mistake this rule exists to stop.
+So Setup, every page layout, every related list, report type, list view, board, SOQL query, Apex class,
+flow and file under `functions/` now agree: it is **`Decoration__c`**.
 
-This is the "don't guess API names from labels" rule (§9) aimed at the most-used object in the system.
-Unlike `Order_Substatus__c`, where the mismatch is an accident of history, here label and API name were
-made to disagree **on purpose** — the label is what the shop reads, the API name is what the code reads,
-and only the first one was cheap to change.
+⛔ **What did NOT change, and is the live trap now:**
 
+- **`Pre_Production_Item__c.Production_Method__c` — the FIELD.** Still that name, still labelled
+  "Production Method", now typed `Lookup(Decoration)`. Object and field API names are separate
+  namespaces and the field was never in scope.
+- **`Production_Method__r` — 48 traversals across the repo.** A relationship name derives from the
+  **field**, not the object. Because the field kept its name, every one of these is still correct.
+  Rewriting them to `Decoration__r` breaks all 48 — and at **runtime against a live org**, not at
+  build time.
+- **`Order.Decoration_Method__c`** is still an unrelated field, live in `_rework.js`'s
+  `CLONED_ORDER_FIELDS`. It is not this object and never was.
+
+🪤 **`functions/api/production-methods/index.js` holds the object and the field 27 lines apart** —
+`:64` was renamed, `:91` must not be. A find-and-replace on that file breaks it silently. The two
+guard lines are listed in full in §4 wave 0c.
+
+📌 **The rule this replaces is still worth keeping in mind:** label and API name were deliberately made
+to disagree for a day, and the code read one while the shop read the other. That is survivable. What is
+not survivable is assuming the disagreement is still there after somebody closed it.
 
 **13. The custom-field EDIT page wedges the browser renderer — and it is NOT only Order.** Recorded
 2026-09-08 for the Order custom-field edit page (4 incidents, Lightning Object Manager AND Classic).
@@ -595,6 +785,71 @@ evicted, not absent. Do not conclude the repo is broken until the files are know
 **Fix: force macOS to download them** (opening them, or staging them through the Claude device
 bridge, both do it), then everything works normally. A directory listing that reports `cloudOnly`
 is the fastest diagnosis — check before concluding anything else.
+
+**15. 🚩 RENAMING AN OBJECT DESTROYS EVERY APEX CLASS THAT REFERENCES IT, AND APEX HAS NO VERSION
+HISTORY.** Salesforce refuses the rename outright while any Apex names the object, so the only route
+is to **empty the referencing classes to stubs first**. ⛔ **Those stubs overwrite the originals, and
+the UI keeps no prior version.** On 2026-09-15 four classes were emptied on the strength of a runbook
+step that said "download them first" — and the downloads were never taken.
+`OrderPrintDateRollup`, `ProductionAutoSchedulerSelector`, `ProductionEventPublisher` and
+`ProductionAutoSchedulerService` had to be **rebuilt from live data**. They work, they are tested, and
+they are **reimplementations, not restorations** (§4 wave 0c).
+
+**The backup is four clicks and it is not optional:**
+
+> Setup → Apex Classes → click the class → **Download**
+
+That writes a byte-perfect `.cls`. ⛔ **Do not "back up" a class by copying its text through a browser
+tool** — the bridge strips quotes and `=` out of what it reads back, so the backup is corrupt in
+exactly the places that matter, and there is nothing to compare it against.
+
+**The working sequence, proven twice (0b and 0c):**
+
+```
+1  create the new trigger + helper against the NEW name    (they will not compile yet — that is fine)
+2  DOWNLOAD every referencing class
+3  empty them to stubs (keep the class declaration and every public signature)
+4  rename the object
+5  paste the downloaded classes back, rewritten against the new name
+6  deploy all artifacts in ONE transaction — intermediate states do not compile
+7  run the test class
+8  repeat 1-7 in the other org
+9  only then change the BFF
+```
+
+🪤 **Step 6 is load-bearing.** Saved one at a time these classes do not compile, because the helper
+calls a `scheduleFromMethods` that does not exist until the service is also updated. Use a validate-only
+deploy to prove the whole set compiles before writing anything.
+
+**16. 🪤 FLOW BUILDER CAN ACCEPT AN EDIT, DISPLAY IT CORRECTLY, AND DISCARD IT ON COMMIT.** Setting the
+`PressChoices` **record choice set**'s *Choice Value* to `Id` was attempted three times in dev2 — by
+mouse click, by keyboard Enter, and by saving without reopening the panel. **All three displayed the
+right value. All three wrote `valueField: null` to metadata**, confirmed by reading the flow metadata
+back. The symptom downstream was a `MALFORMED_ID` fault, because the choice was handing the whole
+record where an Id was expected.
+
+⛔ **Two junk versions came out of this — dev2 V47 (activated, behaviourally identical to V46) and V48
+(draft). Delete them.** ✅ **The real fix was a different mechanism entirely: a Get Records inside the
+loop.**
+
+📌 **The rule: three failed commits of the same edit means the mechanism is wrong, not your aim.** Stop
+and change approach rather than producing a fourth version. Flow versions are cheap to create and
+expensive to explain later.
+
+**17. 🚩 A FAULTING FLOW ROLLS BACK THE WHOLE TRANSACTION, SO ONE FAULT LOOKS LIKE SEVERAL UNRELATED
+BUGS.** On 2026-09-15 two defects were reported separately — *"runs won't hit the calendar"* and
+*"no Run Line Items are created"* — and investigated as two. They were **one cause**:
+`Production_Run_Generate_Line_Item_Skeleton` held a stale reference to the renamed run line item object,
+faulted, and rolled back the `Planned → Confirmed` PATCH that the app had just issued. No Confirmed
+status meant no calendar Event (trap 9); no successful flow meant no line items.
+
+📌 **Diagnose by transaction, not by symptom.** Before splitting an investigation in two, ask whether
+both symptoms ride the same save. Here the tell was already documented: **trap 9 says a run left on
+`Planned` IS the failed-publish signal**, and three runs were sitting on `Planned`.
+
+⚠️ **This is made harder by `ProductionAutoSchedulerService.scheduleFromOrders()` swallowing its own
+exceptions.** Best-effort is right for a calendar publish; silent is not. Closing that gap is an open
+item in §0.
 
 #### Conventions to follow
 
@@ -712,6 +967,8 @@ derived from the endpoints, not from watching the shop.
 
 The four-quantity model (`Planned` / `Incomplete` / `Misprint` / `Damaged` on
 `Production_Run_Line_Items__c`) is deployed to dev2 and staging, not production.
+
+⚠️ **D17 (2026-09-16) SUPERSEDES D1: this model is being replaced by Run Result (§4 target-model plan, S6).** Until S6 lands, what follows is still how the code behaves. Do not change it piecemeal.
 
 **Only problems are recorded.** There is deliberately no "good" or "complete" field — what went
 right is whatever's left over. **Confirmed as permanent by the product owner 2026-08-31 (D1):** the
@@ -834,6 +1091,44 @@ The post-save view can show what you typed rather than what was stored. Every �
 
 ---
 
+##### 🎯 Driving the DEVELOPER CONSOLE's Query Editor — the recipe that works
+
+Worked out 2026-09-15 across dozens of queries in both orgs. This is the fastest read path into an org
+that exists here; the alternatives are worse.
+
+⛔ **The REST API refuses cookie auth.** Calling `/services/data/...` from a page's JS with the session
+cookie returns `INVALID_SESSION_ID`. There is no session-id-from-the-page shortcut. Use the Query
+Editor.
+
+**The two things that silently do not work:**
+
+1. ⛔ **Setting `textarea.value` directly does not take.** The console is ExtJS; the component keeps its
+   own model and the DOM write is ignored on Execute. **Use the component:**
+   ```js
+   Ext.getCmp('queryEditorText').setValue("SELECT Id FROM Account LIMIT 1");
+   ```
+   Read it straight back with `.getValue()` to confirm before executing.
+2. ⛔ **The first click after a page load is swallowed.** Budget one throwaway click, or take a
+   screenshot first — the screenshot round-trip is usually enough to settle it.
+
+**Reading results back.** Each query opens **its own console tab**, so a DOM query for "the grid" can
+land on a stale one — match grids by **content**, not by position. The reliable extraction is the page
+text, filtered:
+
+```js
+document.body.innerText.split('\n').filter(l => l.indexOf('Exception') > -1).join('\n\n')
+```
+
+Grid-row selectors (`.x-grid3-row`) return empty often enough to not be worth relying on.
+
+🪤 **SOQL: field aliases are legal ONLY on aggregate expressions.**
+`SELECT ApexClass.Name cls, MethodName mn FROM ApexTestResult` fails with *"only aggregate expressions
+use field aliasing"*. Drop the aliases; `COUNT(Id) n` is fine.
+
+⛔ **Do not encode or transform output to get it past the browser extension's content filter.** Base64
+was tried and blocked, and working around a content filter is not something to do. Slice the output in
+plain text and take more passes.
+
 #### Verifying a change
 
 There are no tests. What's available:
@@ -955,6 +1250,8 @@ loads Chart.js) rather than putting it in `<helmet>`.
 
 ##### The Production Results model — do not redesign this by accident
 
+⚠️ **D17 (2026-09-16) supersedes D1.** The redesign is now deliberate and staged: see §4 target-model plan, S6. Until then, the rules below describe the live code.
+
 `Production_Run_Line_Items__c` carries four quantities: `Planned_Qty__c`, `Incomplete_Qty__c`,
 `Misprint_Qty__c`, `Damaged_Qty__c`.
 
@@ -1066,6 +1363,981 @@ run, and **B12 in particular is answerable with one query against staging** rath
 > 📌 **Until `docs/decisions-and-e13-groundwork` is merged, copy these files somewhere outside the
 > repo before any branch switch.** That merge is in `CLAUDE-CODE-QUEUE.md` under "Still to do" and it
 > stopped being housekeeping.
+
+---
+
+### 🧭 Target model build — OBJECT-GUIDE adoption, plan and test protocol (written 2026-09-16)
+
+**Why this exists.** On 2026-09-16 Anthony's boss handed over a new Salesforce object design
+(`OBJECT-GUIDE.md`, produced in another Claude project). The point of it is to make **each order's
+process definitive and its record-keeping clearer**: one reusable record for the art, one "recipe" for
+how that art prints with each method, real catalog objects instead of copied picklists, and a counting
+log in place of a single end-of-run total. This section is how that design gets built **without
+breaking the dashboard**. Read it with §2 open. Every rule below comes from a trap in that section.
+
+📌 **The mental model: the dashboard is the outfit, Salesforce is the body.** Workers only see the
+boards. Salesforce holds the data, the flows and the Apex. They ship on different schedules: org
+changes go by hand or change set, org by org, while code goes live **in all three orgs at once** on
+push. So every stage below is built **body first, outfit second**, and the outfit must still fit if
+the body in the active org is one step behind.
+
+**Measured basis.** Counts, field lists and the decision record are in the Claude project
+*UI/Salesforce Fixes v12*: `claude/target-model-gap-analysis.md` and
+`claude/step0-dev2-measurements-2026-09-16.md`. They were read live from dev2 and staging on 2026-09-16
+through the Developer Console. Headline numbers:
+
+| | dev2 | staging |
+|---|---|---|
+| Orders | 88 | 6,697 |
+| `Pre_Production_Item__c` | 326 | 211 |
+| `Print_Process_Details__c` | 0 | **5** |
+| Artwork Master / Design / Artwork Asset | 1 / 28 / 0 | 0 / 18 / 1 |
+| `Screen__c` | 6 (all on an Order) | **object absent** |
+| `Order.Design__c` set | 69 | **4,846** |
+| `Order.Artwork_Approved__c` ticked | 0 | **236** (~3.5%) |
+| Decoration methods in use | 3 of 4 | 3 of 4 |
+| Placements in use | 6 of 11 | 4 of 11 |
+| `Production_Station__c` | ~~empty shell, no run lookup~~ **same 9 fields + run lookup, all FLS-hidden (corrected in S1)** | **9 fields, 2 rows, run lookup set on 6 of 35** |
+
+**Decisions this plan rests on:** D14–D19 in §5, all dated 2026-09-16.
+
+#### What already exists vs what the design asks for
+
+| Target object | Today | Stage |
+|---|---|---|
+| Order, Order Product, Production Requirement, Production Plan, Decoration, Production Run, Run Line Item, Artwork Master, Artwork Asset | ✅ exist; wave 0a–0c renames done in both sandboxes | — |
+| Artwork Version | `Design__c`. **Keeps its API name (D14)**, but the Opportunity master-detail must change | S3 |
+| Work Center | `Production_Station__c` (**D19**); ✅ both sandboxes aligned in S1 | S1 ✅ |
+| Approval gate | `Order.Artwork_Approved__c` exists; nothing enforces it (**D15, D16**) | S2 |
+| **Art Spec** | ❌ does not exist | S3 |
+| **Decoration Method**, **Placement** | ❌ picklists on `Decoration__c` and both run objects | S4 |
+| Decoration → Art Spec, Pre-Production Item → Art Spec | ❌ | S5 |
+| **Run Result** | ❌ (**D17**, supersedes D1) | S6 |
+| **Screen Prep**, **Ink Mix**, **Screen Reclaim**; Screen → Art Spec | ❌ (`Screen__c` exists in dev2 only) | S7 |
+| Production | ❌ **none of the production objects exist there** (§9) | S8 |
+
+#### The build rules — apply to every stage
+
+1. **Additive only. No renames.** An object rename cost four Apex classes (trap 15). Nothing in this
+   plan renames an object or a field. New names are new components. Old ones are frozen and retired
+   later, never repurposed.
+2. **Body first.** A new field or object is created in **dev2 → FLS → staging (change set) → FLS**, and
+   read back in **both** orgs, **before** any file under `functions/` names it. Change sets drop FLS,
+   arrive flows **Inactive**, and never carry records, permission-set assignments or deletions (§9).
+   The profile that matters is **System Administrator**, which the dashboard signs in as (S1
+   finding 2). Grant `Salesforce API Only System Integrations` and `Minimum Access - API Only
+   Integrations` as well.
+3. **The outfit must fit a body one step behind.** Production has none of this, so for as long as it
+   can be the active org, **every new field the app reads goes through `runQueryOptionalField`
+   (`_placements.js`) or sits on its own endpoint that can answer `available:false`** (trap 1). A new
+   object is never added to an existing board's main SELECT. It gets a follow-up query.
+4. **Writes stay allow-listed** (§2 conventions). Every new picklist or catalog value lives in **one**
+   shared module. Today the placement list has at least four copies: `_placements.js`, a private
+   `ALLOWED_PLACEMENTS` in `decorations/[id].js`, `ca-api.js` `PLACEMENTS`, and the org value sets.
+   Converge them **before** S4.
+5. **Apex: Download before you edit** (trap 15). Any stage that touches a class starts with
+   Setup → Apex Classes → Download.
+6. **Flows: verify the active version number, then read resolved values in a debug run** (traps 11,
+   16, 17). A flow that completes is not a flow that works. A faulting flow rolls back the whole save.
+7. **One stage per branch, one story per commit, Asana id in the message, no push** (§0).
+   **Update this file at the moment a piece lands**: the stage row below, §9 for parity, §11 for the
+   change log.
+8. **Sandbox records are disposable; Setup is not** (§1). Break test orders freely. Treat every field,
+   value, flow version and validation rule as something that ships to production.
+
+#### The test protocol — every stage passes all of these before the next one starts
+
+| # | Check | How | What it catches |
+|---|---|---|---|
+| T1 | Repo is well-formed | `node tools/smoke.mjs` (7 checks, baseline green 2026-09-16) | missing files, parse errors, `<sc-for>` in `<table>` |
+| T2 | Body matches in both orgs | Dev Console: `SELECT QualifiedApiName, DataType FROM FieldDefinition WHERE EntityDefinition.QualifiedApiName = '<obj>'` in dev2 **and** staging, diffed. ⚠️ **It omits fields the querying user cannot see** (S1 finding 1), so confirm any "missing" field on the classic object page | a field missing or typed differently in one org |
+| T3 | FLS granted | Setup → field → Set Field-Level Security, both orgs. **The load-bearing profile is System Administrator**, the dashboard's run-as user (S1 finding 2); also grant the two integration profiles for safety. Confirm with `SELECT Parent.Profile.Name, Field FROM FieldPermissions WHERE SobjectType = '<obj>'` | trap 1, the whole-board blank behind HTTP 200 |
+| T4 | Flows active and correct | Flow Trigger Explorer active version, plus a debug run's **resolved inputs** | inactive change-set flows; green-but-wrong flows |
+| T5 | Outfit fits every org | `GET /api/admin/sf-env`, then walk the affected boards on **dev2, then staging**. **Network tab, not the screen.** No amber "Demo data" chip, no 4xx/5xx | demo-data fallback masking a broken query |
+| T6 | Outfit survives a missing body | Temporarily remove FLS on the new field in dev2 and reload. The board must still load and simply omit the feature. Restore FLS | trap 1 for the production case |
+| T7 | Scenario walk | The stage's scenarios below, on a throwaway order in each sandbox | the behaviour actually changed |
+| T8 | Nothing else moved | Re-run the §8 checks for the boards the stage touched; `GET /api/rework-check` on a reprint order | regressions in reprint and rollups |
+
+The Developer Console recipe is in §2 (`Ext.getCmp('queryEditorText').setValue(...)`). For batches,
+hook `Ext.Ajax` `requestcomplete` and key each response on its `q=` URL parameter. Responses arrive
+late, so keying on order mislabels them. Use `COUNT(Id) n` rather than `COUNT()`. Keep each script
+call short, because a backgrounded console tab throttles timers and a long awaited loop hits the 45 s
+timeout.
+
+---
+
+#### S0 · Measure and decide — ✅ DONE 2026-09-16, five small items left
+
+✅ Counts taken in both sandboxes. ✅ D14–D19 decided.
+
+**Still open, none of them blocking S1:**
+- 📌 **Approval-gate start date (D16):** the day the whole design is built in Salesforce. When S7 is done, **ask Anthony to confirm it.** Nothing to pick before then.
+- ✅ **`Order.Design__c` is attached by a person (D20).** In S3, still check that no flow or Apex overwrites it.
+- ✅ **`Print_Process_Details__c` is retired whenever convenient (D21).** No row review is needed in the sandboxes; count production's rows before deleting there.
+- 🔵 **Settle `Design_Family__c` (dev2) vs `Design_Artwork__c` (staging)** (§11, 2026-09-16). Still open after S3.
+- ✅ **What writes `Order.Design__c`:** found in S3 — flow *Order and Order Items Subflow Design* sets it at order creation.
+- ✅ **Production waits for the finished model (D22).** E7.4's old-model build is superseded.
+
+#### S1 · Work Center parity (D19) — ✅ DONE IN BOTH SANDBOXES 2026-09-16
+
+**What was planned** was building staging's nine fields and the run lookup in dev2. **What was found
+changed the job:** dev2 **already had all of them.** Peter Larson created them on 2026-05-22, and
+`Production_Run__c.ProductionStation__c` exists too. The morning's measurement said *"empty shell, no
+fields, no lookup"* because **none of the fields were visible to any profile, including the admin
+running the query.** See the 🚩 below. So S1 became a **visibility-and-cleanup** stage, not a build.
+
+**Done and verified (read back from both orgs through the Developer Console after the change):**
+
+| | dev2 | staging |
+|---|---|---|
+| The 9 station fields + `Production_Run__c.ProductionStation__c` exist | ✅ (already did) | ✅ (already did) |
+| FLS, Visible + editable | ✅ **newly granted** on all 10 to System Administrator, System Admin GOA, System Admin Modified, Salesforce API Only System Integrations, Minimum Access - API Only Integrations | ✅ System Administrator already had all 10; the run lookup is visible to every profile. The other four profiles were **not** added on the 9 station fields (cosmetic; nobody signs in on them) |
+| `Station_Type__c` values | ✅ **fixed**: was one junk value, literally `Type of production equipment` (a description typed as a value). Renamed to `Screen Print`; added `Embroidery`, `Heat Press` | ✅ same fix |
+| `Active__c` | ✅ **Text(255) → Checkbox**, default Checked | ✅ same |
+| Station records | ✅ **5 created**: Press 1, Press 2 (Screen Print) · Embroidery Machine (Embroidery) · Hat Press, Shirt Press (Heat Press). All Active; `Station_Name__c` = Name | ✅ Press 1 and Press 2 **updated in place** (6 runs still point at them); the other 3 created. Same 5, same values |
+
+The five stations mirror the five `Account Type='Press'` records by name, and their types mirror
+`Account.Print_Method__c`. **Capacity, setup minutes, run minutes, location and code are still blank
+in both orgs.** They need real shop numbers from Anthony before S4 can use them.
+
+**Dashboard:** no change, as planned. **Not done / follow-ups:**
+- **Page layout.** dev2's Production Station layout shows only Name, so a record created from the UI
+  cannot set the new fields. Add them to the layout in both orgs (metadata, hand work).
+- **Real numbers** for capacity and setup/run minutes (Anthony).
+
+🚩 **THREE FINDINGS FROM S1 THAT CHANGE HOW EVERY LATER STAGE IS TESTED.**
+
+1. **`FieldDefinition` hides fields the querying user cannot see.** A FLS-hidden field does not show up
+   as "hidden"; it is **simply absent** from `SELECT … FROM FieldDefinition`, exactly as if it did not
+   exist. That is how 2026-09-16's measurement reported dev2's station object as empty, and it makes
+   test **T2 unreliable on its own.** Cross-check any "missing field" against the classic object page
+   (`/<01I id>?setupid=CustomObjects` → *Custom Fields & Relationships*), which lists every field
+   regardless of FLS. The same effect shows on `Production_Run__c` in dev2: **Setup lists about 40
+   custom fields, while the admin's `FieldDefinition` returns 22**, and *Deleted Fields* shows only 3.
+   ⚠️ **So §4 wave 0c's "20 fields … are deleted" is probably wrong.** They look FLS-hidden, not
+   deleted. Re-check before trusting either reading.
+2. **The dashboard does not sign in as the "integration" profiles.** `_sf.js` uses OAuth
+   `client_credentials` through the connected app **PreProd Dashboard**. Login history shows its
+   run-as user in **both** sandboxes is an **"Anthony Martinez" user on the System Administrator
+   profile** (dev2 `005ca00000BhcA9`, staging `005ca00000B0aWt`), with one permission set, **Proposed
+   Runs Access**. In dev2, **no user at all** is on `Salesforce API Only System Integrations` or
+   `Minimum Access - API Only Integrations`. ➡️ **The FLS that actually decides trap 1 is System
+   Administrator's** (plus that permission set). §9's advice to grant the two integration profiles is
+   harmless but not load-bearing. Production's run-as user is unknown until E7.5 configures it.
+3. **Change-field-type is scriptable if you do not mouse-click it.** In staging, a mouse click on the
+   *Checkbox* radio of `CustomFieldStageManager?change=1` froze the renderer (trap 13's family).
+   Setting the radio with a form-input call, then pressing Next and Save from a separate script step,
+   worked in **both** orgs. The same goes for *Set Field-Level Security*
+   (`StandardFieldAttributes/e`): its Save ignores mouse clicks about half the time but always
+   responds to a scripted click. Get the page's token URL by fetching the field detail page and
+   reading the button's `navigateToUrl(...)`.
+
+📌 Also seen in login history: **Salesforce CLI** sessions (`Remote Access 2.0 · Salesforce CLI`)
+exist in both sandboxes. A CLI is authenticated on some machine, which matters for the "no CLI path"
+assumption in §0.
+
+#### S2 · The approval gate (D15, D16) — ✅ BUILT IN BOTH SANDBOXES 2026-09-16, GATE OFF (date blank)
+
+**What exists now.**
+- `Production_Gate__mdt` (Custom Metadata), field `Approval_Gate_Start__c` (Date), record **`Default`**
+  with the date **blank** in both orgs. dev2 type `01Ica000000Wqpt`, record `m0Xca000001vmaU`; staging
+  type `01Ica000000Wr1B`, record `m0Xca000001vmk5`.
+- Validation rule **`Decoration__c.Artwork_Approval_Gate`**, active, Top of Page. dev2 `03dca000000IWCj`,
+  staging `03dca000000IWEL`. Formula:
+  ```
+  AND(
+    OR(ISNEW(), ISCHANGED(Status__c)),
+    OR(ISPICKVAL(Status__c, "Ready for Print"), ISPICKVAL(Status__c, "In Production")),
+    NOT(ISBLANK($CustomMetadata.Production_Gate__mdt.Default.Approval_Gate_Start__c)),
+    NOT(Order__r.Artwork_Approved__c),
+    DATEVALUE(Order__r.CreatedDate) >= $CustomMetadata.Production_Gate__mdt.Default.Approval_Gate_Start__c
+  )
+  ```
+  Message: *"Artwork is not approved on this order yet. Tick Artwork Approved on the Order, then move the
+  decoration again."* (A validation-rule message cannot easily name the order number; the dashboard's
+  own message does.)
+- **Code (uncommitted on Anthony's Mac, for review):** new `functions/api/_approval-gate.js`
+  (`loadGateStart`, `checkApprovalGate`, `gateResponse` → **409 `artwork_not_approved`** with a
+  sentence naming the order, `isApprovalRuleFailure`); the check is called before the write in
+  `decorations/[id].js` (PATCH to a gated status, and the org rule's refusal is turned into the same
+  409), `decorations/index.js` (create at a gated status) and `production-runs/index.js` (**before the
+  insert**; nothing on the Planned → Confirmed PATCH). `calendar.html` `commitDrop` now alerts
+  `errText(e)` so the sentence reaches the worker instead of `POST … -> 409`. The start date is cached
+  60 s per org. **Degrades open:** no metadata type, no record, blank date, `Artwork_Approved__c`
+  unreadable, or any failed lookup → allowed and logged.
+
+**How it was tested.**
+- dev2 Execute Anonymous (every script ends in `System.assert(false)`, so nothing was kept): date blank →
+  moves allowed. **Date set temporarily to 1/1/2026 with Anthony's OK** → unapproved order moved to
+  Ready for Print and to In Production is refused with the message; tick Artwork Approved → allowed.
+  Date then **cleared** and re-read blank on the record page. dev2 has no order created before 2026, so
+  scenario (a) could only be tested in code. staging: date blank → allowed; staging's date was never set.
+- Local harness (mocked Salesforce), 14 checks pass: off for blank / no record / no type / unreadable
+  field / failed read / no ids / bad id; blocked for an unapproved order on or after the start (also via
+  a decoration id); allowed when approved or created before the start; the 409 shape. A mutation
+  control (flipping the approved test) failed 5 checks, so the harness bites. `node tools/smoke.mjs` green.
+
+**Still open for S2.**
+- **Before the date is ever set:** check `OrderScheduling` and the Order flows for any system-context path
+  that moves a Decoration to Ready for Print / In Production (a flow hitting the rule faults and rolls
+  back, trap 17). Harmless while the date is blank, because the rule cannot fire.
+- **Board chip "Needs art approval"** (`index.html`, `pre-production.html`, `calendar.html`) deferred on
+  purpose: with the gate off it would mark ~96% of staging orders for no reason. Build it together with
+  the date, showing only when the gate is on for that order.
+- Scenarios (b)–(e) through the real dashboard (not just the org) once the code is deployed to a
+  preview, and T6 with FLS removed from `Artwork_Approved__c`.
+- At the end of S7: **ask Anthony for the start date**, set it in both orgs' `Default` record (records
+  also travel in the change set to production, D22).
+
+**The original plan, kept for reference.**
+
+**Salesforce.**
+- **A Custom Metadata Type**, e.g. `Production_Gate__mdt` with `Approval_Gate_Start__c` (Date).
+  📌 Use Custom Metadata, **not a custom setting or a record**: its records **do** travel in a change
+  set, so the start date reaches staging and production with the rule instead of being re-typed per
+  org (E7.1's `Production_Calendar_Setting__c` is the counter-example).
+- **A validation rule on `Decoration__c`.** It blocks `Status__c` changing to `Ready for Print` or
+  `In Production` when `Order__r.Artwork_Approved__c` is false **and** the Order was created on or
+  after the start date. **A blank start date means the rule never fires**, so S2 can ship early and stay dark until Anthony confirms the date at the end of S7. Its message says exactly what to do: *"Artwork is not approved on order
+  #####. Tick Artwork Approved on the Order, then try again."*
+- ⛔ **Do not put the same rule on `Production_Run__c`'s `Planned → Confirmed` PATCH.** A rule failing
+  there leaves the run **stranded on `Planned`** with no calendar Event (trap 9). That is the exact
+  signature of trap 17's rolled-back-flow incident and would be misdiagnosed the same way. The run
+  side is enforced in the app **before insert**.
+- Check `OrderScheduling` and the Order flows for any path that moves a Decoration's status in system
+  context. A validation rule applies there too, and a flow that hits it faults and rolls back
+  (trap 17).
+
+**Dashboard.**
+- **`functions/api/decorations/[id].js`:** before PATCHing `Status__c` to `Ready for Print` or
+  `In Production`, read `Order__r.Artwork_Approved__c` and the gate start date. Refuse with a named
+  reason (`artwork_not_approved`) and a human message, never the generic failure shape (§2
+  conventions).
+- **`functions/api/production-runs/index.js` (create) and `calendar.html` (`commitDrop`):** the same
+  check **before the insert**, so a run is never created for an unapproved order.
+- Boards: a "Needs art approval" chip on cards in `index.html`, `pre-production.html` and
+  `calendar.html`, so the block is visible before anyone tries to move the card.
+- **Read `Artwork_Approved__c` and the metadata through an optional path** (build rule 3). If the
+  active org lacks either, the gate is **off**. Log it, but do not block the shop in an org where the
+  rule does not exist.
+
+**Test.** T1–T8, plus these scenarios:
+(a) an order created **before** the start date, unapproved → moves freely;
+(b) created **after**, unapproved → the card will not move to Ready for Print, the run form refuses,
+and the message names the order;
+(c) tick the box → both work;
+(d) no run is ever left on `Planned` by the gate (query `Auto_Scheduling_Status__c = 'Planned'`
+before and after);
+(e) T6 with FLS removed from `Artwork_Approved__c` → boards load and the gate is off.
+
+#### S3 · The art layer: Art Spec, and Design Version reparented (D14) — ✅ DONE IN BOTH SANDBOXES 2026-09-17
+
+**Decided with Anthony before building (2026-09-17):** delete `Opportunity.Design_Count__c` (a COUNT
+roll-up over `Design__c`, the only thing blocking the type change; no metadata referenced it; 15 staging
+Opportunities had a value); when an Opportunity is deleted, **keep the design** (lookup = clear value);
+`Design__c` sharing becomes **Public Read/Write** (Salesforce sets it on conversion; matches
+`Artwork_Master__c`); Art Spec gets the **full recipe** field list.
+
+**What exists now (same in both orgs).**
+- **`Art_Spec__c`** (label Art Spec, name `AS-{00000}`, reports + history on). dev2 object `01Ica000000Wryr`.
+  Fields: `Artwork_Version__c` (Lookup → `Design__c`, optional, clear on delete, child rel `Art_Specs`),
+  `Decoration_Method__c` (restricted picklist: Screen Print / Embroidery / Heat Press / Promotional Items,
+  mirrors `Decoration__c.Type__c` until S4), copied from `Design__c`: `Ink_Colors__c`,
+  `Print_Color_Order__c`, `Print_Specifications__c` (Text Area), `Size_Location__c`, `Dryer_Settings__c`;
+  screen print: `Mesh_Counts__c`, `Ink_Type__c` (Text 100), `Flash_Notes__c`; embroidery:
+  `Stitch_Count__c` (Number 8,0), `Thread_Colors__c`; heat press: `Transfer_Type__c` (restricted picklist
+  DTF / HTV / Sublimation / Screened Transfer / Other, **= `Decoration__c.Transfer_Type__c`**),
+  `Press_Temperature_F__c` (3,0), `Press_Time_Seconds__c` (3,0), `Press_Pressure__c` (Text 50);
+  `Notes__c` (Long Text). **Copied, not moved:** the `Design__c` fields are untouched.
+- **`Decoration__c.Art_Spec__c`** (child rel `Decorations`) and **`Pre_Production_Item__c.Art_Spec__c`**
+  (child rel `Pre_Production_Items`), both optional lookups, clear on delete.
+- **`Design__c.Opportunity__c` is now Lookup(Opportunity)**, optional, clear on delete, child rel still
+  `Designs`. Records kept their links: **dev2 28/28, staging 18/18**. `Design__c` now has a standard
+  Owner (dev2: Anthony 13, Peter 13, Uros 2) and sharing `ReadWrite`. **`Opportunity.Design_Count__c` is
+  deleted and erased in both orgs** (Salesforce hides "Change Field Type" while a deleted roll-up is
+  still in the Deleted Fields bin; Anthony erased it by hand).
+- **staging `Design__c.DesignMaster__c` already existed** (Lookup → Artwork_Master__c, label "Design"),
+  FLS-hidden, which is why S0 reported it missing. FLS granted 2026-09-17 (System Administrator + the two
+  integration profiles). 0 records set.
+- **How it moved:** built by hand in dev2 (field wizard; FLS defaults gave every profile edit), then
+  outbound change set **"S3 Art Spec 2026-09-17"** (object, 17 fields, layout, both lookups, **plus profile
+  settings for System Administrator and the two integration profiles, so FLS travelled**), deployed in
+  staging by Anthony. The reparent, the roll-up deletion and the staging FLS grant were done by hand in
+  each org.
+- **4 sample Art Specs in dev2** (AS-00001…04), from real Pre-Production Items: Franklin Classical
+  (00013513) screen print + heat press, Schedule Master Merch (00013474) embroidery, Apex Orders
+  (00013518) screen print. Each is linked to its decoration and that decoration's PPIs (12 PPIs).
+
+**Tested.** T2: field lists match in both orgs (17 on Art Spec). T3: System Administrator + both
+integration profiles can edit all 19 new fields in both orgs (`FieldPermissions`). dev2 Execute
+Anonymous (rolled back): a `Design__c` with no Opportunity inserts, and an Art Spec hangs off it. T5 on
+dev2 after the reparent: `/api/production-orders` 200 with 66 mockup URLs, `/api/calendar` 10, `/api/inbox`
+3, a `mockup-proxy` fetch 200 — the Opportunity → Design mockup path still works. T8: `/api/rework-check`
+all six queries OK on 00013513 / 00013517 / 00013474. No code changed, so T1/T6 do not apply.
+**Not done:** T5 on staging (switching the active org is global and PIN-gated; do it on the next planned
+switch).
+
+**🚩 What the samples say about the shape — answered 2026-09-17 as D23–D26 (§5).**
+1. **One recipe per decoration is not enough for multi-placement decorations.** 00013513's screen-print
+   decoration is Back;Front with two inks and four screens. If front and back are different art, each
+   placement needs its own Art Spec, which makes Art Spec per design + method + **placement** (S4).
+2. **The same design + method is not always the same recipe.** "Calendar King Orders 20487" has three
+   embroidery decorations with different threads and stitch counts. Real or test noise? If real, Art Spec
+   is less reusable than OBJECT-GUIDE assumes.
+3. **Two transfer-type lists:** `Pre_Production_Item__c.Transfer_Type__c` = Screen Transfer / Digital
+   Transfer / Sublimation / Vinyl; `Decoration__c.Transfer_Type__c` = DTF / HTV / Sublimation / Screened
+   Transfer / Other. Art Spec uses the Decoration list. Converge in S4 (build rule 4).
+4. **`Order.Design__c` has an automated writer:** flow *Order and Order Items Subflow Design* (active v48)
+   sets it on the Order it creates from its `DesignID` input. D20 says a person attaches it; that holds for
+   manual orders only. The reorder screen flow copies `Design__r.Id` onto new Opportunity products.
+
+**The original plan, kept for reference.**
+
+**Salesforce.**
+- `Art_Spec__c`: Lookup → `Design__c` (Artwork Version), Lookup → decoration method (a picklist
+  mirroring `Decoration__c.Type__c` until S4 creates the object), plus the per-method print facts that
+  today sit on `Design__c` (`Ink_Colors__c`, `Print_Color_Order__c`, `Dryer_Settings__c`,
+  `Print_Specifications__c`, `Size_Location__c`, `Method__c`). **Copy, do not move.** The old fields
+  stay readable until nothing reads them.
+- **`Design__c.Opportunity__c`: Master-Detail → Lookup.** This is a type change, not a rename, so Apex
+  still compiles. Before changing it, check for Opportunity roll-up summaries over `Design__c`, for
+  sharing that depends on the master-detail, and for the Opportunity-side flows (36 Apex references,
+  §11). **Keep the field populated.** The dashboard's mockup path runs `Order.OpportunityId` →
+  `Design__c.Mockup_URL__c` (`_mockup.js`, `mockup-proxy`, D8 adoption) and must keep working.
+- Staging needs `Design__c.DesignMaster__c` (Lookup → Artwork Master). Only dev2 has it.
+- Populate a handful of Art Specs **by hand from real Pre-Production Items** and check the shape
+  against real jobs before anything reads it.
+
+**Dashboard.** Nothing reads Art Spec yet. D8's lazy mockup adoption writes to `Design__c`. Re-test it
+after the parent change.
+
+**Test.** T2, T3, T5 (mockups on `index.html`, `pre-production.html`, `order-sheet.html`), T8.
+`Design__c` record counts unchanged in both orgs.
+
+#### S4 · The catalog layer: Decoration Method, Placement, Work Center cutover — ✅ DONE IN BOTH SANDBOXES 2026-09-17
+
+**Decided with Anthony (2026-09-17):** build the per-placement junction (D23); the D25 transfer mapping as
+proposed; stations filled from the press **by name**, non-press accounts ("CA Press 1", "Culture Apparel")
+left blank; `Run_Minutes_Per_Unit__c` takes decimals.
+
+**What exists now (both orgs).**
+- **`Decoration_Method__c`** (Name = the `Type__c` value; `Active__c` default on, `Sort_Order__c`) — 4 records:
+  Screen Print, Embroidery, Heat Press, Promotional Items. dev2 object `01Ica000000Ws6v`.
+- **`Placement__c`** (Name = the picklist value; `Active__c`, `Sort_Order__c`) — all 11 values, Front…Pocket.
+  dev2 `01Ica000000Ws8X`.
+- **`Decoration_Placement__c`** (`DP-{00000}`; dev2 `01Ica000000WsA9`): `Decoration__c` (**required
+  Lookup**, not master-detail — Salesforce does not offer `Decoration__c` as a master because it is already
+  the detail of two master-detail relationships, Order and `Production_Plan__c`), `Placement__c`,
+  `Art_Spec__c` (D23, set by a person; S5 wires it). One row per decoration per placement.
+- **New lookups:** `Decoration__c.Decoration_Method__c`, `Production_Run__c.Placement__c`,
+  `Proposed_Run__c.Placement__c`, `Art_Spec__c.Placement__c`, `Art_Spec__c.Method__c`.
+- `Pre_Production_Item__c.Transfer_Type__c` gained DTF / HTV / Screened Transfer / Other; **the old four stay
+  active** (the pages still send them and production only has them). `Production_Station__c.Run_Minutes_Per_Unit__c`
+  is now `Number(14,2)`.
+- **Apex (source in `New Apex Classes/`):** `CatalogSync` + `CatalogSyncTest` (8/8 pass in dev2; class 90%
+  covered) and five triggers — `CatalogSyncDecoration` (before insert/update/delete, after insert/update),
+  `CatalogSyncProductionRun`, `CatalogSyncProposedRun`, `CatalogSyncArtSpec`, `CatalogSyncPreProductionItem`
+  (all before insert/update). **Dual-write happens in the org:** the app keeps writing `Type__c`,
+  `Placements__c`, `Print_Location__c`, `Press__c`, and the triggers fill the lookups by name and keep the
+  junction rows in step. They never throw (bookkeeping must not roll back a save, trap 17) — except the
+  before-delete, which removes a decoration's junction rows first: **a required lookup forces "don't allow
+  deletion of the parent", so without it every decoration with placement rows would become undeletable.**
+  Station rule: set from the press on create or press change; a station typed on a run whose press did not
+  change is kept; no same-named station → blank. PPI transfer types: legacy → canonical on save (D25).
+- **Code (uncommitted on the Mac):** `_placements.js` now owns `DECORATION_METHODS`/`ALLOWED_METHOD_TYPES` and
+  `ALLOWED_TRANSFER_TYPE` (legacy + canonical); `decorations/[id].js`, `decorations/index.js` and
+  `pre-production-items/index.js` import them instead of private copies (build rule 4). Smoke green. Reads
+  do not use the lookups yet; writes still send picklist values.
+- **Moved to staging** by change set **"S4 Catalog 2026-09-17"** (27 components + System Administrator and the
+  two integration profiles, so FLS travelled), deployed by Anthony. Catalog records were seeded by script in
+  each org (records do not travel).
+
+**Backfill (by anonymous Apex, per org).**
+| | dev2 | staging |
+|---|---|---|
+| Decorations with a method | 101 / 101 | 51 / 51 |
+| `Decoration_Placement__c` rows | 108 | 74 |
+| Runs with `Placement__c` (= runs with a print location) | 52 / 52 | 4 / 4 |
+| Runs with a station | 88 | 28 (23 from press; 5 had a station and no press) |
+| Proposed runs with `Placement__c` | 46 / 46 | 7 / 7 |
+| PPI transfer types remapped | 27 → Screened Transfer | 3 → Screened Transfer |
+| Runs whose schedule changed | **8** (see below) | **0 of 35** (snapshot compared) |
+
+🪤 **Saving a run or a decoration re-runs the auto-scheduler for that press** (`ProductionRunTrigger` /
+`ProductionMethodTrigger` → `ProductionAutoSchedulerService`), which re-slots every run not Confirmed/Planned.
+The dev2 backfill therefore touched 8 stale, past-dated suggestions: 7 became "Unable to auto-schedule" and
+PR-0029 moved from 6/8 to 9/20. Confirmed/Planned runs never move. Staging had no such runs. **Before any
+production backfill, count `Press__c != null AND PrintMethod__c != null AND status not in
+(Confirmed, Planned)` first.** The skeleton flow is safe (entry requires the change to Confirmed).
+
+**Tested.** T1 smoke green. T2/T3: fields and System Administrator edit access read back in both orgs. T4:
+triggers Active in both. T5 on dev2: a real dashboard PATCH (`/api/decorations/{id}`, Front → Front+Back →
+Front) added and removed the junction row; production-orders, calendar, inbox, orders, presses, shortfalls
+all 200; rework-check all six queries OK. staging (rolled back): insert → 1 row, edit to three placements →
+3 rows and method follows `Type__c`, delete → 0 rows, Vinyl → HTV. **T5 on staging (2026-09-17, after Anthony
+switched the dashboard):** `/api/admin/sf-env` → `staging`; production-orders (19), calendar, inbox (104), orders
+(5), presses (5), shortfalls (`available:true`) all 200; decorations and pre-production-items 200 for an order;
+rework-check all six queries OK; index, calendar, pre-production and order-sheet render live ("LIVE ·
+SALESFORCE", no demo chip) with mockups showing.
+
+**Still open.**
+- ~~`CatalogSyncPreProductionItem` trigger has 0% coverage~~ — **closed by S5**: `ArtSpecLinkTest` inserts
+  items, so the trigger is 1/1 covered in dev2.
+- `Decoration__c.Transfer_Type__c` exists in dev2 but is FLS-hidden (another hidden field; staging's is visible).
+- `Decoration__c.Placement__c` (single) exists beside `Placements__c` (multi); CatalogSync uses the multi-select
+  and falls back to the single only when the multi is blank.
+- Freeze the picklists only after production has the objects (S8). Deactivate the legacy PPI transfer values then.
+
+**The original plan, kept for reference.**
+
+**From S3 (D23–D25), in scope for S4:** add `Art_Spec__c.Placement__c` (lookup → `Placement__c`) and split
+sample AS-00001 into front and back; the `Decoration_Placement__c` junction decision below must also carry
+the Art Spec per placement (S5 wires it); converge `Pre_Production_Item__c.Transfer_Type__c` onto the
+Decoration list (D25 mapping, confirm first); no uniqueness rule on Art Spec (D24).
+
+**Converge the code copies first (pure code, can start now).** Replace the private
+`ALLOWED_PLACEMENTS` / `ALLOWED_METHOD_TYPES` in `decorations/[id].js` (and any other copy) with
+imports from `_placements.js`. Keep `ca-api.js` `PLACEMENTS` as the one client copy.
+
+**Salesforce.**
+- `Decoration_Method__c` (seed: Screen Print, Embroidery, Heat Press, Promotional Items) and
+  `Placement__c` (seed all 11 values; only 6 are in use across both orgs, but existing records carry
+  the others' names).
+- New **lookups beside the picklists** on `Decoration__c`, `Production_Run__c` and
+  `Proposed_Run__c`. A record-triggered flow or Apex **fills each lookup from its picklist on save**, so
+  nothing the app writes today has to change (dual-write in the org, not the app).
+- Backfill the existing records once.
+- 🪤 `Placements__c` is **multi-select** and `Print_Location__c` is single. A multi-select cannot
+  become one lookup, so a Decoration with two placements needs a child junction
+  (`Decoration_Placement__c`) or stays per-placement as D11 already treats runs. Decide this before
+  building.
+- Work Center cutover: fill `ProductionStation__c` from `Press__c` on save, the same way.
+- 📌 **Blank station numbers must mean "unknown, keep today's behaviour"** (Anthony, 2026-09-16: the
+  real capacity and setup/run minutes are not available yet). Anything that starts reading
+  `Capacity_Per_Hour__c`, `Setup_Minutes_Default__c` or `Run_Minutes_Per_Unit__c` falls back, when the
+  field is blank, to what runs today: `Order.Duration__c`, then `runDurationHours()`'s 2-hour default
+  (`_priority.js`), and the Apex scheduler's fixed blocks. It never treats blank as 0. Verified
+  2026-09-16: **nothing in `functions/`, the pages or the four rebuilt Apex classes reads any
+  `Production_Station__c` field today**, so blank values change nothing until S4.
+- 🪤 `Run_Minutes_Per_Unit__c` is `Number(18,0)`, so whole minutes only. A press doing a shirt in
+  under a minute cannot be expressed. Change it to allow decimals (e.g. `Number(16,2)`) in both orgs
+  before anything relies on it, or derive per-unit time from `Capacity_Per_Hour__c`.
+
+**Dashboard.** Reads switch to the lookups through optional fields. **Writes keep sending picklist
+values** until production has the objects. Only then do the picklists freeze.
+
+**Test.** T1–T8. Specifically: create, edit and move a decoration with each method and each placement
+in both orgs; confirm no `INVALID_OR_NULL_FOR_RESTRICTED_PICKLIST`; confirm lookups filled;
+`calendar.html` press lanes unchanged.
+
+#### S5 · Wiring: Decoration → Art Spec, Pre-Production Item → Art Spec (D18) — ✅ BUILT IN DEV2 2026-09-17, staging waits on the change set
+
+**Decided with Anthony (2026-09-17), D27:** the pages show the recipe facts **for that decoration's method**;
+a location is linked automatically **only when exactly one spec fits**; the same rule keeps running for new
+records (not just a one-time backfill).
+
+**What exists now (dev2).**
+- **No new fields.** The three lookups already existed: `Decoration_Placement__c.Art_Spec__c` (the real link,
+  one per location, D23), `Decoration__c.Art_Spec__c` and `Pre_Production_Item__c.Art_Spec__c` (both from S3).
+- **Apex (source in `New Apex Classes/`):** `ArtSpecLink` + `ArtSpecLinkTest` (**7/7 pass; class 112/115 = 97%**)
+  and three triggers, all Active: `ArtSpecLinkPlacement` (`Decoration_Placement__c` after insert/update),
+  `ArtSpecLinkArtSpec` (`Art_Spec__c` after insert/update), `ArtSpecLinkItem` (`Pre_Production_Item__c` before
+  insert/update).
+- **The one-clear-match rule.** A location row gets a spec when exactly one spec has the same Opportunity (spec →
+  `Artwork_Version__c` → `Opportunity__c` = decoration → Order → `OpportunityId`), the same method
+  (`Method__c` = `Decoration_Method__c`) and the same `Placement__c`. A spec with **no** placement counts only
+  when the decoration has a single location (D23: front art is not back art). If someone set
+  `Decoration__c.Art_Spec__c` by hand, that spec is the **only** candidate (same rules). A Pre-Production Item
+  gets a spec only when **every** location on its decoration is linked, and all to the same spec. **Only blank
+  links are ever filled** — a hand-set link is never changed or cleared. Errors are logged, never thrown.
+- 🪤 **`Decoration__c.Art_Spec__c` is deliberately never written by the Apex.** Saving a decoration re-runs the
+  auto-scheduler for its press (S4 finding). Location rows and items have no such trigger, so linking them moves
+  no runs. The page falls back to the decoration-level link when no location on it has one.
+- **Backfill (dev2):** 108 blank rows checked (dry run first, rolled back) → **3 linked** (PM-00130/Tag → AS-00002,
+  PM-00083/Front → AS-00003, PM-00135/Front → AS-00004), **0 new item links** (the 12 hand-set in S3 were already
+  there). PM-00129 (Front + Back, with the placement-less AS-00001 set on the decoration) **stays blank on
+  purpose** — one recipe cannot be both sides; give AS-00001 a placement, or add the back recipe, and the
+  trigger links it.
+- **Validation rule to know about:** `Opportunity.BillToContactRequired` needs `BillToContact__c` on any
+  non-converted Opportunity, so tests that insert one must create a Contact first.
+
+**Dashboard (uncommitted on the Mac).**
+- **New `functions/api/art-specs/index.js`** — `GET /api/art-specs?orderId=` → `{available, specs, byDecoration,
+  byItem, itemsAvailable}`. A follow-up endpoint (build rule 3): no board's main SELECT names `Art_Spec__c`, and
+  any failed query (production, FLS) answers **200 `available:false`**. `Production_Method__r` traversal kept (trap 12).
+- **`ca-api.js`:** `getArtSpecs()` (a failed call also resolves to `available:false`), `artSpecLines(spec, method)`
+  (the per-method field list: Screen Print → ink colors, color order, mesh, ink type, flash, dryer; Embroidery →
+  thread colors, stitch count; Heat Press → transfer, temp, time, pressure; every method → size/location, print
+  specs, notes; blanks dropped) and `artSpecsForDecoration()`.
+- **`order-sheet.html`:** each decoration card prints "Print recipe · <location> · AS-…" lines; the Ink Colors row
+  uses the specs' colours when any spec has them, else the items' Pantones as before. CRLF kept. Divs only.
+- **`pre-production.html`:** drawer gains a **Print Recipe** section (hidden when empty) and a "Recipe AS-… ·
+  Front" note on each linked item. Also fixed an S4 leftover: the three transfer-type pickers still offered
+  the legacy four values, which the org now rewrites on save; they now offer the D25 list (an item still holding
+  a legacy value keeps it in its own list), via one `transferOptions()` helper.
+
+**Tested.** T1 smoke 7/7. T2/T3: no new fields; the lookups were read back in S3/S4. T4: three triggers Active in
+dev2; `CatalogSyncTest` still 8/8. T7: the seven test scenarios (per-location specs; placement-less spec on one
+vs two locations; wrong method / two candidates stay blank; spec created later links rows and items, and a new
+item picks it up; hand-set links kept; decoration-level spec is the only candidate). Endpoint unit-tested with a
+stubbed Salesforce (full shape, bad id → 400, missing object → `available:false`, missing item link → rest still
+served). Both pages rendered headless against fixtures: the order sheet printed the three recipes and the size
+grid still drew its 20 cells; with `available:false` and with a 500 the sheet printed exactly as before; the
+drawer showed the recipe and the item note. **Not yet:** T5/T6 against a live org — needs the code pushed.
+
+**To finish S5.**
+1. Anthony: upload change set **"S5 Art Spec Link 2026-09-17"** (dev2 → staging), deploy it in staging.
+2. Claude: run `ArtSpecLinkTest` in staging, dry-run then run the backfill there, record counts here.
+3. Anthony: commit and push the code; Claude: T5 on dev2 and staging (`/api/art-specs` 200, recipe visible on an
+   order with a linked spec), T6 (hide FLS on `Decoration_Placement__c.Art_Spec__c` in dev2 → `available:false`,
+   pages unchanged, restore).
+
+**The original plan, kept for reference.**
+
+**Salesforce.** `Decoration__c.Art_Spec__c` and `Pre_Production_Item__c.Art_Spec__c` (both Lookups).
+Pre-Production Item **points at** the spec and does not copy its method, placement or colours.
+Backfill where the match is unambiguous; leave the rest blank.
+
+**Dashboard.** `pre-production.html` and `order-sheet.html` show the spec (ink colours, colour order,
+dryer settings) via a follow-up query. ⛔ The field `Pre_Production_Item__c.Production_Method__c` and
+its 48 `Production_Method__r` traversals stay exactly as they are (trap 12).
+
+**Test.** T1–T8. The order sheet prints the spec, and the size grid still renders (the `<table>` rule).
+
+#### S6 · Run Result (D17) — the counting screen is rebuilt
+
+**Salesforce.**
+- `Run_Result__c`, Master-Detail → `Production_Run_Line_Item__c`: `Good_Qty__c`, `Misprint_Qty__c`,
+  `Damaged_Qty__c`, `Incomplete_Qty__c`, `Counted_At__c` (default NOW), `Counted_By__c` (optional
+  text; *who* is not required, D17), `Note__c`.
+- 🪤 **A Number field cannot be converted into a roll-up summary in place.** The line item's
+  `Misprint_Qty__c` etc. stay Number fields. New roll-ups (e.g. `Results_Good_Qty__c`,
+  `Results_Misprint_Qty__c`, …) are created beside them. **Verify in Setup that the run-level
+  `Total_*_Qty__c` roll-ups can be re-pointed at the new fields before designing further.** Roll-up
+  summary restrictions on summarising other roll-ups are the unknown here.
+- **Everything that reads the old line-item quantities must move with it:**
+  - the skeleton flow's give-back loop (`Incomplete_Qty__c`);
+  - B9's `Get Damaged Line Items` and its email body;
+  - `_rework.js` gate 4;
+  - `rework-check.js`, `shortfalls/index.js`, `run-results/index.js`, `run-line-items/index.js`;
+  - `counting.html`, `ca-api.js`.
+- **Migration:** one Run Result per line item that holds any quantity, stamped from the run's
+  `Result_Recorded_At__c` / `Result_Recorded_By__c`. Do this **before** any reader switches, or
+  history is lost.
+- 🪤 Staging carries `Actual_Good_Qty__c` and `Reprint_Qty_Needed__c` on the line item (§1). **Do not
+  reuse them.** They predate this design and D17 creates its own.
+
+**Dashboard.**
+- `counting.html` becomes **"add a count"**: each entry appends a Run Result.
+- The card shows progress (Σ good ÷ planned) and the list of counts with times.
+- `Submit` keeps its meaning of **"counts are final"** (`Result_Status__c`), which is what reprint
+  gate 2 still keys on.
+- D5 still holds: sibling carry-over is display-only. Incomplete still means make-up run, not reprint.
+- D10 (timer stop → counting) is unchanged.
+
+**Test.** T1–T8, plus:
+(a) two partial counts on one line → the rollups sum;
+(b) submit with no counts → still allowed;
+(c) a misprint count → the reprint builds at gate 4 and `rework-check` agrees;
+(d) the skeleton flow on a make-up run subtracts the new incomplete total;
+(e) the B9 email shows the right per-size numbers (debug resolved values);
+(f) T6 on `Run_Result__c` → the counting screen degrades to the old four-box form.
+
+#### S7 · Shop floor: Screen, Screen Prep, Ink Mix, Screen Reclaim
+
+**Salesforce.**
+- Create `Screen__c` in staging (dev2's shape: `Status__c`, `Mesh_Count__c`, `AssignedOrder__c`,
+  `Quantity__c`, `Screen_Notes__c`), then add `Screen__c.Art_Spec__c` in both orgs.
+- Build `Screen_Prep__c`, `Ink_Mix__c` and `Screen_Reclaim__c` per OBJECT-GUIDE.
+- The six dev2 screens are re-pointed by hand.
+
+**Dashboard.** `station.html` step stations gain screen and ink steps through new endpoints that answer
+`available:false` where the objects are missing. This is the least coupled stage and can run
+alongside S5 and S6.
+
+**Test.** T1–T8 on `station.html` at tablet width.
+
+#### S8 · Production (E7.4) — waits until S1–S7 are done (D22)
+
+Production has **none** of the production objects (§9, 2026-09-14). Build it **once**, on the new
+model, in the order S1 → S7, using the same change sets. Everything in §9's "what change sets do not
+do" list applies, and **`Artwork_Approved__c`'s gate turns on in production only when its start date
+is set there**.
+
+
+### Wave 0c · `Production_Method__c` → `Decoration__c` — DONE IN BOTH SANDBOXES 2026-09-15
+
+**This subsection absorbs the whole `Claude outputs/` folder. That folder can be deleted.** What was
+in it — the rebuild brief and its assumptions, the four rebuilt classes, the restore snippets, the
+stub runbook, the change list and the two evidence CSVs — is either reproduced below, or lives in
+Salesforce/git and is named here with the place to find it. §12 has the file-by-file disposition.
+
+**Why 0c was different from 0a and 0b.** Those renamed objects almost nothing referenced. This one
+renamed **the most-used object in the system**, and Salesforce refuses to rename an object any Apex
+references. The referencing classes had to be emptied first — which destroyed them (trap 15).
+
+---
+
+#### 🚩 The four classes were REBUILT, not restored. Read this before trusting scheduling behaviour.
+
+Nobody has the original source. `OrderPrintDateRollup`, `ProductionAutoSchedulerSelector`,
+`ProductionEventPublisher` and `ProductionAutoSchedulerService` were emptied to stubs on 2026-09-15
+without being downloaded first, and then **reimplemented from live org data** by Claude Code.
+
+They compile, they deploy, they pass their tests, and they are byte-identical across dev2 and staging.
+**None of that makes them the original.** Everything below separates what came out of the org from
+what was inferred.
+
+##### ✅ MEASURED — read out of dev2, and the backbone of the rebuild
+
+**The proposal slot shape.** All 11 surviving `Proposal` runs read `Scheduled_Start__c 13:00:00Z` /
+`Scheduled_End__c 22:00:00Z` — **08:00→17:00 America/Chicago, a fixed 9-hour block** covering the whole
+shop day, one run per press per day.
+
+🚩 **But a CONFIRMED run does not carry that shape.** The 79 live run Events run 15 minutes to 3½
+hours, all over the clock — `14:00→15:00Z` (8 of them), `15:15→16:15Z` (4), `13:00→13:30Z` (3). So the
+9-hour block is **what the scheduler proposes**, and a confirmed run carries **a window a human
+edited**. That distinction is load-bearing: anything that "normalises" run times to the 9-hour block
+would overwrite every schedule the shop actually made.
+
+**The 3-day lead time.** `CreatedDate` vs `Scheduled_Start__c`, 8 of 8 forward-scheduled runs:
+
+```
+created Tue 06-16  ->  Fri 06-19, Sat 06-20, Sun 06-21, Mon 06-22
+created Wed 07-22  ->  Sat 07-25, Sun 07-26
+created Wed 08-12  ->  Sat 08-15, Sun 08-16
+```
+
+First usable day is **today + 3**, then it packs forward one day at a time.
+📌 **Note the Saturdays and Sundays — weekends are NOT skipped.** Calendar days, not business days.
+
+**The sort.** `Order.Priority_Score__c` is a formula and **lower = more urgent** (class 1 → 100000,
+class 3 → 300000, plus an in-hands term and order age). The run reads it through the formula field
+`Order_Priority_Score__c`, so the comparator is a plain **ascending** sort, nulls last.
+
+**The Event subject and owner.** Read off all 79 live run Events: **`press name · decoration type ·
+order label`**, joined with `" · "` (U+00B7). 78 of 79 carry all three parts; one (`Shirt Press`) is
+bare, which is the degenerate case `buildEventSubject()` has to tolerate. **All 79 are owned by
+`005ca00000BhcA9AAJ`** — exactly `Production_Calendar_Setting__c.Calendar_Owner_Id__c` in dev2. That
+same setting carries `Disable_Event_Publishing__c`, which is what `isEnabled()` reads.
+
+🪤 **The order label is the anchor text of a `HYPERLINK()` formula.** `Order.GOA_Order_Number__c` comes
+back as `<a href="/801ca00000TR5N9" target="_self">20488-1</a>`. `orderLabel()` strips it, mirroring
+`plainText()` in `functions/api/_sf.js`. This is the B22 trap — 121 characters of markup around a
+7-character number.
+
+**The selector's two WHERE clauses** are verbatim from `SELECTOR-CHANGE.md`, including the
+`= null OR NOT IN (...)` branch. Not guesses. ⛔ **That file is deleted from disk — recover it with
+`git show HEAD:SELECTOR-CHANGE.md` before committing the deletions** (§0 open item 6).
+
+##### 📌 Metadata corrections the rebuild forced — the old brief was substantially wrong
+
+- **`Production_Run__c` has 31 fields, not 50.** Verified three ways (`sf sobject describe`, Apex
+  `fields.getMap()` which ignores FLS, and a SOQL probe returning `No such column`).
+- **20 named fields are gone** — deleted-not-yet-erased, so they still appear in `FieldDefinition` and
+  are recoverable from Setup → Object Manager → Deleted Fields for ~15 days from 2026-09-15:
+  `Status__c` · `Estimated_Run_Minutes__c` · `Setup_Minutes_c__c` · `Setup_Family_c__c` ·
+  `Priority_Score_c__c` · `Queue_Position_c__c` · `Ready_for_Scheduling_c__c` · `Blocked_c__c` ·
+  `Block_Reason__c` · `Rush_c__c` · `Order__c` · `Order_Name__c` · `ScheduledStartDateTime__c` ·
+  `ScheduledEndDateTime__c` · `Actual_Run_Minutes__c` · `Spoilage_Quantity_c__c` ·
+  `Completion_Notes_c__c` · `Mockup_URL__c` · `Status_Indicator__c` · `ProductionStation__c`
+- 🪤 **The "both `X__c` and `X_c__c` spellings exist" trap does NOT apply here.** For every one of
+  those fields only the **`_c__c`** spelling ever existed. There was nothing to choose between.
+- **`Production_Run__c.Status__c` does not exist.** The lifecycle lives entirely on
+  **`Auto_Scheduling_Status__c`**, which has **four active values: `Proposal`, `Confirmed`, `Planned`,
+  `Unable to auto-schedule`.** (An earlier note claimed the field was restricted to Proposal /
+  Unable to auto-schedule. That was incomplete — `Planned` is real and settable.)
+- **Live distribution at rebuild time:** Confirmed **79**, Proposal **11**, blank **1**, Planned **0**.
+  🚩 Zero runs had ever held `Planned`, so the new test below is the first thing in the org ever to
+  exercise that status.
+
+##### ⚠️ ASSUMED — every inference, and who has to confirm it
+
+Each is marked `// ASSUMPTION:` in the deployed source.
+
+| Where | Assumption | If it is wrong |
+|---|---|---|
+| `…Service` lead time | Counted from **`Date.today()`**, not the run's `CreatedDate` | At first scheduling the two are identical, so the data cannot distinguish them. A run re-slotted next month would otherwise still measure from its creation day. |
+| `…Service` `computeEarliestStart(run)` | Ignores its `run` argument | Signature kept because it was read out of the org. Any per-run floor belongs exactly there. |
+| `…Service` unschedulable runs | Existing `Scheduled_Start__c`/`End__c` are **left alone**; only the status changes | No run in dev2 carries `Unable to auto-schedule`, so there is no evidence either way. Chose the reading that cannot destroy a time somebody typed. One line to flip. |
+| `…Service` `buildEventSubject()` | Rebuilds only *press · type* and **keeps the Event's existing Subject** when it has nothing better | Deliberate. This class does not query `GOA_Order_Number__c`, and re-deriving would **strip the order number off an existing calendar entry**. |
+| `…Service` `MAX_SEARCH_DAYS = 365` | Original limit unknown | Far enough for any real job, short enough to stay inside CPU limits. |
+| `…Service` `priorityScore()` | Null score sorts **last** | `Priority_Score_c__c` does not exist, so there is nothing else it could read. Null sorts last so an unknown does not jump ahead of a job the shop rated urgent. |
+| `…Publisher` unconfirm | Un-confirming a run **deletes** its Event | The documented acceptance test is *"Hit Unconfirm. The event disappears"*, which only a delete satisfies. ✅ **Now asserted by a test — see below.** |
+| `…Publisher` no window | A `Confirmed` run with **no** scheduled window retracts its Event instead of throwing | Salesforce rejects an Event with no start/end. E5.11 explicitly left this unverified. |
+| `…Publisher` duplicates | If a run somehow has **more than one** Event, the first is kept and extras are left alone | This class has never created a duplicate, so a second Event came from somewhere else and is not ours to delete. |
+| `…Rollup` `disabled` | A plain `private static Boolean = false` | Inferred from one log line in the E7.7 notes. Nothing in the org reads it, so flipping it is a code edit. |
+
+📌 **Deliberately NOT done in the rollup**, per B23 and the E7.7 diagnosis: no read-back verification
+and no monotonic guard. The class is correct and merely **inert**, because **B19** — Order-side
+automation rewriting `Print_Date__c` while reporting success — is the real defect. It was not "fixed"
+here.
+
+📌 **`ProductionAutoSchedulerSelector` has no assumptions at all.** Both filtering clauses are verbatim
+from `SELECTOR-CHANGE.md`; the rest is field lists.
+
+#### ✅ `shippingBuffer()` — the rebuilt guess was replaced with the shop's real numbers
+
+🚩 **This is the single most important correction in the wave.** The rebuild shipped an invented
+table — Pickup 0 · Delivery 1 · Order Fulfillment / Split Ship 5 · Shipping 2 in-TN, 4 out-of-state,
+3 blank — flagged in its own notes as *"the weakest thing here… no surviving evidence at all."*
+**Every number was wrong.** Anthony supplied the real ones on 2026-09-15 and they were deployed to
+both orgs:
+
+| Delivery method | Buffer days | Note |
+|---|---|---|
+| `Pickup` | **0** | |
+| `Delivery` | **0** | This is **local dropoff**, not carrier delivery |
+| `Split Ship` | **3** | ⚠️ Anthony: *"keep the split, my boss will deal with that later"* |
+| `Order Fulfillment` | **3** | ⚠️ **Placeholder — not yet in use.** Will be used eventually; still in testing |
+| Shipping, in-state (`TN` / `TENNESSEE`) | **3** | `SHIP_DAYS_IN_STATE` — boss to confirm |
+| Shipping, out-of-state | **3** | `SHIP_DAYS_OUT_OF_STATE` — boss to confirm |
+| State blank / not set | **3** | `SHIP_DAYS_STATE_UNKNOWN` |
+
+```apex
+private static final Integer SHIP_DAYS_IN_STATE     = 3;   // boss to confirm
+private static final Integer SHIP_DAYS_OUT_OF_STATE = 3;   // boss to confirm
+private static final Integer SHIP_DAYS_STATE_UNKNOWN = 3;
+```
+
+📌 **All three shipping constants are 3 today, and they are kept as three separate constants on
+purpose** — the in-state and out-of-state numbers are the two Anthony's boss still has to rule on, and
+collapsing them now would lose the question. 📌 **No test depends on this table**; the 3-day lead time
+alone is what makes `testNoSlotNarrowWindow` fail correctly.
+
+---
+
+#### ✅ The seven artifacts — deployed and verified byte-identical in dev2 AND staging
+
+| # | Artifact | Type | Origin |
+|---|---|---|---|
+| 1 | `OrderPrintDateRollup` | class | rebuilt |
+| 2 | `ProductionAutoSchedulerSelector` | class | rebuilt |
+| 3 | `ProductionEventPublisher` | class | rebuilt |
+| 4 | `ProductionAutoSchedulerService` | class | rebuilt (+ `scheduleFromMethods` folded in) |
+| 5 | `ProductionMethodTriggerHelper` | class | **new** |
+| 6 | `ProductionMethodTrigger` | trigger on `Decoration__c` | **new** |
+| 7 | `ProductionAutoSchedulerServiceTest` | test class | restored + one new method |
+
+**Salesforce is the system of record for all seven.** The rebuilt sources are not in git — read them
+from Setup → Apex Classes, or take a Download before touching anything (trap 15).
+
+🪤 **Artifacts 5 and 6 must be created in this order: helper first, then trigger.** The trigger will
+not compile against a class that does not exist. Both are small enough to reproduce here, and these
+are the only two artifacts of the seven with no other written record:
+
+```apex
+public without sharing class ProductionMethodTriggerHelper {
+    public static void afterInsert(List<Decoration__c> newMethods) {
+        ProductionAutoSchedulerService.scheduleFromMethods(newMethods);
+    }
+    public static void afterUpdate(List<Decoration__c> newMethods, Map<Id, Decoration__c> oldMap) {
+        ProductionAutoSchedulerService.scheduleFromMethods(newMethods);
+    }
+}
+```
+
+```apex
+trigger ProductionMethodTrigger on Decoration__c (after insert, after update) {
+    if (Trigger.isAfter) {
+        if (Trigger.isInsert) { ProductionMethodTriggerHelper.afterInsert(Trigger.new); }
+        if (Trigger.isUpdate) { ProductionMethodTriggerHelper.afterUpdate(Trigger.new, Trigger.oldMap); }
+    }
+}
+```
+
+And the method folded into `ProductionAutoSchedulerService` alongside `scheduleFromRuns`:
+
+```apex
+public static void scheduleFromMethods(List<Decoration__c> methods) {
+    if (isRunning || methods == null || methods.isEmpty()) { return; }
+    Set<Id> orderIds = new Set<Id>();
+    for (Decoration__c pm : methods) {
+        if (pm.Order__c != null) { orderIds.add(pm.Order__c); }
+    }
+    if (!orderIds.isEmpty()) { scheduleFromOrders(orderIds); }
+}
+```
+
+🪤 **`OrderPrintDateRollup.syncFromRuns` already contains its `Decoration__c` SOQL loop.** An earlier
+runbook (`STEP8-RESTORE-ORDER.md` v1, step 6) said to paste that loop back in. **Doing so inserts a
+SECOND copy of the same query into the same method.** It compiles. It runs the query twice on every
+run save. That step was withdrawn in v2 and is recorded here so nobody reinstates it.
+
+---
+
+#### ✅ Tests — 4 of 5 became 5 of 6, and four rebuild assumptions became verified behaviour
+
+**One test method was added: `testConfirmPublishesEventAndUnconfirmRetractsIt`.** It exists because
+`ProductionEventPublisher` sat at **20.5%** coverage — nothing in the surviving suite ever reached
+`Confirmed`, which is the only status that makes it publish.
+
+It walks a run **`Planned` → `Confirmed` → (window moves) → `Planned`** and asserts, in order:
+
+1. the scheduler does **not** touch a `Planned` run, and a human-set time survives the save
+2. 🚩 **insert publishes NOTHING**, even for a run born with a window — *the `oldMap` trap, asserted
+   rather than assumed* (trap 9)
+3. confirming publishes **exactly one** Event, with the run's start/end, owned by the running user
+   (the `Production_Calendar_Setting__c` fallback), subject carrying press name **and** decoration type
+4. moving the window **updates** that same Event rather than duplicating it
+5. un-confirming **deletes** the Event — *"Hit Unconfirm. The event disappears"*
+6. the run keeps its times; only the calendar entry goes
+
+**Result: `ProductionEventPublisher` 20.5% → 89.3%.** Four lines that were `// ASSUMPTION:` in the
+rebuild are now asserted behaviour.
+
+⚠️ **`ProductionEventPublisher` swallows its own exceptions.** If an assertion in that test fails on a
+**count**, the real cause is in the debug log, not in the assertion message. Check the log before
+concluding the test is wrong.
+
+**The one remaining failure is the known pre-loss baseline.** `testHappyPath` fails at the Event
+assertion — *"One Event should be created: Expected: 1, Actual: 0"* — and the three assertions before
+it pass. **The test is wrong, and this is measured, not argued:** 79 Events sit on runs and every one
+is on a `Confirmed` run; the 11 `Proposal` runs have **zero** Events between them. Two documents say
+the same independently (`_run-schedule-status.js`: *"Proposal … NOT on the calendar"*, and
+`SELECTOR-CHANGE.md`'s table).
+
+⛔ **Do not "fix" it by making the assertion pass.** That means publishing the machine's unreviewed
+guess to the shop's Salesforce calendar, which in production syncs to everyone's Google calendar. It
+is a change to what the whole shop sees, so it is **Anthony's decision, not a tidy-up.** If he wants
+it: one branch in `ProductionEventPublisher.isCalendarRelevant` (treat a null `old` as "was not
+Confirmed") plus dropping the `Confirmed` gate.
+
+📌 **`testMethodUpdateInvokesScheduler` now passes.** It previously failed with
+`CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY` on `Decoration__c (Order__c)` — a test-fixture problem, not
+FLS: it failed with the stubs too, live records updated fine, and it only affected `@testSetup`-created
+records.
+
+#### ✅ The BFF change — 21 object edits, and the two lines that had to survive them
+
+**Applied and committed 2026-09-15.** The old name appeared **~245 times** in the repo. **Only 21 of
+them were the OBJECT.** Every edit was asserted against its exact expected content at its exact line
+before being written, and files were read and written with `newline=""` so line endings are untouched.
+
+**15 inline references**
+
+| File | Lines |
+|---|---|
+| `functions/api/_ppi-checklist.js` | 193 (`/sobjects/` URL) |
+| `functions/api/_rework.js` | 286 (semi-join), 319 |
+| `functions/api/rework-check.js` | 202, 271 (semi-join) |
+| `functions/api/calendar/index.js` | 215 |
+| `functions/api/inbox/index.js` | 167, 274 (anti-join) |
+| `functions/api/run-results/index.js` | 259, 279, 372 |
+| `functions/api/run-line-items/index.js` | 198 |
+| `functions/api/shortfalls/index.js` | 105 |
+| `functions/api/production-orders/index.js` | 127 |
+| `functions/api/orders/index.js` | 108 |
+
+**6 constant declarations** — `_pm-rollup.js:20`, `_print-date-rollup.js:39`, `_priority-rollup.js:31`,
+`production-runs/index.js:195`, `production-methods/[id].js:84`, `production-methods/index.js:64`
+(all `const PM_OBJECT = "Production_Method__c"` → `"Decoration__c"`).
+
+##### ⛔ The two lines that are byte-identical and must NOT change
+
+Both are the **field** `Production_Method__c` on `Pre_Production_Item__c`, which was never renamed:
+
+```
+functions/api/production-methods/index.js:91
+  const ITEM_PM_FIELD     = "Production_Method__c";      // lookup -> Method
+
+functions/api/pre-production-items/index.js:61
+  "Production_Method__c",
+```
+
+🪤 **`production-methods/index.js` contains both cases 27 lines apart.** Line 64 changed; line 91 did
+not. Both were asserted present before the run and asserted intact after it.
+
+##### ⛔ 48 `Production_Method__r` traversals also stay
+
+A relationship name derives from the **field**, not the object, so all 48 are still correct — across
+`station.html`, `_priority-rollup.js` and others. Rewriting them to `Decoration__r` breaks every one,
+and **at runtime against a live org rather than at build time**.
+
+##### Verification after the run
+
+| Check | Expected | Actual |
+|---|---|---|
+| `FROM Production_Method__c` / `sobjects/Production_Method__c` remaining | 0 | **0** |
+| `PM_OBJECT = "Production_Method__c"` remaining | 0 | **0** |
+| Guard lines intact | 2 | **2** |
+| `Production_Method__r` traversals | 48 | **48** |
+| New `Decoration__c` object references | 21 | **21** |
+
+No whole-file diffs — changed-line count matched edit count, so no line-ending churn.
+
+##### ⚠️ A second pass, 5 more edits — and these are the ones that are WRONG FOR STAGING
+
+`Production_Run_Line_Items__c` → `Production_Run_Line_Item__c` at `run-results/index.js:43`,
+`run-line-items/index.js:86`, `rework-check.js:295`, `rework-check.js:327`, `_rework.js:341`.
+Three **prose** references deliberately remain, at `run-line-items/index.js:17`, `rework-check.js:28`
+and `ca-api.js:1430`.
+
+🔴 **staging's object is still `Run_Line_Items__c`, so these 5 lines break staging the moment the BFF
+deploys.** See trap 10 and §0 open item 1. **Rename staging by hand first.**
+
+---
+
+#### ✅ The two flow faults — reported as two bugs, fixed as one cause
+
+Both were found on 2026-09-15 after the rename, and both are in the change set
+**`0c Flow Fixes 2026-09-15`** (built in dev2, ⛔ **not yet uploaded to staging**).
+
+**Fault 1 — `MALFORMED_ID` on order creation**, in `Order and Order Items Subflow Design`. The
+`PressChoices` **record choice set** had no `valueField`, so it handed the whole record where an Id was
+expected. ⛔ **Three attempts to set Choice Value to `Id` in Flow Builder were silently discarded**
+(trap 16), leaving junk versions **V47 (active, identical to V46)** and **V48 (draft)** to be deleted.
+✅ **Anthony fixed it with a Get Records inside the loop instead** — a different mechanism, which is
+the right response to an editor that will not commit.
+
+📌 **Two earlier theories were wrong and are recorded so nobody re-runs them:** test-run saturation,
+and an unguarded `try/catch` in `scheduleFromOrders`. The fault email disproved both.
+
+**Fault 2 — no calendar Event AND no Run Line Items, from one stale reference.**
+`Production_Run_Generate_Line_Item_Skeleton` still named the old run line item object, faulted, and
+**rolled back the entire `Planned → Confirmed` PATCH**. No Confirmed status meant no Event (trap 9);
+no completed flow meant no line items. One cause, two symptoms, two separate bug reports — the full
+lesson is trap 17.
+
+**Left behind by the faults:** Order **00013516**, and runs **PR-0115 / PR-0116 / PR-0117** stuck on
+`Planned`. Clean these up once staging is verified (§0 open item 5).
+
+---
+
+#### 📎 EVIDENCE — the 11 Proposal runs, preserved here because restoring the scheduler destroys them
+
+🚩 **These eleven rows were the only surviving output of the original scheduler.** Every measured fact
+above — the 9-hour block, the 08:00 local start, the 3-day lead time, weekends-not-skipped — was read
+off them. The moment the rebuilt scheduler fires on one of their presses it re-slots them from
+`today + 3` and overwrites all three fields. There is no second copy anywhere. **This is that copy.**
+
+```csv
+Id,Name,Press__c,Press__r.Name,PrintMethod__c,Scheduled_Start__c,Scheduled_End__c,Auto_Scheduling_Status__c,Order_Priority_Score__c,Order_In_Hands_Date__c,CreatedDate
+a3Xca000000GHEbEAO,PR-0023,001ca00000PzbqpAAB,Culture Apparel,a3Vca000000KhtdEAC,2026-06-19T13:00:00.000+0000,2026-06-19T22:00:00.000+0000,Proposal,91991,2026-06-26,2026-06-16T09:06:22.000+0000
+a3Xca000000GHEcEAO,PR-0024,001ca00000PzbqpAAB,Culture Apparel,a3Vca000000KhteEAC,2026-06-20T13:00:00.000+0000,2026-06-20T22:00:00.000+0000,Proposal,91991,2026-06-26,2026-06-16T09:06:22.000+0000
+a3Xca000000GHEdEAO,PR-0025,001ca00000PzbqpAAB,Culture Apparel,a3Vca000000KhtfEAC,2026-06-21T13:00:00.000+0000,2026-06-21T22:00:00.000+0000,Proposal,292391,2026-06-30,2026-06-16T09:06:53.000+0000
+a3Xca000000GHEeEAO,PR-0026,001ca00000PzbqpAAB,Culture Apparel,a3Vca000000KhtgEAC,2026-06-22T13:00:00.000+0000,2026-06-22T22:00:00.000+0000,Proposal,292391,2026-06-30,2026-06-16T09:06:53.000+0000
+a3Xca000000GnPlEAK,PR-0027,001ca00000Qm1SgAAJ,CA Press 1,a3Vca000000Kp6PEAS,2026-06-04T13:00:00.000+0000,2026-06-04T22:00:00.000+0000,Proposal,192406,2026-06-30,2026-07-21T14:40:02.000+0000
+a3Xca000000GoqTEAS,PR-0029,001ca00000SAbqzAAD,Press 1,a3Vca000000KgZNEA0,2026-06-08T13:00:00.000+0000,2026-06-08T22:00:00.000+0000,Proposal,350095,,2026-07-22T18:02:20.000+0000
+a3Xca000000GothEAC,PR-0030,001ca00000SAbvpAAD,Press 2,a3Vca000000L06fEAC,2026-07-25T13:00:00.000+0000,2026-07-25T22:00:00.000+0000,Proposal,195455,2026-07-31,2026-07-22T18:42:23.000+0000
+a3Xca000000GoyXEAS,PR-0031,001ca00000SAc2HAAT,Embroidery Machine,a3Vca000000L0LBEA0,2026-07-25T13:00:00.000+0000,2026-07-25T22:00:00.000+0000,Proposal,195455,2026-07-31,2026-07-22T19:19:24.000+0000
+a3Xca000000Gp09EAC,PR-0032,001ca00000SAc2HAAT,Embroidery Machine,a3Vca000000L0LBEA0,2026-07-26T13:00:00.000+0000,2026-07-26T22:00:00.000+0000,Proposal,195455,2026-07-31,2026-07-22T19:20:08.000+0000
+a3Xca000000H7wLEAS,PR-0041,001ca00000SAbqzAAD,Press 1,a3Vca000000L6f7EAC,2026-08-15T13:00:00.000+0000,2026-08-15T22:00:00.000+0000,Proposal,298234,2026-08-28,2026-08-12T20:11:26.000+0000
+a3Xca000000H7zZEAS,PR-0043,001ca00000SAbqzAAD,Press 1,a3Vca000000L6dWEAS,2026-08-16T13:00:00.000+0000,2026-08-16T22:00:00.000+0000,Proposal,298234,2026-08-28,2026-08-12T20:46:04.000+0000
+```
+
+📌 **PR-0027 and PR-0029 sit in the past, on press Accounts that no longer exist.** They were treated as
+stale outliers and excluded from the lead-time measurement — which is why it reads "8 of 8", not
+"11 of 11".
+
+**The companion Events export** (79 rows, `Id, WhatId, Subject, StartDateTime, EndDateTime, OwnerId`)
+is **not reproduced** — its load-bearing content is the subject format, the single owner id and the
+window distribution, all recorded under MEASURED above. The rows themselves are still queryable in
+dev2 while those Events exist:
+
+```sql
+SELECT Id, WhatId, Subject, StartDateTime, EndDateTime, OwnerId FROM Event WHERE WhatId != null
+```
 
 ---
 
@@ -4236,6 +5508,34 @@ decision is made on a Salesforce record, not in this app; the recipient is the O
 Owner, already on the Order). **Still open: where the pending decision lives — see B9.** Do not
 build against this until it carries a decision date.
 
+**D14 — `Design__c` keeps its API name and is reparented, not renamed. DECIDED 2026-09-16 (Anthony, for his boss).** "Leave `Design__c` as is" means the **API name only**. The object becomes OBJECT-GUIDE's *Artwork Version* by changing `Opportunity__c` from Master-Detail to Lookup and hanging it under `Artwork_Master__c`. It already reads "Design Version" in Setup. **Rules out:** any rename of `Design__c` (36 Apex references, trap 15), and treating the Opportunity parent as frozen. See **S3** in §4's target-model plan.
+
+**D15 — proof approval lives on the job, not on the art. DECIDED 2026-09-16 (Anthony).** Measured: no field on `Design__c` holds approval; it is already `Order.Artwork_Approved__c` (the flag) and `Opportunity.Artwork_Approval_URL__c` (the proof link). Those stay the home. **Rules out:** an approval field on Artwork Version or Art Spec, and any per-art approval that a reused design would carry into a new order.
+
+**D16 — an order cannot be printed until its artwork is approved, from a start date forward. DECIDED 2026-09-16 (Anthony).** Enforced in the org (a validation rule on `Decoration__c` status) **and** in the app (before a run is created, never on the `Planned → Confirmed` PATCH, trap 9). It applies only to orders created on or after a start date held in Custom Metadata; older orders are not backfilled. **The start date is the day the whole new design is finished in Salesforce** (Anthony, 2026-09-16): when S7 is done, **ask Anthony to confirm the date**, and only the date he confirms goes into the metadata record. Until then the record's date stays blank, and a blank date means the gate is off. Only ~3.5% of staging orders are ticked today, which is why it is not retroactive. **Rules out:** an app-only gate, a backfill, and a gate that can strand a run on `Planned`. See **S2**.
+
+**D17 — Run Result replaces "only problems are recorded". DECIDED 2026-09-16 (Anthony). SUPERSEDES D1.** The shop needs to see how far a run has got before it finishes, and needs every count logged. Each count becomes a `Run_Result__c` row under its line item: good, misprint, damaged, incomplete and a time. **Who** counted is optional and not a design concern for now; someone counting and it being logged is what matters. `Result_Status__c = Submitted` keeps its meaning of *counts are final* (reprint gate 2). D5 and the incomplete-is-not-a-loss rule both still hold. ⚠️ **Until S6 lands, D1's behaviour is still what the code does.** Do not start storing a good quantity piecemeal. **Rules out:** a single end-of-run total as the only record, and reusing staging's leftover `Actual_Good_Qty__c`. See **S6**.
+
+**D18 — Pre-Production Item stays and keeps being created. DECIDED 2026-09-16 (Anthony).** It remains the per-line pre-press checklist and runs **alongside** Art Spec. It gains a lookup to its Art Spec and does not copy the spec's method, placement or colours. **Rules out:** retiring Pre-Production Item as OBJECT-GUIDE proposed, and two records each owning the same print facts. See **S5**.
+
+**D19 — Work Center is `Production_Station__c`, in staging's shape. DECIDED 2026-09-16 (Anthony).** dev2 is brought up to staging's nine fields and the `Production_Run__c.ProductionStation__c` lookup, and `Active__c` becomes a Checkbox in both orgs. Account `Type='Press'` stays live until the S4 cutover. **Rules out:** designing a new Work Center object, and switching the press picker before the scheduler reads the station. See **S1**.
+
+**D20 — a person attaches the design to the order. DECIDED 2026-09-16 (Anthony).** `Order.Design__c` (Lookup → Design Version) is set by hand, by a person, and is the order's canonical link to its art. It is populated on 4,846 of 6,697 staging orders, and nothing under `functions/` writes it. **Still check whether any flow or Apex also writes it** (S3). If one does, it must stop overwriting what a person chose. **Rules out:** automation deciding an order's artwork, and the dashboard inferring the art from the "most recently modified `Design__c` on the Opportunity" as the long-term source (today's `_mockup.js` path stays only until S3 switches it).
+
+**D21 — `Print_Process_Details__c` is retired, whenever convenient. DECIDED 2026-09-16 (Anthony).** No review of the 5 staging rows is required. No code reads it (0 references under `functions/`). ⚠️ **Deletion is a Setup action and does not travel in a change set** (§9), so it is done by hand per org. **Production also has this object (35 fields, §9 sweep 2026-09-14) and its data was never queried.** Count its rows there before deleting it in production. **Rules out:** migrating its fields into the new model.
+
+**D22 — production waits and gets the new model in one go. DECIDED 2026-09-16 (Anthony).** Nothing is promoted to production until S1–S7 are finished and verified in both sandboxes. Then S8 builds the whole design there once. **E7.4 as scoped (the old ~10-object build) is superseded** and is not to be built separately. **Rules out:** building the old model in production and rebuilding it later. 📌 The merge guardrail (§4 B9: `feat/proposed-run-press` needs `Proposed_Run__c.Press__c` in production) is unchanged in substance. Production stays an unconfigured org in the switcher (`SF_ENV_PRODUCTION_*` unset) until S8, and must not be pointed at before then.
+
+**D23 — one Art Spec per design + method + placement. DECIDED 2026-09-17 (Anthony).** Front art is almost always different from back art, so a front-and-back decoration needs two recipes. Art Spec gets a placement in S4 (a lookup to the new `Placement__c`, beside nothing: Art Spec has no placement picklist to dual-write). Consequence for S5: `Decoration__c.Art_Spec__c` (one lookup) cannot describe a multi-placement decoration, so the Decoration → Art Spec join has to be per placement (the same `Decoration_Placement__c` junction S4 must decide for `Placements__c`, carrying the Art Spec). The S3 sample AS-00001 ("Front + Back") is the counter-example and should be split when S4 adds placement. **Rules out:** one recipe per design + method.
+
+**D24 — Art Specs are not unique per design + method + placement. DECIDED 2026-09-17 (Anthony).** The three different embroidery recipes on "Calendar King Orders 20487" are test data, but they mirror real orders: the same art can be run differently from job to job. So no uniqueness rule, no duplicate check. A new job reuses a recipe by picking an existing Art Spec or copying one and editing it. **Rules out:** a unique key on (design, method, placement), and treating an Art Spec as never-changing once used.
+
+**D25 — the Decoration transfer-type list is the right one. DECIDED 2026-09-17 (Anthony).** DTF / HTV / Sublimation / Screened Transfer / Other (`Decoration__c.Transfer_Type__c`, also `Art_Spec__c.Transfer_Type__c`). `Pre_Production_Item__c.Transfer_Type__c` (Screen Transfer / Digital Transfer / Sublimation / Vinyl) converges to it in S4, with existing PPI values remapped. 📌 **Proposed mapping, confirm with Anthony before running it:** Screen Transfer → Screened Transfer, Digital Transfer → DTF, Vinyl → HTV, Sublimation → Sublimation. **Rules out:** keeping two lists.
+
+**D27 — how Art Specs are linked and shown. DECIDED 2026-09-17 (Anthony).** (1) The order sheet and the Pre-Production drawer show the recipe facts that belong to the decoration's method (screen print: ink colors, color order, mesh, ink type, flash, dryer; embroidery: thread colors, stitch count; heat press: transfer, temperature, time, pressure; plus size/location, print specs and notes for all). (2) A location is linked to a spec automatically **only when exactly one spec fits** — same job, method and location; a spec with no location only for a single-location decoration. (3) That rule keeps running on new and edited records, not just once. Hand-set links are never overwritten. **Rules out:** guessing between two candidate recipes, and copying recipe facts onto the item (D18). See **S5**.
+
+**D26 — the order-creation flow keeps writing `Order.Design__c`. DECIDED 2026-09-17 (Anthony); amends D20.** Flow *Order and Order Items Subflow Design* (active v48) sets `Order.Design__c` from its `DesignID` input when it creates an Order. It stays, unless it would cause a critical failure. Checked 2026-09-17: it writes only on **create** (a `recordCreates` element; no update of an existing Order), so it never overwrites a design a person later chose, and after S3 a design no longer disappears with its Opportunity (lookup, clear on delete), so the link it writes stays valid. No critical failure found. A person still attaches the design on orders made by hand. **Rules out:** removing that assignment from the flow.
+
 **Still open — cleared allocation rows.** Today a cleared size is set to `Planned_Qty__c = 0` and the
 row is never deleted, so zero rows still render on the counting screen. The alternative is deleting
 non-last rows and zeroing only the final one. Setting to zero is reversible and does not reach into
@@ -6232,7 +7532,189 @@ most, because it is the only path that creates records on its own.
 ---
 
 ## 9. Org parity and change management
+
+### `Production_Station__c` — aligned 2026-09-16 (S1)
+
+dev2 and staging now match on the Work Center object: 9 custom fields (`Active__c` is a **Checkbox** in
+both), `Station_Type__c` = Screen Print / Embroidery / Heat Press, the `Production_Run__c.ProductionStation__c`
+lookup, and the same 5 station records. FLS: System Administrator can edit all 10 fields in both orgs.
+dev2 also grants the two integration profiles and the GOA / Modified admin profiles; staging does not
+(cosmetic). **Records and FLS were set by hand in each org**, because neither travels on a change set.
+Production has none of this (D22). ⚠️ See §4 S1 for why earlier parity reads of this object were wrong.
+
+### Art Spec wiring (S5) — ⚠️ dev2 only, 2026-09-17
+
+dev2 has `ArtSpecLink`, `ArtSpecLinkTest` and triggers `ArtSpecLinkPlacement`, `ArtSpecLinkArtSpec`,
+`ArtSpecLinkItem` (all Active), and 3 backfilled location links. staging gets the same five components by change
+set **"S5 Art Spec Link 2026-09-17"** (no fields, so no profiles needed), then its own backfill. For production:
+the same components, and the backfill after S4's.
+
+### Catalog layer (S4) — aligned 2026-09-17
+
+Both sandboxes have `Decoration_Method__c` (4 records), `Placement__c` (11), `Decoration_Placement__c`, the five
+new lookups, the `CatalogSync` class, its test and five triggers (all Active), the extra PPI transfer values and
+`Run_Minutes_Per_Unit__c` as `Number(14,2)`. Catalog records were created by script in each org — **they do not
+travel**, so production needs the same seed, then the backfill (see §4 S4 for the scheduler warning).
+
+### Art layer (S3) — aligned 2026-09-17
+
+Both sandboxes have `Art_Spec__c` with the same 17 fields, `Decoration__c.Art_Spec__c`,
+`Pre_Production_Item__c.Art_Spec__c`, `Design__c.Opportunity__c` as a **Lookup** (sharing Public
+Read/Write), no `Opportunity.Design_Count__c`, and a visible `Design__c.DesignMaster__c`. Only dev2 has
+sample Art Spec records. For production (D22): the object and fields travel in a change set (include the
+profiles so FLS goes too); **the roll-up deletion + erase and the Master-Detail → Lookup change do not, and
+must be done by hand, in that order, before anything depends on them.**
+
+### Approval gate (S2) — aligned 2026-09-16
+
+dev2 and staging both have `Production_Gate__mdt` + `Approval_Gate_Start__c`, the `Default` record with
+a **blank** date, and the active `Decoration__c.Artwork_Approval_Gate` rule with the same formula (IDs in
+§4 S2). Built by hand in each org. For production (D22) the type, the record and the rule all travel in a
+change set; **confirm the record's date on arrival**, since that is the switch.
 What each org actually has, how that was measured, and what moving metadata between them does and does not carry.
+
+### Wave 0c parity and the 2026-09-15 Apex measurement
+
+#### ✅ THE ORGS AGREE ON THE RUN LINE ITEM OBJECT — re-verified 2026-09-16
+
+Both read **`Production_Run_Line_Item__c`**, label "Run Line Item". staging holds **14 records** in
+it, which is the check that matters: a Metadata-API "rename" would have produced a **second, empty**
+object beside the original, so a live record count is what distinguishes a real rename from that
+failure mode.
+
+❌ **On 2026-09-15 this section said staging was still `Run_Line_Items__c` and called it 🔴 blocking.
+That was wrong.** Kept rather than deleted because the correction is the lesson: the claim was read
+once, late in a session, and gated three pieces of work behind itself for a day. **Re-query before
+acting on any ⛔ line.**
+
+📌 **The Metadata API still has no rename operation** — deploying a new `fullName` creates a second
+object and leaves the first one holding all the data. That part of the old entry stands and is why
+every rename on the map is hand work in Setup, per org.
+
+#### 📍 THE RENAME MAP — what is left, read live in both orgs 2026-09-16
+
+| The rename | dev2 | staging |
+|---|---|---|
+| `Artwork__c` → `Artwork_Asset__c` (label "Artwork Asset") | ✅ | ✅ |
+| `Design_Master__c` → `Artwork_Master__c` (label "Artwork") | ✅ | ✅ |
+| `ProductionPlan__c` → `Production_Plan__c` | ✅ | ✅ |
+| `ProductionRequirements__c` → `Production_Requirement__c` | ✅ | ✅ |
+| `Production_Method__c` → `Decoration__c` | ✅ | ✅ |
+| `Production_Run_Line_Items__c` → `Production_Run_Line_Item__c` | ✅ | ✅ |
+| **`Design__c` → *(new name)*** | ⛔ **not done** | ⛔ **not done** |
+| **`Production_Run__c.PrintMethod__c` → *(new name)*** | ⛔ **not done** | ⛔ **not done** |
+
+**Two renames remain. Waves 0a, 0b and 0c are complete in both sandboxes.**
+
+🪤 **`Design__c`'s LABEL already reads "Design Version" in both orgs, so on screen it looks finished.**
+The API name is untouched. Same trap as `Decoration__c` was for a week — judge a rename by the API
+name, never by what Setup displays.
+
+##### Custom objects in scope, as the orgs actually read them (2026-09-16)
+
+| dev2 | staging |
+|---|---|
+| `Artwork_Asset__c` — Artwork Asset | `Artwork_Asset__c` — Artwork Asset |
+| `Artwork_Master__c` — Artwork | `Artwork_Master__c` — Artwork |
+| `Decoration__c` — Decoration | `Decoration__c` — Decoration |
+| `Design__c` — Design Version | `Design__c` — Design Version |
+| **`Design_Family__c` — Design Family** | **`Design_Artwork__c` — Design/Artwork** |
+| `Pre_Production_Item__c` | `Pre_Production_Item__c` |
+| `Production_Plan__c` | `Production_Plan__c` |
+| `Production_Requirement__c` | `Production_Requirement__c` |
+| `Production_Run__c` | `Production_Run__c` |
+| `Production_Run_Line_Item__c` | `Production_Run_Line_Item__c` |
+| **`Production_Station__c`** | **`production_station__c`** (lowercase p) |
+
+🚩 **Two divergences that are NOT on the rename map and were found by this sweep:**
+
+1. **dev2 has `Design_Family__c`; staging has `Design_Artwork__c`.** Different objects, not a rename —
+   neither org has the other's. ⚠️ **Settle this before wave 0d touches anything Design-shaped**, or
+   0d will be designed against a picture only one org matches.
+2. **`Production_Station__c` vs `production_station__c`** — a capital letter. Harmless at runtime
+   (Salesforce matches API names case-insensitively) but it will surface in every future parity diff
+   and read as a real difference. Recorded so nobody investigates it twice.
+
+#### Change set `0c Flow Fixes 2026-09-15` — built in dev2, NOT yet uploaded
+
+Holds both repaired flows: `Order and Order Items Subflow Design` and
+`Production_Run_Generate_Line_Item_Skeleton`.
+
+📌 **Upload it only after staging's object rename**, or the skeleton flow arrives correct and the BFF
+arrives wrong. 📌 **Flows deploy INACTIVE — activate both by hand afterwards.** Component type in this
+org is **`Flow Definition`**; there is no "Flow" entry.
+
+#### ✅ Apex coverage and test health, measured in both orgs 2026-09-15
+
+**Both orgs clear the 75% production gate.**
+
+| | dev2 | staging |
+|---|---|---|
+| Org-wide coverage | **82%** | **85%** |
+| Run window (UTC) | 15:29:54Z | 19:29:50Z → 19:41:15Z |
+| Tests enqueued / completed | — | 3,905 / 3,594 |
+| Total failures | 264 | 306 |
+| **Local failures (deploy-blocking)** | **2** | **14** |
+| Managed-package failures (excluded from deploys) | 262 | 292 |
+
+🚩 **The big failure numbers are almost entirely managed packages and cannot block anything.** Split
+by namespace — dev2: rh2 144, MC4SF 34, aircall 32, slackv2 24, fbsync 10, report_sender 5, mone 5,
+RQL 5, ATUC 4, usf3 3, Form_Builder 3, cil 3, TVA_CFB 2, smrtDev 1, Flowdometer 1. staging: rh2 175,
+MC4SF 33, aircall 32, slackv2 24, fbsync 10, report_sender 6, RQL 5, ATUC 4, usf3 3, Form_Builder 3,
+mone 2, TVA_CFB 2, smrtDev 1, zkmulti 1, invmgrnp 1.
+
+**dev2's 2 local failures:**
+
+| Class · method | Error | Reading |
+|---|---|---|
+| `ProductionAutoSchedulerServiceTest.testHappyPath` | *One Event should be created: Expected: 1, Actual: 0* | ✅ Known pre-loss baseline. **The test is wrong** — see §4 wave 0c. Do not "fix" it. |
+| `OrderTriggerHandlerTest.testStatusChangeToNonPartialDoesNotError` | `FAILED_ACTIVATION, An order must have at least one product` | Test-data problem, unrelated to the rename — it activates an Order with no OrderItems. |
+
+**staging's 14 local failures**, by class: `ApprovalProcessTest` 4 · `ScheduledBatchableTest` 2 ·
+`BatchClassForApprovalProcessTest` 2 · `QB_WebhooksTest` 2 · `ProductionAutoSchedulerServiceTest` 1
+(the same `testHappyPath`) · `OpportunityProductsControllerTest` 1 · `QuoteProductsControllerTest` 1 ·
+`QuoteOppProductsControllerTest` 1.
+
+📌 **The 12 extra staging failures are all in code nobody touched today** — approvals, QuickBooks
+webhooks, quote/opportunity controllers. That is consistent with staging simply being **staler** than
+dev2, not with anything wave 0c broke. **No failure in either org is attributable to the rename or the
+Apex rebuild.**
+
+⚠️ **Coverage is not the gate on its own.** A production deploy needs **75% org-wide aggregate** (not
+per-class) **plus some coverage on every trigger**, and **every local test in the run must pass**.
+Managed-package tests (non-null `NamespacePrefix`) are excluded from deploy runs. So those 14 staging
+failures would each need fixing before a production push — none of them block the staging work queued
+in §0.
+
+**The query that produces this split**, run in the Developer Console (§2, browser recipes):
+
+```sql
+SELECT ApexClass.NamespacePrefix, COUNT(Id) n FROM ApexTestResult
+WHERE Outcome = 'Fail' AND TestTimestamp >= <run start> AND TestTimestamp <= <run end>
+GROUP BY ApexClass.NamespacePrefix ORDER BY COUNT(Id) DESC
+```
+
+```sql
+SELECT ApexClass.Name, MethodName, Message FROM ApexTestResult
+WHERE Outcome = 'Fail' AND TestTimestamp >= <run start> AND TestTimestamp <= <run end>
+  AND ApexClass.NamespacePrefix = null
+```
+
+🪤 **No field aliases on the second one** — `SELECT ApexClass.Name cls` fails with *"only aggregate
+expressions use field aliasing"*. `COUNT(Id) n` in the first is fine because it is an aggregate.
+
+#### ⚠️ Two flows diverged, and they were NOT part of wave 0c
+
+| Flow | dev2 | staging |
+|---|---|---|
+| `OrderScheduling` | **V24** | **V37** |
+| `Create_Multi_Orders_with_Design_Name` | **V21** | **V21**, modified ten months apart |
+
+📌 **Do not reconcile these by reflex.** §0 already warns that version numbers do not imply parity in
+these orgs, and neither flow was in scope today. They are recorded so the next parity sweep does not
+report them as new.
+
+---
 
 ### Org parity — RE-MEASURED 2026-09-14 (supersedes the 2026-09-03/04 sweep below)
 
@@ -6797,6 +8279,27 @@ Newest first. One line per change; link to the story that carries the detail.
 
 | Date | What | Where |
 |---|---|---|
+| 2026-09-17 | 🔧 **S5 ART SPEC WIRING BUILT in dev2; staging waits on change set "S5 Art Spec Link 2026-09-17".** Decision **D27** (Anthony): per-method recipe facts; auto-link only on one clear match; keeps running. Apex `ArtSpecLink` + 3 triggers fill blank `Decoration_Placement__c.Art_Spec__c` (and `Pre_Production_Item__c.Art_Spec__c` when a decoration has one spec) — never `Decoration__c`, whose save re-runs the scheduler. Tests 7/7, 97%; closes S4's 0%-coverage item. dev2 backfill: 3 of 108 rows linked, PM-00129 left blank on purpose. **Code, uncommitted on the Mac:** new `functions/api/art-specs/index.js` (follow-up endpoint, `available:false` fallback); `ca-api.js` spec helpers; recipe on `order-sheet.html` and in the `pre-production.html` drawer; transfer pickers moved to the D25 list. Smoke green; headless renders with and without specs. Also: **T5 walk on staging passed** (S4's last open test) | §0, §4 S4/S5, §5, §9 |
+| 2026-09-17 | ✅ **S4 CATALOG LAYER DONE in dev2 + staging.** New `Decoration_Method__c` (4), `Placement__c` (11) and `Decoration_Placement__c` (per-placement junction with an Art Spec lookup, D23); lookups on Decoration, Production Run, Proposed Run and Art Spec; Apex `CatalogSync` + 5 triggers keep them filled from the picklists the app still writes (dual-write in the org), tests 8/8. Backfilled both orgs. PPI transfer types gained the Decoration list and legacy values map on save (D25). `Run_Minutes_Per_Unit__c` → decimals. Change set **S4 Catalog 2026-09-17** with profiles. 🪤 Required lookup ⇒ "don't allow parent delete", handled by a before-delete; the dev2 backfill re-slotted 8 stale proposal runs through the auto-scheduler (staging: 0 changed). **Code, uncommitted on the Mac:** method/placement/transfer allow-lists moved into `_placements.js`; Apex source added to `New Apex Classes/` | §0, §4 S4, §9 |
+| 2026-09-17 | **Decisions D23–D26 (Anthony), answering S3's findings.** D23 one Art Spec per design + method + **placement** (front art differs from back), so S4 adds a placement to Art Spec and S5's Decoration → Art Spec join is per placement. D24 no uniqueness rule on Art Spec (the same art is run differently between jobs). D25 the Decoration transfer-type list is canonical; PPI's list converges in S4 (mapping proposed, to confirm). D26 flow *Order and Order Items Subflow Design* keeps setting `Order.Design__c` on create (amends D20); checked: create-only, no critical failure. Docs only | §4 S3/S4, §5 |
+| 2026-09-17 | ✅ **S3 ART LAYER DONE in dev2 + staging.** New `Art_Spec__c` (AS-{00000}; lookup to `Design__c`, method picklist, 15 recipe fields) plus `Decoration__c.Art_Spec__c` and `Pre_Production_Item__c.Art_Spec__c`, moved to staging by change set **with profile settings so FLS came along**. `Design__c.Opportunity__c` **Master-Detail → Lookup** in both orgs (links kept 28/28 and 18/18; sharing now Public Read/Write; keep design when the deal is deleted), after deleting and erasing the only blocker, `Opportunity.Design_Count__c` (Anthony OK'd; erase done by Anthony). staging's `Design__c.DesignMaster__c` existed all along, FLS-hidden; FLS granted. 4 sample Art Specs in dev2 from real PPIs. dev2 mockups and rework-check verified after the change. 🚩 **Findings:** multi-placement decorations need more than one recipe; one design has three different embroidery recipes; two transfer-type lists; `Order.Design__c` is also written by flow *Order and Order Items Subflow Design*. No code changed | §0, §4 S0/S3, §9 |
+| 2026-09-16 | ✅ **S2 APPROVAL GATE BUILT in dev2 + staging, and OFF.** `Production_Gate__mdt.Default.Approval_Gate_Start__c` (blank in both) + validation rule `Decoration__c.Artwork_Approval_Gate` (Ready for Print / In Production refused while `Order.Artwork_Approved__c` is false, for orders created on or after the date). Tested in dev2 with a **temporary 1/1/2026 date (Anthony approved), then cleared**. **Code, uncommitted on the Mac:** new `functions/api/_approval-gate.js`; checks in `decorations/[id].js`, `decorations/index.js`, `production-runs/index.js` (before insert, never on the Confirmed PATCH, trap 9); `calendar.html` drop failure now shows the server's sentence. 409 `artwork_not_approved`. Degrades open. Harness 14/14, mutation control bites, smoke green. **Open:** system-context flow check before the date is set; the board chip (deferred until the date); end-to-end scenarios on a preview | §0, §4 S2, §9 |
+| 2026-09-16 | ✅ **S1 WORK CENTER PARITY DONE in dev2 + staging.** dev2 already had all 9 `Production_Station__c` fields and `Production_Run__c.ProductionStation__c` (Peter, 2026-05-22), **FLS-hidden from every profile**, which is why the morning's `FieldDefinition` read called it an empty shell. **Changed in both orgs:** FLS granted in dev2 (5 profiles × 10 fields; staging's System Administrator already had it); `Station_Type__c`'s single junk value `Type of production equipment` → `Screen Print`, plus `Embroidery`, `Heat Press`; `Active__c` Text → **Checkbox** (default checked); **5 station records** (Press 1, Press 2, Embroidery Machine, Hat Press, Shirt Press) with types and Active, staging's two existing rows updated in place. Read back live in both orgs. 🚩 **Findings:** (1) `FieldDefinition` silently omits FLS-hidden fields, so T2 needs a Setup cross-check, and §4 wave 0c's "20 deleted `Production_Run__c` fields" is probably FLS-hidden (Setup lists ~40 custom fields, admin sees 22, *Deleted Fields (3)*); (2) **the dashboard's run-as user is an "Anthony Martinez" System Administrator + Proposed Runs Access in both sandboxes**, not the integration profiles, which have no users in dev2; (3) change-field-type and Set-FLS pages work when driven by form input plus a scripted Save, and freeze or ignore clicks on a mouse click. **Open:** add the fields to the page layouts; real capacity and setup/run minutes. No code changed | §4 S1, §9 |
+| 2026-09-16 | **Three more target-model decisions (Anthony): D20** a person attaches `Order.Design__c`; **D21** `Print_Process_Details__c` is retired whenever convenient (count production's rows first; deletions do not travel); **D22** production waits and gets the whole new model in one go, which supersedes E7.4's old-model build. **Approval start date (D16)** = the day the whole design is built in Salesforce; ask Anthony to confirm it then, and until then the date stays blank and the gate is off. S0 is now closed except for the still-open `Design_Family__c` (dev2) vs `Design_Artwork__c` (staging) question. Docs only | §4 plan, §5 |
+| 2026-09-16 | 🧭 **TARGET OBJECT MODEL ADOPTED — decisions D14–D19, and a staged build + test plan.** Anthony's boss supplied OBJECT-GUIDE; it was measured against dev2 and staging through the Developer Console (counts in §4's plan). Decided with Anthony: **D14** `Design__c` keeps its API name and is reparented off Opportunity; **D15** proof approval stays job-level (`Order.Artwork_Approved__c` + `Opportunity.Artwork_Approval_URL__c`, since no approval field exists on `Design__c`); **D16** no printing until approved, from a start date not yet picked; **D17** Run Result, **superseding D1**; **D18** Pre-Production Item stays and points at Art Spec; **D19** Work Center = `Production_Station__c` in staging's shape. 🪤 **Two assumptions disproved by measurement:** the Work Center "head start" was an empty shell in dev2 (no fields, no records, no run lookup) and only real in staging; and `Order.Design__c`, believed unused, is set on 4,846 of 6,697 staging orders. **No org metadata and no code changed.** This entry adds §4's plan (build rules 1–8, tests T1–T8, stages S0–S8), D14–D19 in §5, supersession notes on D1 in §2/§3 and a §0 pointer. `node tools/smoke.mjs` green before the edit | §0, §2, §3, §4, §5 |
+| 2026-09-16 | **Wave 0d — "Decoration" is the word on screen** — visible text only. **106 lines** on branch `feat/decoration-visible-text` (commit `bf0f577`, off `origin/main`, unpushed) and **82 lines** applied to the working tree, which already carried partial wave-0d work from another session. `Production Method` / `Print Method` → **`Decoration`** (qualifier dropped), plurals and lowercase prose to match. Untouched: all `__c`/`__r` tokens (48 `Production_Method__r` on the branch), both wave-0c guard lines, HTTP verbs, template bindings, CSS custom properties, route paths, capability keys, error CODES, report field names, `Delivery Method`, comments and `console.*` logs. 🪤 **TWO SCANNER BUGS WORTH REMEMBERING, both caught after the fact.** (1) `{{o.method}}` sits between tags and scans as a text node, but it is an object key into `renderVals` — renaming one side blanks the value at runtime and nothing fails loudly. (2) **A `<script>` body also sits between tags**, so a naive text-node walk treats ALL THE JAVASCRIPT as page copy: the first cut renamed `st.methods` → `st.decorations`, `{methods:{}}` → `{decorations:{}}` and `setForm({method:x})` → `{decoration:x}` — 37 identifier renames that rule 3 forbids. They were *internally consistent*, so every page still rendered and smoke still passed; only a diff audit for `decoration` adjacent to `{ , . [ :` found them. **Any text-only rename pass over these pages must blank `<script>` and `<style>` bodies before walking text nodes, and must run that punctuation audit before committing.** Applied with a two-pass writer (all lines asserted before any file is opened) and `newline=""`, so the diff is 106 in / 106 out with no line-ending churn. All nine pages re-rendered clean in a headless browser, zero visible "Method" left. No Asana id supplied | §2 |
+| 2026-09-16 | 📍 **THE RENAME MAP IS DOWN TO TWO ITEMS — read live in both orgs.** ✅ Complete in dev2 **and** staging: `Artwork__c`→`Artwork_Asset__c`, `Design_Master__c`→`Artwork_Master__c` (0a), `ProductionPlan__c`→`Production_Plan__c`, `ProductionRequirements__c`→`Production_Requirement__c` (0b), `Production_Method__c`→`Decoration__c` (0c), and `Production_Run_Line_Items__c`→`Production_Run_Line_Item__c`. ⛔ **Left: `Design__c` (the object, wave 0d — 36 Apex classes, plus an Opportunity master-detail so it carries sales-side automation too) and `Production_Run__c.PrintMethod__c` (a FIELD — ~28 Apex refs + 48 repo refs).** 🪤 **`Design__c`'s label already reads "Design Version" in both orgs, so Setup makes it look finished** — the same trap `Decoration__c` set for a week. Judge a rename by the API name, never by the screen. 🚩 **Two divergences found that are NOT on the map: dev2 has `Design_Family__c` where staging has `Design_Artwork__c` (different objects, neither org has the other's — settle before 0d), and `Production_Station__c` vs `production_station__c` (a capital letter; harmless, but it will show up in every future diff)** | §9 |
+| 2026-09-16 | ❌ **CORRECTION — staging's run line item object was NEVER the blocker. Yesterday's 🔴 open item 1 was wrong.** staging reads **`Production_Run_Line_Item__c`**, label "Run Line Item", with **14 live records** — matching dev2 exactly. The record count is the check that matters: a Metadata-API "rename" produces a *second, empty* object beside the original, so live records are what distinguish a real rename from that failure mode. 📌 **Whether Anthony renamed it overnight or the 09-15 reading was simply wrong cannot be determined from here, and chasing it is not worth the time.** The method is the lesson: a claim read **once**, late in a long session, was written up as 🔴 and gated the change set *and* the BFF deploy behind itself for a day. **One re-query closed it.** ✅ **Consequence: the change set and the BFF deploy are no longer gated on anything** | §0 item 1, §2 trap 10, §9 |
+| 2026-09-15 | 📚 **`Claude outputs/` FOLDED INTO THIS DOCUMENT AND RETIRED.** All 25 files absorbed: the rebuild brief and its measured-vs-assumed tables, the four rebuilt classes, the RESTORE snippets, the STEP6 stub runbook, both STEP8 restore orders, the BFF change list and the two evidence CSVs. §4 wave 0c now carries the measured facts, every `// ASSUMPTION:` and who confirms it, the trigger/helper source verbatim, the 21+5 BFF edits with the guard lines, and **the 11 Proposal runs CSV in full** — that last one because restoring the scheduler destroys the rows it was read from and there is no second copy. §12 has the file-by-file disposition. ⚠️ **What is NOT reproduced: the four rebuilt `.cls` sources.** Salesforce is their system of record, in two orgs; take a Setup → Apex Classes → **Download** before touching them (trap 15) | §4 wave 0c, §12 |
+| 2026-09-15 | ✅ **APEX HEALTH MEASURED IN BOTH ORGS — dev2 82%, staging 85%, both over the 75% production gate.** 🚩 **The frightening part is a mirage:** dev2 shows **264** failures and staging **306**, but split by `ApexClass.NamespacePrefix` only **2** and **14** are local. Managed-package tests are excluded from deploy runs and cannot block anything. dev2's two: `testHappyPath` (the known pre-loss Event assertion — the test is wrong, do not fix it) and `OrderTriggerHandlerTest.testStatusChangeToNonPartialDoesNotError` (`FAILED_ACTIVATION, An order must have at least one product` — test data, unrelated). staging's extra twelve are all in approvals / QuickBooks webhooks / quote controllers, i.e. **code nobody touched today — staging is staler, not broken.** 📌 **No failure in either org is attributable to the rename or the rebuild.** ⚠️ Coverage alone is not the gate: production needs 75% org-wide **and every local test passing** | §9 |
+| 2026-09-15 | ✅ **BOTH "NEW" BUGS WERE ONE BUG — and that is the lesson worth keeping.** *"Runs won't hit the calendar"* and *"no Run Line Items are created"* were reported and investigated separately. One cause: `Production_Run_Generate_Line_Item_Skeleton` held a stale reference to the renamed run line item object, faulted, and **rolled back the entire `Planned → Confirmed` PATCH**. No Confirmed → no Event (trap 9); no completed flow → no line items. The tell was already in the trap list — three runs sitting on `Planned` IS the failed-publish signal. Fixed in dev2; ⛔ staging waits on the change set. Orphans left behind: Order **00013516**, runs **PR-0115/0116/0117** | §2 trap 17, §4 wave 0c |
+| 2026-09-15 | 🪤 **FLOW BUILDER ACCEPTED AN EDIT, DISPLAYED IT, AND DISCARDED IT ON COMMIT — three times.** Setting the `PressChoices` record-choice-set *Choice Value* to `Id` (the `MALFORMED_ID` order-creation fault) failed by mouse, by keyboard, and by save-without-reopening; each attempt displayed correctly and each wrote `valueField: null`, confirmed against the metadata. ⛔ Junk versions **V47 (ACTIVE, identical to V46)** and **V48 (draft)** to delete. ✅ **Anthony fixed it a different way — a Get Records inside the loop.** 📌 Two earlier theories of mine were wrong and the fault email disproved both: test-run saturation, and an unguarded try/catch in `scheduleFromOrders` | §2 trap 16 |
+| 2026-09-15 | ✅ **`shippingBuffer()` NOW HOLDS THE SHOP'S REAL NUMBERS — every rebuilt guess was wrong.** The rebuild invented Pickup 0 · Delivery 1 · Split Ship 5 · Shipping 2 in-TN / 4 out / 3 blank, and flagged it in its own notes as *"the weakest thing here."* Anthony's actual table: **Pickup 0 · Delivery (local dropoff) 0 · Split Ship 3 · Order Fulfillment 3 (placeholder, not yet in use) · Shipping 3 in-state, 3 out-of-state, 3 blank.** Deployed to both orgs. 📌 The three shipping constants are kept separate although all three are 3 — in-state vs out-of-state is the open question for Anthony's boss, and collapsing them would lose it. 📌 **The lesson is not that the guess was bad; it is that a guess dressed as code reads as fact to the next session** | §4 wave 0c |
+| 2026-09-15 | ✅ **`ProductionEventPublisher` COVERAGE 20.5% → 89.3%, and four rebuild assumptions became asserted behaviour.** One new test method, `testConfirmPublishesEventAndUnconfirmRetractsIt`, walks a run `Planned → Confirmed → moved → Planned` and asserts: the scheduler leaves a `Planned` run alone; 🚩 **insert publishes NOTHING even for a run born with a window (the `oldMap` trap, asserted not assumed)**; confirming publishes exactly one Event with the right times, owner and subject; moving the window updates that Event rather than duplicating it; un-confirming **deletes** it; the run keeps its times. Test suite 4 of 5 → **5 of 6** in both orgs. 📌 `Auto_Scheduling_Status__c` has **four** active values — `Proposal`, `Confirmed`, `Planned`, `Unable to auto-schedule` — and **zero runs had ever held `Planned`**, so this test is the first thing in the org to exercise it | §4 wave 0c |
+| 2026-09-15 | ✅ **WAVE 0c IS DONE IN BOTH SANDBOXES — `Production_Method__c` → `Decoration__c`, org side AND app side.** ❌ **This inverts trap 12, which said for a week that the API name would never change and `Decoration__c` does not exist.** 🚩 **It cost four Apex classes:** Salesforce refuses to rename an object any Apex references, so `OrderPrintDateRollup`, `ProductionAutoSchedulerSelector`, `ProductionEventPublisher` and `ProductionAutoSchedulerService` were emptied to stubs — **and never downloaded first, because Apex has no version history in the UI.** They were **rebuilt from live org data by Claude Code and are reimplementations, not restorations.** Seven artifacts now deployed and **verified byte-identical across dev2 and staging** (the four rebuilds + new `ProductionMethodTriggerHelper`, new `ProductionMethodTrigger` on `Decoration__c`, and the test class). ✅ **BFF: 21 object edits across 15 inline sites and 6 constants**, each asserted at its exact line before writing, `newline=""` throughout. ⛔ **Two byte-identical lines deliberately NOT touched** — `production-methods/index.js:91` and `pre-production-items/index.js:61` are the **field** `Pre_Production_Item__c.Production_Method__c`, which was never renamed — 🪤 **and `production-methods/index.js` holds the object and the field 27 lines apart, so a find-and-replace breaks it silently.** ⛔ **48 `Production_Method__r` traversals also stay**: a relationship name derives from the field, not the object, and rewriting them fails at runtime against a live org rather than at build time | §2 traps 12 & 15, §4 wave 0c |
+| 2026-09-15 | 🔴 **THE ORGS DISAGREE ON THE RUN LINE ITEM OBJECT AND NO CHANGE SET CAN FIX IT** — dev2 is `Production_Run_Line_Item__c`, staging is still `Run_Line_Items__c`. The Metadata API has **no rename operation**: deploying a new `fullName` creates a **second** object and leaves the first one holding all the data. **Staging must be renamed by hand.** 5 BFF edits (`run-results/index.js:43`, `run-line-items/index.js:86`, `rework-check.js:295` and `:327`, `_rework.js:341`) are correct for dev2 and **wrong for staging** — and one deployment serves all three orgs, so the BFF cannot ship until staging is renamed. ⚠️ Read once, late in a long session: **re-verify both names in the org before acting** | §2 trap 10, §9 |
+| 2026-09-15 | 📦 **Change set `0c Flow Fixes 2026-09-15` BUILT in dev2 — both repaired flows, not yet uploaded.** Upload only **after** staging's object rename, then **activate both by hand** (flows arrive Inactive) | §9 |
+| 2026-09-15 | ❌ **CORRECTION — the row below (the 🚩🚩 uncommitted-rename alarm) was resolved the same day and its conclusion was inverted.** It read the working-tree `Decoration__c` sweep as a sweep against an object that does not exist, and recommended deciding whether to revert it. **The right answer was the third option: create the object.** `Production_Method__c` was renamed to `Decoration__c` in dev2 **and** staging on 2026-09-15, the BFF edits are correct, and they are now committed. 📌 **Kept rather than deleted, because the alarm was right on the facts it had** — a `FROM <object that does not exist>` sweep IS trap 1 at full blast radius, and it was found and stopped before it shipped. The failure mode it describes is real; only the resolution changed | §4 wave 0c |
 | 2026-09-15 | 🚩🚩 **UNCOMMITTED IN THE WORKING TREE: a `Production_Method__c` → `Decoration__c` rename across 16 server files, 21 sites, and it reaches live SOQL** (`FROM Decoration__c` in `_rework.js`, `rework-check.js`, `inbox/index.js`, plus semi-joins). **`Decoration__c` does not exist** — "decoration" is the UI label for `Production_Method__c`. Nothing of this is in HEAD (0 occurrences), so it is working-tree only, but it is one `git add -A` away from shipping. Trap 1 at full blast radius: a missing object in a SELECT is a parse error that empties the board behind an HTTP 200, and these queries back the inbox, the calendar, the production board, run-results, rework-check and every rollup. Found while staging B24; **left untouched and uncommitted**. Decide whether the field is being created in Salesforce or the sweep should be reverted | §2 trap 1 |
 | 2026-09-15 | **B24 — the AM's decoration now reaches the run form, and the form says what did not come with it** — `calendar.html`'s new-run form defaulted its decoration select to the order's FIRST `Production_Method__c`, so a Heat Press proposal on a two-decoration order booked press time against **Screen Print** with every other field correctly filled. New shared `matchProposalMethod()` in `ca-api.js` resolves `Machine_Group__c` against the order and never guesses — none / exactly one / several, and several is only resolved when the proposal's print location is offered by exactly one of them (D11/B4: two Screen Print decorations on different placements is a real order). ⚠️ **The decoration is resolved BEFORE the print-location guard** because that guard reads it; reversing the two lines fails 5 assertions in the harness's own negative control. All three guards now name what they dropped in the existing `runMsg` instead of blanking a box silently, and the AM's `notes` are displayed there — `POST /api/production-runs` writes six fields and none is a note, so there is nowhere to store it. `pre-production.html` deliberately does NOT set the decoration (the modal is fixed to one) and warns on a type mismatch only when it can positively tell. The `runMsg` chip lost its uppercase — it was built for "Run created." and now carries a human's note. **No new SOQL, no endpoint change.** 26/26 in `~/tmpwork/decorationcarry.mjs` plus two negative controls, and driven in a rig on a two-decoration order. Commit `4eb612c` on `feat/proposed-run-press`, unpushed. No Asana id supplied; B23 was taken | §4 B24 |
 | 2026-09-15 | ✅ **WAVE 0b IS DONE IN BOTH SANDBOXES — `ProductionRequirements__c` → `Production_Requirement__c` and `ProductionPlan__c` → `Production_Plan__c`, org side AND app side.** Sequence used, and it is the one to repeat for 0c: deploy a STUB of the only referencing Apex class → rename → restore the class rewritten against the new names → change the BFF. Anthony did the three Apex/org steps by hand in dev2 and staging. ✅ **Rename verified by compilation, not by eye:** the restored `ProductionAutoSchedulerServiceTest` contains `Production_Plan__c` and `Production_Requirement__c` and is Active — Apex only saves if it compiles, so the objects must exist under the new names. ⚠️ **Tests: 4 of 5 pass.** `testHappyPath` fails at line 105 — *"One Event should be created: Expected: 1, Actual: 0"*. The three assertions before it pass, so the scheduler itself is fine (status `Proposal`, both scheduled times set); only the calendar Event is missing. 📌 **Probably NOT caused by the rename:** `ProductionEventPublisher` has ZERO references to either renamed object, and §2 rule 9 independently documents this exact failure (`Trigger.oldMap` is null on insert, so a run created already-Confirmed may publish no Event) — and the test inserts a run directly instead of the app's insert-then-PATCH. **Unresolved: no prior test history exists for the class, so whether it was ever green is unknown.** ✅ **BFF: 11 changed lines across 3 files** — 6 code, 5 comments. `plans/index.js` 2 (`FROM ProductionPlan__c` ×2), `production-methods/index.js` 6 (`REQ_OBJECT`, `PLAN_OBJECT`, 4 comments), `_rework.js` 3 (two composite **write** URLs + 1 comment). `node --check` clean on all three. 🪤 **THE TRAP THAT MAKES THIS A HAND EDIT: `ProductionPlan__c` is an object AND a field, four lines apart.** `production-methods/index.js:61` is `PLAN_OBJECT` (renamed); **`:65` is `PM_PLAN_FIELD` (must NOT be renamed)**. Same in `_rework.js`: `:500` is the object in a composite URL (renamed), **`:508` is the field in the body (not renamed)**. A find-and-replace breaks both files silently. Four old-name mentions deliberately remain and are all correct — they are the field | §2 r14, §9, §11 |
@@ -6934,6 +8437,27 @@ a file of that name automatically as project instructions; every other file has 
 you delete it outright, the trap list in §2 stops being loaded by default and a session can start
 work without it. **Recommended: replace `CLAUDE.md` with a three-line pointer** to this file and §2,
 rather than removing it. Same for `README.md`, which is what GitHub shows on the repo's front page.
+
+**The `Claude outputs/` folder — folded into this document 2026-09-15, and safe to delete in full.**
+
+25 files from the wave 0c rebuild. ⛔ **Nothing in it was a source of truth**: it was working material
+produced during one wave, and every durable fact in it is now in §2, §4 wave 0c or §9.
+
+| File(s) | Now in | Note |
+|---|---|---|
+| `REBUILD-BRIEF-for-Claude-Code.md` | — | The brief that commissioned the rebuild. 📌 **Substantially wrong** — it claimed `Production_Run__c` had 50 fields and named many that do not exist. The corrections are in §4 wave 0c; the brief itself is not worth keeping. |
+| `REBUILD-0-ASSUMPTIONS.md` | §4 wave 0c | Measured-vs-assumed, in full, including every `// ASSUMPTION:` and the metadata corrections. |
+| `REBUILD-1…4-*.cls` | **Salesforce** | The four rebuilt classes. ⚠️ **Not reproduced anywhere on disk or in git.** Two orgs hold them; take a Setup → Apex Classes → **Download** before touching them (trap 15). |
+| `ProductionAutoSchedulerService.cls`, `ProductionAutoSchedulerServiceTest.cls` | **Salesforce** | The assembled, deployed versions of 4 and 7. Same caveat. |
+| `RESTORE-1-snippets.apex` | §4 wave 0c | `scheduleFromMethods` reproduced verbatim. 🪤 Its part 2 (the rollup SOQL loop) must **not** be applied — it duplicates a loop already in the class. |
+| `RESTORE-2-…Helper.cls`, `RESTORE-3-…Trigger.trigger` | §4 wave 0c | Both reproduced **verbatim** — they are small, and this was their only written record. |
+| `RESTORE-4-…Test.cls`, `1-STRIP-…`, `2-RESTORE-…` | **Salesforce** | Superseded by the deployed test class, which has the sixth method. |
+| `TEST-ADD-testConfirmPublishesEvent.cls` | §4 wave 0c + Salesforce | What it asserts and why, and the 20.5% → 89.3% result. |
+| `STEP6-0-READ-ME-FIRST.md`, `STEP6-1…4-*-EMPTIED.cls` | §2 trap 15 | The stub-then-rename procedure, generalised into the reusable sequence. The stub files themselves are spent. |
+| `STEP8-RESTORE-ORDER.md`, `STEP8-RESTORE-ORDER-v2.md` | §2 trap 15, §4 wave 0c | 🪤 v1's step 6 was **actively wrong** and v2 withdrew it; that trap is recorded in §4 so nobody reinstates it. |
+| `BFF-0c-CHANGE-LIST.md` | §4 wave 0c + **git** | All 21 edits, both guard lines and the verification table. The change itself is committed. |
+| `dev2-proposal-runs-2026-09-15.csv` | §4 wave 0c | 🚩 **Reproduced IN FULL.** The 11 rows are the only surviving output of the original scheduler and the rebuilt one overwrites them. There is no other copy. |
+| `dev2-run-events-2026-09-15.csv` | §4 wave 0c (summarised) | 79 rows. Its load-bearing content — subject format, the single owner id, the window distribution — is recorded; the SOQL to re-export it is there too. |
 
 **Deliberately NOT carried over — delete these, do not merge them:**
 
