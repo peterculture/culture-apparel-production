@@ -82,8 +82,8 @@ and switched OFF** (blank start date) until Anthony confirms the date at the end
 is done in both sandboxes** (2026-09-17); its findings became D23–D26. **S4 (the catalog layer) is done in both
 sandboxes** (2026-09-17): catalog objects, in-org dual-write Apex, backfill. **S5 (Decoration and
 Pre-Production Item → Art Spec) is done in both sandboxes and live** (2026-09-17). **S6 (Run Result, "add a count")
-is built, tested and migrated in dev2** (2026-09-17, D28); change set **"S6 Run Result 2026-09-17"** and the code
-(uncommitted on the Mac) wait on Anthony.
+is live in both sandboxes** (2026-09-17, D28): change set deployed, code pushed, migration run in both, the live
+screen walked on dev2. Left: one probe fix to push, and scenarios (c)(d)(e) on a throwaway order. **S7 is next.**
 D17 **supersedes D1**: the counting model is being replaced, but not until S6. The 2026-09-15 handoff
 below is still accurate for everything it covers.
 
@@ -1923,7 +1923,7 @@ its 48 `Production_Method__r` traversals stay exactly as they are (trap 12).
 
 **Test.** T1–T8. The order sheet prints the spec, and the size grid still renders (the `<table>` rule).
 
-#### S6 · Run Result (D17) — the counting screen is rebuilt — 🔧 BUILT IN DEV2 2026-09-17, staging waits on the change set
+#### S6 · Run Result (D17) — the counting screen is rebuilt — ✅ IN BOTH SANDBOXES AND LIVE 2026-09-17 (3 scenarios left)
 
 **Decided with Anthony (2026-09-17), D28:** Salesforce keeps the old per-size boxes as auto-totals of the Run
 Results (nothing downstream changes); a manager can reopen a submitted run to fix counts; migrated counts get
@@ -1980,14 +1980,43 @@ add 409, legacy submit still writes). **Counting screen, headless, stateful mock
 second add, remove, type + Submit (add then final), locked view (no inputs, no remove), Reopen → editable; legacy
 mode posts the old payload. No page errors.
 
-**To finish S6.**
-1. Anthony: upload + deploy **"S6 Run Result 2026-09-17"** to staging.
-2. Claude: run the tests in staging, dry-run then run the migration there (14 lines; 3 with counts, 0 submitted
-   runs today), record counts.
-3. Anthony: commit + push the code. Claude: T5 on both orgs (counting screen live: add, remove, submit, reopen on
-   a throwaway run), the §4 S6 scenarios (a)–(f) below, T6 (hide `Run_Result__c` for System Administrator →
-   old form), T8 (`rework-check` on a reprint order).
-4. Production (S8): the change set, then this migration **after counting the runs the scheduler could touch**.
+**Deployed and checked (2026-09-17, after Anthony deployed the change set and pushed).**
+- **staging:** change set deployed; `RunResultRollupTest` **5/5** (and S4/S5 suites still green).
+- **staging migration: 2 Run Results** from 12 eligible lines (good 4,470 · misprint 30 · no damaged/incomplete),
+  0 runs rescheduled, old line values unchanged. Dry run first, as in dev2.
+- 🪤 **STAGING HAS TWO LINE ITEMS THAT CANNOT BE WRITTEN AT ALL.** `PRLI-0001` and `PRLI-0002` hang off legacy run
+  **PR-0001, which has no `PrintMethod__c`** — and in staging that field is **required**, so ANY update to those
+  line items fails with `REQUIRED_FIELD_MISSING: [PrintMethod__c]` as the parent is re-saved. This is not new (the
+  old counting POST would fail the same way) and it is not caused by S6; the first migration attempt simply hit it
+  first. The migration now selects only lines whose run HAS a decoration (`WHERE ProductionRun__r.PrintMethod__c
+  != null`) and leaves those two alone. **They still carry `Misprint_Qty__c = 3000` on PRLI-0001**, which is why
+  staging's line-item misprint total (3,030) is larger than its Run Result total (30). Give PR-0001 a decoration —
+  or delete it — before that run can ever be counted.
+- **Live on dev2 (T5 / T7 a):** the counting screen is in "add a count" mode. On throwaway run **PR-0091**: typed
+  40 good + 2 misprint → Add Count → the size line read "So far: 40 good · 2 misprint", progress moved, the count
+  appeared in the log with time and name; a second count summed to 80 good · 4 misprint (two partial counts on one
+  line = scenario (a)); Remove took one back off the totals; Submit recorded "80 good · 4 misprinted" and ran the
+  reprint check (answer: another run on the order still needs counting). Re-opening the run showed the **locked**
+  view (no boxes, no remove, Reopen button); the org then **refused** an add and a remove with 409 `run_submitted`,
+  and `action:"reopen"` put it back to Draft. **Every test count was then deleted; PR-0091 is Draft with no counts
+  and blank totals again.**
+- **T6 (dev2):** `Run_Result__c.Good_Qty__c` hidden from System Administrator → the screen fell back to the old
+  four-box form, every board stayed 200, and `totalGood` came back null. FLS restored, results came back.
+  🚩 **That test found a real defect, now fixed:** the "does this org have Run Results" probe was `SELECT Id`,
+  which still succeeded while the *read* failed, so the page offered the old boxes and the legacy save refused
+  them (409) — a dead end. The probe now selects the same fields the read does. **This fix is a one-line change in
+  `functions/api/run-results/index.js` and needs another push.**
+- **T8:** `rework-check` on 00013513 answers `already_reworked` (reprint 00013514) with all queries OK;
+  production-orders, calendar, inbox, orders, presses, shortfalls, run-results and run-line-items all 200.
+
+**Still to do on S6.**
+- Scenarios **(c)**, **(d)** and **(e)** below — the reprint built from misprint counts end to end, the skeleton
+  flow's give-back on a make-up run, and B9's per-size email — need a throwaway order walked from printing to
+  counting in dev2. Nothing in those paths changed (they read the same line-item fields, which now hold the Run
+  Result totals), so this is confirmation, not suspicion.
+- Push the probe fix above.
+- Production (S8): the change set, then this migration **after counting the runs the scheduler could touch** —
+  and check first for runs without a decoration, as staging's PR-0001 shows.
 
 **Migration script** (anonymous Apex; replace the last line with `System.assert(false, msg);` for a dry run):
 ```
@@ -2014,7 +2043,8 @@ for (Production_Run_Line_Item__c l : lines) {
 insert ins;
 System.debug(LoggingLevel.ERROR, 'S6MIG inserted ' + ins.size());
 ```
-The dev2 run also snapshotted every run's schedule before/after and compared the old line values (both clean).
+⚠️ Add `WHERE ProductionRun__r.PrintMethod__c != null` to that `lines` query (staging's PR-0001, above). The dev2
+and staging runs also snapshotted every run's schedule before/after and compared the old line values (both clean).
 
 **The original plan, kept for reference.**
 
@@ -7656,9 +7686,12 @@ dev2 also grants the two integration profiles and the GOA / Modified admin profi
 (cosmetic). **Records and FLS were set by hand in each org**, because neither travels on a change set.
 Production has none of this (D22). ⚠️ See §4 S1 for why earlier parity reads of this object were wrong.
 
-### Run Result (S6) — ⚠️ dev2 only, 2026-09-17
+### Run Result (S6) — aligned 2026-09-17
 
-dev2 has `Run_Result__c` (9 fields), `Production_Run_Line_Item__c.Good_Qty__c`, `Production_Run__c.Total_Good_Qty__c`,
+Both sandboxes have the object, the two good fields, the class, its test and the trigger (change set deployed to
+staging; tests 5/5 there). Records do not travel: dev2 migrated 132 Run Results, staging 2. ⚠️ staging's legacy run
+PR-0001 has no decoration and `PrintMethod__c` is required there, so its two line items cannot be written at all —
+they were skipped and still hold the old 3,000 misprints. dev2 has `Run_Result__c` (9 fields), `Production_Run_Line_Item__c.Good_Qty__c`, `Production_Run__c.Total_Good_Qty__c`,
 `RunResultRollup` + test + `RunResultTrigger`, and 132 migrated Run Results. Change set **"S6 Run Result 2026-09-17"**
 (15 components + 3 profiles) is built, not uploaded. Records do not travel: staging and production each need the
 migration script (§4 S6). ⚠️ staging's line item also has `Actual_Good_Qty__c` / `Reprint_Qty_Needed__c` — unused, do
@@ -8401,6 +8434,7 @@ Newest first. One line per change; link to the story that carries the detail.
 
 | Date | What | Where |
 |---|---|---|
+| 2026-09-17 | ✅ **S6 LIVE in both sandboxes.** Change set deployed to staging (tests 5/5); staging migrated (2 Run Results; 12 eligible lines). Code pushed; the live counting screen walked on dev2 throwaway run PR-0091 — add, two counts summing, remove, submit (reprint check ran), locked view, org refusing add/remove on a submitted run, reopen — then every test count deleted. T6 passed and **found a defect: the Run-Result probe used `SELECT Id` while the read used the full field list, so a half-hidden layer left the old form with a save that 409'd. Probe now matches the read — one-line fix, needs a push.** 🪤 staging's legacy PR-0001 has no decoration and `PrintMethod__c` is required there, so its 2 line items cannot be written at all (pre-existing; migration skips them, 3,000 misprints still on the old field). Left: scenarios (c)(d)(e) on a throwaway order | §4 S6, §9 |
 | 2026-09-17 | 🔧 **S6 RUN RESULT BUILT in dev2** (D28). New `Run_Result__c` + `Good_Qty__c` / `Total_Good_Qty__c`; Apex `RunResultRollup` keeps the old line boxes = sums of Run Results and locks submitted runs; tests 5/5. dev2 migrated: 132 Run Results, sums match, 0 runs rescheduled. **Code, uncommitted on the Mac:** `run-results` actions add/remove/submit/reopen + results in GET (fail-open), `ca-api.js` wrappers, `counting.html` "add a count" screen with progress, log and manager reopen (old form kept when the org lacks Run Result). Rig 24/24, headless screen walk clean, smoke green. Change set "S6 Run Result 2026-09-17" built, not uploaded | §0, §4 S6, §5, §9 |
 | 2026-09-17 | ✅ **S5 CLOSED.** Order sheet re-pushed and live; dev2 live check passed (recipes print on 00013513); T6 passed (field hidden → `available:false`, boards unchanged; restored) | §0, §4 S5 |
 | 2026-09-17 | ✅ **S5 in staging + live.** Change set deployed; tests 7/7 + 8/8 in staging. Backfill linked nothing (staging has 0 Art Specs). Live test with two throwaway recipes: triggers linked only the intended location and items; the Pre-Production drawer showed the recipe on the live dashboard; deleting them cleared all links. 🚩 `order-sheet.html` is still the pre-S5 version live — re-commit/push. Open: dev2 live check and T6 (need the dashboard on dev2) | §4 S5, §9 |
