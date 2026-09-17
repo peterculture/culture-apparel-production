@@ -170,11 +170,24 @@ window.__resources = Object.assign({}, window.__resources, {
     <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:#6b645c;margin-bottom:10px">Decorations</div>
     <div style="display:flex;flex-direction:column;gap:8px">
       <sc-for list="{{methods}}" as="m" hint-placeholder-count="2">
-        <div style="display:flex;align-items:center;gap:10px;border:1.5px solid #d8d1c7;border-radius:8px;padding:10px 14px">
-          <span style="width:9px;height:9px;border-radius:50%;background:{{m.color}};flex-shrink:0"></span>
-          <span style="font:600 13px/1 'Oswald';color:#141210;flex-shrink:0">{{m.type}}</span>
-          <span style="font:400 12px/1 'Archivo';color:#6b645c">{{m.placementLabel}}</span>
-          <span style="margin-left:auto;font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#a79f92;flex-shrink:0">{{m.status}}</span>
+        <div style="border:1.5px solid #d8d1c7;border-radius:8px;padding:10px 14px;break-inside:avoid">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="width:9px;height:9px;border-radius:50%;background:{{m.color}};flex-shrink:0"></span>
+            <span style="font:600 13px/1 'Oswald';color:#141210;flex-shrink:0">{{m.type}}</span>
+            <span style="font:400 12px/1 'Archivo';color:#6b645c">{{m.placementLabel}}</span>
+            <span style="margin-left:auto;font:600 9px/1 'Oswald';letter-spacing:.08em;text-transform:uppercase;color:#a79f92;flex-shrink:0">{{m.status}}</span>
+          </div>
+          <!-- S5: Art Spec per location. Plain divs, never a <table> (see the size grid's note). -->
+          <sc-if value="{{m.hasSpecs}}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:8px;padding-top:8px;border-top:1px dashed #d8d1c7;display:flex;flex-direction:column;gap:6px">
+              <sc-for list="{{m.specs}}" as="sp" hint-placeholder-count="1">
+                <div>
+                  <div style="font:600 10px/1.2 'Oswald';letter-spacing:.1em;text-transform:uppercase;color:#6b645c">Print recipe · {{sp.title}}</div>
+                  <div style="font:400 12px/1.5 'Archivo';color:#141210">{{sp.text}}</div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
         </div>
       </sc-for>
       <sc-if value="{{methodsEmpty}}" hint-placeholder-val="{{ false }}"><div style="font:400 12px/1.4 'Archivo';color:#a79f92">No decorations linked to this order yet.</div></sc-if>
@@ -269,7 +282,7 @@ class Component extends DCLogic {
       const api = window.CAApi;
       if(!api){ this.fail('The page did not load correctly', 'ca-api.js is missing, so this sheet cannot be built. Reload the page; if it happens again the deployment is broken.'); return; }
       const M = { sp:'Screen Print', em:'Embroidery', hp:'Heat Press' };
-      const [o1, o2, rows, items] = await Promise.all([ api.getOrders().catch(()=>[]), (api.getProductionOrders?api.getProductionOrders():Promise.resolve([])).catch(()=>[]), api.getOrderSizes(orderId), api.getPreProductionItems(orderId).catch(()=>[]) ]);
+      const [o1, o2, rows, items, artSpecs] = await Promise.all([ api.getOrders().catch(()=>[]), (api.getProductionOrders?api.getProductionOrders():Promise.resolve([])).catch(()=>[]), api.getOrderSizes(orderId), api.getPreProductionItems(orderId).catch(()=>[]), (api.getArtSpecs?api.getArtSpecs(orderId):Promise.resolve(null)) ]);
       const rec = o1.concat(o2).find(r => r.Id === orderId);
       /* Not an error in Salesforce -- both queries succeeded, this order just
          isn't in either result. The usual causes are an order marked Complete
@@ -320,7 +333,20 @@ class Component extends DCLogic {
         id: m.id, type: m.type || 'Decoration', color: m.color || '#8a8378',
         placementLabel: (m.placements && m.placements.length) ? m.placements.join(' + ') : '—',
         status: m.status || '—',
+        /* S5: the Art Spec ("print recipe") for this decoration, one entry per location that has
+           one. getArtSpecs() resolves to {available:false} when the org has no spec layer, and
+           artSpecsForDecoration() then returns [], so the sheet prints exactly as before. */
+        specs: (api.artSpecsForDecoration ? api.artSpecsForDecoration(artSpecs, m.id, m.type) : [])
+          .filter(sp => sp.lines.length)
+          .map(sp => ({
+            title: (sp.placement ? sp.placement + ' · ' : '') + sp.name,
+            text: sp.lines.map(l => l.label + ': ' + l.value).join('   ·   '),
+            inks: sp.lines.filter(l => l.label === 'Ink colors').map(l => l.value),
+          })),
       }));
+      // Ink colours: from the Art Specs when any spec names them, the items' Pantones otherwise.
+      const specInks = [];
+      methods.forEach(mm => mm.specs.forEach(sp => sp.inks.forEach(v => v.split(/\s*,\s*/).forEach(c => { if (c && specInks.indexOf(c) < 0) specInks.push(c); }))));
       const order = {
         goa: api.text(rec.GOA_Order_Number__c) || rec.OrderNumber || rec.Id,
         goaTail: (api.text(rec.GOA_Order_Number__c)||rec.OrderNumber||'').replace(/[^0-9-]/g,'') || (rec.OrderNumber||''),
@@ -329,7 +355,7 @@ class Component extends DCLogic {
         method: api.methodOf(rec), methodLabelText: M[api.methodOf(rec)],
         printDate: pd, qty: String(grand),
         placement: placements.join(', ') || '—',
-        inkColors: inkColors.join(', ') || '—',
+        inkColors: (specInks.length ? specInks : inkColors).join(', ') || '—',
         totalGarments: grand ? (String(grand) + ' pieces') : '—',
         notes: api.text(rec.Production_Notes__c) || api.text(rec.Special_Notes__c) || '',
         specs: api.text(rec.Specifications_for_Printing__c) || '',
@@ -373,7 +399,7 @@ class Component extends DCLogic {
       tagBg: g.dark ? '#141210' : 'transparent', tagColor: g.dark ? '#fff' : '#141210',
       cells: (o.cols||[]).map(c => { const q = g.qtys[c]; const zero = !q; return { qty: zero ? '·' : String(q), color: zero ? '#c9c1b7' : '#141210', weight: zero ? 400 : 700 }; }),
     }));
-    const methods = o.methods || [];
+    const methods = (o.methods || []).map(x => Object.assign({}, x, { specs: x.specs || [], hasSpecs: !!(x.specs && x.specs.length) }));
     return {
       goa:o.goa, goaTail:o.goaTail, customer:o.customer, account:o.account, orderNumber:o.orderNumber,
       methodLabel:m.label, methodColor:m.color, printDate:o.printDate, qty:o.qty,
