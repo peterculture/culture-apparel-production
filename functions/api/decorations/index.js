@@ -49,6 +49,7 @@ import { apiVersion, jsonError, runQuery } from "../_sf.js";
 import { rollupOrderSubstatus } from "../_pm-rollup.js";
 import { runComposite, runChunked, rollbackCreated } from "../_composite.js";
 import { requireCap } from "../_session.js";
+import { ALLOWED_METHOD_TYPES, ALLOWED_PLACEMENTS, ALLOWED_TRANSFER_TYPE } from "../_placements.js";
 import { GATED_STATUSES, checkApprovalGate, gateResponse } from "../_approval-gate.js";
 
 // ---------------------------------------------------------------------------
@@ -106,20 +107,13 @@ const ITEM_TRANSFERTYPE_FIELD = "Transfer_Type__c";// Transfer (restricted pickl
 
 // Restricted picklists — validate server-side so a bad value can't reach SF.
 const ALLOWED_MESH          = new Set(["110","125","156","180","196","230","305"]);
-const ALLOWED_TRANSFER_TYPE = new Set(["Screen Transfer","Digital Transfer","Sublimation","Vinyl"]);
+// Transfer types: ALLOWED_TRANSFER_TYPE in ../_placements.js (D25).
 
 // Allow-lists, enforced server-side so the browser can't write arbitrary values.
-const ALLOWED_METHOD_TYPES = new Set(["Screen Print", "Embroidery", "Heat Press", "Promotional Items"]);
 const ALLOWED_ITEM_TYPES   = new Set(["Screen", "Ink", "Thread", "Digitization", "Transfer"]);
-// Placement__c picklist values. MUST match Salesforce exactly (Setup ->
-// Object Manager -> Decoration -> Fields -> Placement) or the create
-// call fails with INVALID_OR_NULL_FOR_RESTRICTED_PICKLIST. If the shop adds a
-// new print location, add it in Salesforce first, then add it here.
-const ALLOWED_PLACEMENTS = new Set([
-  "Front", "Back", "Left Sleeve", "Right Sleeve",
-  "Left Chest", "Right Chest", "Full Front", "Full Back",
-  "Tag", "Hood", "Pocket",
-]);
+// Method and placement allow-lists live in ../_placements.js (S4, build rule 4).
+// They MUST match the org's restricted picklists exactly, or the create fails
+// with INVALID_OR_NULL_FOR_RESTRICTED_PICKLIST.
 // Exact Status__c picklist values, confirmed from Setup 2026-07-02.
 const ALLOWED_STATUSES     = new Set([
   "Pre-Production", "Ready for Print", "In Production",
