@@ -1,5 +1,5 @@
 /**
- * PATCH /api/production-methods/:id
+ * PATCH /api/decorations/:id   (../production-methods/:id is a re-export alias -- see that file)
  *
  * Updates ONE Production_Method__c: its Status__c (the Production floor
  * board, index.html), its Type__c / Placements__c (added
@@ -62,7 +62,7 @@
  *   }
  *
 
- * DELETE /api/production-methods/:id
+ * DELETE /api/decorations/:id
  *
  * Removes ONE Production_Method__c (added 2026-07-29 so a card's drawer can
  * remove a method/location it created by mistake, or one that's no longer
