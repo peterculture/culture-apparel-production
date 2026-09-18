@@ -11,7 +11,7 @@
  * needs no child-relationship name. Same fixed-query, no-client-SOQL shape as
  * /api/orders — the browser can't run arbitrary queries.
  */
-import { runQuery, jsonError, runChunkedIdQuery } from "../_sf.js";
+import { runQuery, jsonError, runChunkedIdQuery, soqlQuoteList } from "../_sf.js";
 import { runQueryOptionalField, splitPlacements } from "../_placements.js";
 import { fetchMockupsByOpportunity } from "../_mockup.js";
 import { createReworkIfNeeded } from "../_rework.js";
@@ -235,26 +235,63 @@ const MULTI_METHOD_FIELD = "Multiple_Production_Methods__c";
    that fails a gate is left for rework-check to explain, not silently skipped
    here with a second opinion. */
 const SWEEP_LIMIT = 3;
+/* How many approved orders to LOOK at per load. Wider than SWEEP_LIMIT because the ones already
+   built are filtered out below, and a window filled with finished work would never reach the new. */
+const SWEEP_SCAN = 50;
 
 async function buildApprovedReprints(env) {
   /* Selecting Misprint_Outcome__c is trap 1 territory -- it exists in all three
      orgs (confirmed 2026-09-08) but existing is not the same as being readable
      by the integration user. This is its own query inside its own try, so an
      FLS surprise costs the sweep and never the inbox itself. */
-  const candidates = await runQuery(
+  /* ⛔ NO SELF-SEMI-JOIN. This used to read
+        AND Id NOT IN (SELECT Original_Production_Order__c FROM Order WHERE Original_Production_Order__c != null)
+     to skip orders that already have a reprint. Salesforce refuses it outright:
+
+        ERROR at Row:1:Column:80
+        The inner and outer selects should not be on the same object type
+
+     so the query never parsed, `candidates.ok` was always false, and this sweep
+     built NOTHING -- in any org, since the day it was written. The only reprint
+     anyone ever saw came from the other two callers (a decoration status PATCH
+     and a run-results submit), which is why it looked like it worked: those
+     paths fire while the order is finishing, and the AM approving LATER -- the
+     whole point of B9 -- silently did nothing. Found 2026-09-18 when Anthony set
+     Misprint_Outcome__c to Reprint and no reprint order appeared.
+
+     Two plain queries instead, and the exclusion is done here. The scan is wider
+     than the build limit so that orders already built cannot fill the window and
+     starve the ones that are not. */
+  const scan = await runQuery(
     env,
     `SELECT Id FROM Order WHERE Misprint_Outcome__c = 'Reprint' ` +
       `AND Order_Substatus__c = 'Completed' ` +
-      // Self-semi-join on the reprint link: an order that already has a child
-      // is done. Gate 1 inside createReworkIfNeeded would catch it anyway; this
-      // just keeps the candidate list honest.
-      `AND Id NOT IN (SELECT Original_Production_Order__c FROM Order WHERE Original_Production_Order__c != null) ` +
-      `ORDER BY Misprint_Outcome_At__c ASC NULLS FIRST LIMIT ${SWEEP_LIMIT}`,
+      `ORDER BY Misprint_Outcome_At__c ASC NULLS FIRST LIMIT ${SWEEP_SCAN}`,
   );
-  if (!candidates.ok) {
-    console.error("B9 sweep: candidate query failed", candidates.status);
+  if (!scan.ok) {
+    console.error("B9 sweep: candidate query failed", scan.status);
     return;
   }
+  if (!scan.records.length) return;
+
+  /* Which of those already have their reprint. Scoped to the ids just found
+     rather than "every reprint ever", so this stays small in production. */
+  const built = new Set();
+  const ids = scan.records.map((r) => r.Id);
+  const done = await runQuery(
+    env,
+    `SELECT Original_Production_Order__c FROM Order ` +
+      `WHERE Original_Production_Order__c IN (${soqlQuoteList(ids)})`,
+  );
+  if (done.ok) {
+    for (const r of done.records) built.add(r.Original_Production_Order__c);
+  } else {
+    // Not fatal: gate 1 inside createReworkIfNeeded checks idempotency itself,
+    // so the worst case is a wasted call that returns already_reworked.
+    console.error("B9 sweep: existing-reprint query failed, relying on the builder's own check", done.status);
+  }
+
+  const candidates = { records: scan.records.filter((o) => !built.has(o.Id)).slice(0, SWEEP_LIMIT) };
   for (const o of candidates.records) {
     // Sequential, not Promise.all -- each build is a chain of composites and
     // firing three at once at one org is how you find the API limit.
