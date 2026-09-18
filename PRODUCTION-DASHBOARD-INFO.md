@@ -82,8 +82,18 @@ and switched OFF** (blank start date) until Anthony confirms the date at the end
 is done in both sandboxes** (2026-09-17); its findings became D23–D26. **S4 (the catalog layer) is done in both
 sandboxes** (2026-09-17): catalog objects, in-org dual-write Apex, backfill. **S5 (Decoration and
 Pre-Production Item → Art Spec) is done in both sandboxes and live** (2026-09-17). **S6 (Run Result, "add a count")
-is live in both sandboxes** (2026-09-17, D28): change set deployed, code pushed, migration run in both, the live
-screen walked on dev2. Left: one probe fix to push, and scenarios (c)(d)(e) on a throwaway order. **S7 is next.**
+is done in both sandboxes and live** (2026-09-17, D28): change set deployed, code pushed, migration run in both,
+the live screen walked on dev2, and scenarios (c)(d)(e) walked — (c) and (e) pass; (d) found that the skeleton
+flow's give-back had been dead in BOTH orgs since the 2026-09-15 repair, for a reason that has nothing to do
+with S6 (**trap 18** — a repaired object reference silently blanks the filter values). ✅ **Anthony fixed both
+flows the same day** (dev2 v6, staging v4); the values read back correctly and the give-back was re-proved in
+dev2 — a run planned at 80 now creates XL:40 + 2XL:40. **All three scenarios pass.** **S7 (the shop
+floor) is now BUILT IN DEV2** (2026-09-18, **D29**): measuring it first showed the shop floor is already
+tracked on Pre-Production Item, so **Screen became the physical frame** and the new objects describe
+frames and ink batches, not jobs. `Screen_Prep__c`, `Screen_Reclaim__c`, `Ink_Mix__c` and the
+`Screen__c` / PPI additions **now exist and read back in BOTH orgs** — staging deployed 2026-09-18 and
+diffed field-by-field against dev2 with zero differences. Left: seeding the frames (needs Anthony's counts
+by mesh) and the `station.html` pickers.
 D17 **supersedes D1**: the counting model is being replaced, but not until S6. The 2026-09-15 handoff
 below is still accurate for everything it covers.
 
@@ -851,6 +861,73 @@ both symptoms ride the same save. Here the tell was already documented: **trap 9
 ⚠️ **This is made harder by `ProductionAutoSchedulerService.scheduleFromOrders()` swallowing its own
 exceptions.** Best-effort is right for a calendar publish; silent is not. Closing that gap is an open
 item in §0.
+
+**18. 🪤 REPAIRING A FLOW'S OBJECT REFERENCE CLEARS ITS FILTER VALUES, AND THE FLOW STILL RUNS GREEN.**
+✅ **FIXED IN BOTH ORGS 2026-09-17 (Anthony)** — dev2 is now **v6 `301ca00000U5OEwAAN`**, staging **v4
+`301ca00000U5HQvAAN`**, and both read back
+`Method__c EqualTo $Record.PrintMethod__c AND Run_Print_Location__c EqualTo $Record.Print_Location__c`.
+Behaviour re-proved in dev2 with the same rolled-back Apex that caught it: a run planned at 80 on method
+`a3Vca000000LJCXEA4` now creates **XL:40 + 2XL:40, total 80** — the two sizes actually left incomplete —
+where before the fix it produced 5 blank rows, and a run planned at 500 produced the full 200.
+**The trap itself still stands: read the values back after any object-reference repair.**
+
+Found 2026-09-17, in the very flow trap 17 is about. The 09-15 repair of
+`Production_Run_Generate_Line_Item_Skeleton` was done exactly as prescribed — re-select the object on each
+Get Records element so the stale reference recompiles, re-pick the filter fields, save a new version,
+activate. It fixed the fault. But re-selecting the object **blanks the value side of every filter**, and
+re-picking the *field* does not put it back. `Get Existing Rows On This Run` was re-entered
+(`ProductionRun__c Equals {!$Record.Id}` is intact); **`Get Rows Across This Method` was not, in either
+org**:
+
+| Org | Flow | `Get Rows Across This Method` filters |
+|---|---|---|
+| dev2 | v5 `301ca00000U1SxAAAV` | `Method__c Equals` ⟵ blank · `Run_Print_Location__c Equals` ⟵ blank |
+| staging | v3 `301ca00000U1paIAAR` | `Method__c Equals` ⟵ blank · `Run_Print_Location__c Equals` ⟵ blank |
+
+A blank right-hand side is not an error. It compiles, activates, and at run time means *equals nothing*,
+which matches **zero rows org-wide** (checked: `WHERE Method__c = null AND Run_Print_Location__c = null`
+returns 0). The loop over those rows never runs, `varAlreadyPlanned` stays 0, and the flow happily builds a
+skeleton for the **whole order quantity every time**.
+
+📌 **The tell is never in the flow.** It ran green on every make-up run since 09-15 and sent no fault email.
+It shows up one layer out, as *"this make-up run is planning more than is actually left"* — and the
+blank-row branch (`Does This Run Cover The Remainder`) turns the same fault into *"my make-up run came out
+empty"*, which looks like a different bug entirely.
+
+📌 **So: after repairing an object reference, read the filter VALUES back out of the metadata** — not the
+canvas, which renders a blank filter as a tidy, finished-looking row. Tooling API:
+`SELECT Metadata FROM Flow WHERE Id = '…'`, then check each `recordLookups[].filters[].value` is non-null.
+The recipe for driving the Developer Console (trap 7) reaches this in two calls.
+
+**19. 🪤 A CUSTOM OBJECT IN A CHANGE SET DOES NOT CARRY ITS OWN FIELDS — AND THE ERROR NAMES SHARING,
+NOT FIELDS.** S7's first change set (2026-09-18) held the four objects plus only the two fields that sat
+on an already-deployed object. It failed validation in staging with, on two of them:
+
+```
+Screen_Prep__c    Custom Object  Cannot set sharingModel to ControlledByParent
+Screen_Reclaim__c Custom Object  on a CustomObject without a MasterDetail relationship field
+```
+
+Nothing is wrong with the sharing model. Adding a master-detail field to an object flips that object's
+`sharingModel` to `ControlledByParent` automatically, so the object's own definition now *requires* an
+MD field to exist — and the MD field **was not in the package**, because a custom object added to a
+change set brings the object, not its fields. The other objects deployed "fine", which is worse: they
+would have landed in staging as **empty shells**, and the first read-back would have looked like trap 1
+all over again.
+
+📌 **So list every field explicitly, including the master-detail ones**, and for an object the target
+org does not have at all, list its **pre-existing** fields too — nobody carries them for you. S7's set
+went from 6 components to 37.
+
+🪤 **An uploaded change set is locked** — its buttons drop to Delete / Upload / Clone, with no Add. The
+fix is **Clone**, add the missing components to the clone, and upload that. The clone keeps the
+components *and* the attached profiles.
+
+🪤 **Both pickers paginate, and so does the change set's own component list.** The field picker is
+lettered (`lsc` A=0…T=19) *and* each letter can run to a second page (`lsr=160`) — `Status` on `Screen__c`
+was on page 2 of "S", which is exactly how a field goes missing without anyone noticing. The detail page
+itself shows 25 rows and hides the rest behind **Next**. **Verify a change set by walking every page and
+ticking off a written checklist**, not by glancing at the first screen.
 
 #### Conventions to follow
 
@@ -1923,7 +2000,7 @@ its 48 `Production_Method__r` traversals stay exactly as they are (trap 12).
 
 **Test.** T1–T8. The order sheet prints the spec, and the size grid still renders (the `<table>` rule).
 
-#### S6 · Run Result (D17) — the counting screen is rebuilt — ✅ IN BOTH SANDBOXES AND LIVE 2026-09-17 (3 scenarios left)
+#### S6 · Run Result (D17) — the counting screen is rebuilt — ✅ DONE 2026-09-17 (all scenarios walked)
 
 **Decided with Anthony (2026-09-17), D28:** Salesforce keeps the old per-size boxes as auto-totals of the Run
 Results (nothing downstream changes); a manager can reopen a submitted run to fix counts; migrated counts get
@@ -2009,12 +2086,117 @@ mode posts the old payload. No page errors.
 - **T8:** `rework-check` on 00013513 answers `already_reworked` (reprint 00013514) with all queries OK;
   production-orders, calendar, inbox, orders, presses, shortfalls, run-results and run-line-items all 200.
 
+**Scenarios (c), (d) and (e) — walked in dev2 2026-09-17. Two pass. The third is fine on our side and
+exposed a fault that predates S6.**
+
+- **(c) The reprint built from misprint counts, end to end — ✅ PASS.** Order **00013518**, run **PR-0118**:
+  reopened it, added 7 good / 2 misprint / 1 damaged through the new screen, submitted. Reprint **00013519**
+  was created for **7 garments — S=4, L=3**, which is misprint + damaged exactly. `rework-check` agrees
+  (`totalReworkQty` 7, every query OK).
+- **(e) B9's damaged-lines email, per size — ✅ PASS.** `B9 Order Complete With Damage - Awaiting AM` v2
+  (dev2 `301ca00000TvbBtAAJ`) reads `Misprint_Qty__c` and `Damaged_Qty__c` **straight off the line item** —
+  the two boxes the Run Result totals now fill — filtering `Order_Id__c` = the order `AND (Misprint > 0 OR
+  Damaged > 0)`, sorted by `Size_Sort__c`, then grouping consecutive rows by size. Replaying that query and
+  that grouping on 00013518 gives **S — 3 misprint, 1 damaged; L — 3 misprint, 0 damaged; totals 6 and 1**,
+  which is exactly what the Run Results underneath say, in size order, with the untouched sizes absent.
+  Checked at query level; **no email was sent.**
+- **(d) The skeleton flow's give-back on a make-up run — ✅ PASS as of 2026-09-17, after Anthony's flow fix.**
+  Re-run after the fix: a run planned at 80 on method `a3Vca000000LJCXEA4` creates **XL:40 + 2XL:40,
+  total 80** — exactly the outstanding quantity, exactly the two sizes left incomplete. Both orgs' flows
+  read back correctly (trap 18). **What follows is the original finding, kept because the diagnosis is the
+  reusable part.**
+  The give-back arithmetic lives in `Production_Run_Generate_Line_Item_Skeleton` and is correct: for each
+  existing row on the method it does `varAlreadyPlanned += Planned_Qty__c` then `-= Incomplete_Qty__c`, so
+  what was planned but never finished comes back. `Incomplete_Qty__c` is one of the boxes S6 now keeps as a
+  sum of Run Results, and it is landing correctly (method `a3Vca000000LJCXEA4`: 200 planned, 80 incomplete;
+  `run-line-items` reports `methodCommitted 120`).
+  **But the flow never executes that loop**, because `Get Rows Across This Method` lost both filter values in
+  the 2026-09-15 repair — **trap 18**. Proved with two rolled-back anonymous-Apex runs on that method:
+  a run planned at 80 got **5 blank rows**, and one planned at 500 got **S/M/L/XL/2XL 40 each, total 200** —
+  the full order again, not the 80 that is actually outstanding.
+  🚩 **This is not caused by S6 and S6 cannot fix it.** The loop body never runs, so it would read 0 whether
+  the incomplete numbers came from Run Results or from the old four-box form. **Both orgs need the flow fix in
+  trap 18 before a make-up run can be trusted** — and the earlier guess that PR-0119's blank rows were a
+  dashboard write-ordering problem is **wrong and withdrawn**: clean Apex reproduces them exactly.
+
 **Still to do on S6.**
-- Scenarios **(c)**, **(d)** and **(e)** below — the reprint built from misprint counts end to end, the skeleton
-  flow's give-back on a make-up run, and B9's per-size email — need a throwaway order walked from printing to
-  counting in dev2. Nothing in those paths changed (they read the same line-item fields, which now hold the Run
-  Result totals), so this is confirmation, not suspicion.
-- Push the probe fix above.
+- ✅ The probe fix is pushed (Anthony, 2026-09-17), and legacy **PR-0001 now has a decoration**, so staging's
+  two stranded line items can be migrated whenever that is wanted.
+- 🟡 **Frames are seeded with PLACEHOLDER data so the build can carry on** (2026-09-18, Anthony's call:
+  fake numbers now, real count before production). **35 frames in each sandbox**, identical spread:
+  110×4 · 125×2 · 156×10 · 180×4 · 196×3 · 230×10 · 305×2, all `In Rack`, `Label_Printed__c` false.
+  Plus **4 placeholder ink batches** (PMS 186 C, PMS 286 C, Black, White) so the batch picker has
+  something to show. dev2 is now 41 screens (35 seeded + its 6 originals), staging 35.
+  **Every placeholder is marked and one query removes them:**
+  - frames — `Screen__c` where `Location__c = 'SEED-PLACEHOLDER'`
+  - ink — `Ink_Mix__c` where `Mixed_By__c = 'SEED-PLACEHOLDER'`
+  Each row also says so in its own Notes field, so nobody meets one in the UI and mistakes it for real.
+  ⛔ **See the production gate below — this data must not reach production.**
+  📌 The seeded spread is also what the picker was designed against: 35 frames is enough that "offer
+  every frame" is visibly the wrong answer, which is why the list narrows to the job's mesh.
+- ✅ **`station.html` pickers are BUILT** (2026-09-18, uncommitted on the Mac; Anthony pushes).
+  **New endpoint `functions/api/shop-floor/index.js`** — `GET ?station=screen|ink` returns the usable
+  frames or batches plus a `byItem` map of what is already recorded; `POST { station, itemId, valueId }`
+  writes the link, and `valueId: null` clears it.
+  ⛔ **It is a FOLLOW-UP endpoint and must stay one.** `_station.js`'s `selectFields` still does not
+  name `Pre_Production_Item__c.Screen__c` or `.Ink_Mix__c`, because an org that lacks them turns the
+  whole station SELECT into a parse error and takes the ink and screen boards to **zero rows behind an
+  HTTP 200** (trap 1). The endpoint answers `200 { available:false }` instead and the picker simply does
+  not render. There is a comment saying so at the top of the file — do not "tidy" those two fields into
+  the station config.
+  - **`ca-api.js`:** `getShopFloor(station)` (fails soft to `available:false`, same shape as
+    `getArtSpecs`) and `setShopFloorLink(station, itemId, valueId)`.
+  - **`station.html`:** the ink and screen stations gained `kit` / `kitLabel` / `kitHint` / `kitNone` in
+    `STATIONS`, a `sf` slice of state loaded next to inventory, `setKit()` (optimistic, rolled back on
+    failure, gated by `canWriteNow` like every other write there), and a picker in the job modal.
+  - 📌 **The options are narrowed to what fits the job** — a 156 mesh job offers 156 frames, a PMS 186
+    job offers PMS 186 batches — because handing a worker all 35 frames and trusting them to read the
+    mesh off a list is how the wrong screen gets pulled. If nothing matches, everything usable is
+    offered with a warning rather than an empty list, since a blank picker reads as broken.
+  - 📌 **Retired and Damaged frames are never offered**; they stay in the org for their history. An ink
+    batch with `Amount_Remaining__c` at 0 is dropped, but a **blank** remaining is kept — blank means
+    nobody has said, which is not the same as empty.
+  - 📌 **An unlabelled frame is still pickable but flagged** ("no label yet"), because most frames are
+    unlabelled until the production gate above is worked through.
+
+**How S7's front end was tested (2026-09-18).**
+- **Endpoint rig, 30/30** (`/tmp` fake-Salesforce rig, same approach as S6's): both stations' GET shape,
+  the retired/empty exclusions actually reaching the SOQL, `byItem`, **an org with no object → 200
+  `available:false`**, an org with the object but no lookup → same, POST writing the right field on the
+  right object, clearing to null, Id and station validation rejecting before any write, the capability
+  gate, `INVALID_FIELD` surfacing as a clean 409, and a real failure still reporting 500.
+- **Headless page walk (Playwright, tablet viewport), both ways.** With the layer: the card opens, the
+  picker renders, **the 230 mesh frame is correctly absent** from a 156 job, the unlabelled frame is
+  flagged, tapping posts exactly
+  `{station:"screen", itemId:"…", valueId:"…"}`, the chip flips to "Saved." and the current selection
+  updates. With `available:false`: **the picker does not render at all** and the board is what it was
+  before S7.
+- `node tools/smoke.mjs` all 7 green; `check-dc-templates.mjs` green.
+- 🪤 The walk needed `vendor/react-*.js`, which are **iCloud-evicted** and were not in the container's
+  working copy (trap 14). Stage them before running a page walk; nothing is wrong with the repo.
+
+**Still to do on S7.**
+⛔ **PRODUCTION GATE — S7's frame data is fake and must not be promoted.** The 35 frames and 4 ink
+batches in each sandbox are invented. Before S8 puts the shop floor into production:
+1. **Anthony counts the real frames per mesh** (the picklist offers 110 · 125 · 156 · 180 · 196 · 230 ·
+   305). This is a physical stock-take, not a Salesforce task, and nothing else in S7 depends on it.
+2. **Delete the placeholders in dev2 and staging** with the two queries above, so no sandbox is ever
+   used as the source of a real count.
+3. **Create the real frames in production**, print labels from `Name`, and tick `Label_Printed__c` as
+   each frame physically gets its label.
+🚩 **S8 must not go ahead on placeholder frames.** A frame record is meant to stand for a real object in
+a rack; a seeded one that survives into production is a frame the shop will look for and never find.
+
+- ✅ **The trap 18 flow fix is done in both orgs** (dev2 v6, staging v4), read back from the metadata and
+  re-proved behaviourally in dev2. Staging is verified at the metadata level only — it has little data to
+  walk.
+- 📌 **Checked and clear: no governor-limit problem in the make-up path.** Creating the run and confirming
+  it are two separate HTTP calls, so they are two separate Salesforce transactions. Measured in dev2: the
+  insert leg costs **33** SOQL queries, the confirm leg **36** when the flow writes blank rows and **66**
+  when it writes rows with quantities — and 66 is a *fixed* cost of that branch, not per row (two populated
+  rows and five populated rows both measured 66). A single anonymous-Apex block doing insert + confirm +
+  one read hits 101 and fails, but **the app never does that** — that failure was the test's shape, not the
+  product's.
 - Production (S8): the change set, then this migration **after counting the runs the scheduler could touch** —
   and check first for runs without a decoration, as staging's PR-0001 shows.
 
@@ -2085,24 +2267,141 @@ and staging runs also snapshotted every run's schedule before/after and compared
 (e) the B9 email shows the right per-size numbers (debug resolved values);
 (f) T6 on `Run_Result__c` → the counting screen degrades to the old four-box form.
 
-#### S7 · Shop floor: Screen, Screen Prep, Ink Mix, Screen Reclaim
+#### S7 · Shop floor: Screen, Screen Prep, Ink Mix, Screen Reclaim — ✅ IN BOTH SANDBOXES 2026-09-18 (D29)
 
-**Salesforce.**
-- Create `Screen__c` in staging (dev2's shape: `Status__c`, `Mesh_Count__c`, `AssignedOrder__c`,
-  `Quantity__c`, `Screen_Notes__c`), then add `Screen__c.Art_Spec__c` in both orgs.
-- Build `Screen_Prep__c`, `Ink_Mix__c` and `Screen_Reclaim__c` per OBJECT-GUIDE.
-- The six dev2 screens are re-pointed by hand.
+🚩 **The measurement that changed this stage's shape.** Read before touching it. The shop floor is
+**already tracked**, on `Pre_Production_Item__c`, and has been all along:
 
-**Dashboard.** `station.html` step stations gain screen and ink steps through new endpoints that answer
-`available:false` where the objects are missing. This is the least coupled stage and can run
-alongside S5 and S6.
+| | dev2 | staging |
+|---|---|---|
+| PPI **Screen** jobs | **186** | **138** |
+| PPI **Ink** jobs | **96** | **68** |
+| `Screen__c` | exists, **6 rows** | **absent** |
+| `Screen_Prep__c` / `Ink_Mix__c` / `Screen_Reclaim__c` | absent | absent |
 
-**Test.** T1–T8 on `station.html` at tablet width.
+`station.html` runs those jobs today through `_station.js`: screens go **Needs Emulsion → Ready for
+Exposure → Needs Tape → Ready for Print**, ink goes **Needs Label → Needs Mixing → Mixed**, each with a
+`statusMap` roll-up to `Status__c` and an order roll-up to `Order.Screens_Completed__c` /
+`Order.Mix_Inks__c`. **D18 already decided Pre-Production Item stays.** And the 6 `Screen__c` rows use
+*the same four status values as the screen pipeline* — so `Screen__c` was a hand-made second copy of
+work the PPI rows already track.
+
+Building the guide's objects as a second job-tracker would therefore have made a **third** home for
+"make a screen". 📌 **D29 settles it: Screen is the physical frame, not the job.** Jobs stay on
+Pre-Production Item; the new objects describe the *things* — frames and ink batches — and their history.
+
+⚠️ **Anthony's frames are not labelled today.** So the org issues the number (`Screen__c.Name` already
+auto-numbers `S-####`), Anthony prints labels from it, and `Label_Printed__c` tracks which frames
+physically carry theirs. Every link from a job to a frame is **optional and blank by default**, so the
+station board works unchanged from day one and gets better as frames get numbered. Nothing waits on the
+labelling project.
+
+**What was built in dev2 (2026-09-18), all read back by query:**
+
+- **`Screen__c` — one row per physical frame.** Kept: `Mesh_Count__c` (a **picklist**, not a number),
+  `Quantity__c`, `Screen_Notes__c`. Added `Art_Spec__c` (lookup — what is burned on it now; blank means
+  clean), `Location__c`, `Label_Printed__c`, `Frame_Status__c` (restricted: In Rack · Coated · Exposed ·
+  On Press · Needs Reclaim · Damaged · Retired, default In Rack) and three roll-ups: `Times_Prepped__c`,
+  `Times_Reclaimed__c`, `Last_Reclaimed_On__c`.
+  🪤 **`Status__c` is NOT reused.** It holds the old per-order job values and is frozen per build rule 1
+  ("old ones are frozen and retired later, never repurposed"). The frame's life is `Frame_Status__c`.
+- **`Screen_Prep__c`** (`SP-{00000}`) — one coat-and-burn event. **Master-Detail → `Screen__c`**
+  (`Screen_Preps__r`), plus `Art_Spec__c`, `Prepped_On__c` (default `NOW()`), `Prepped_By__c` (Text 80,
+  optional — same rule as D28's counted-by), `Emulsion__c`, `Exposure_Seconds__c`, `Notes__c`.
+- **`Screen_Reclaim__c`** (`SR-{00000}`) — one strip event. **Master-Detail → `Screen__c`**
+  (`Screen_Reclaims__r`), plus `Reclaimed_On__c`, `Reclaimed_By__c`, `Outcome__c` (restricted: Clean ·
+  Ghosted · Damaged · Retired), `Notes__c`.
+- **`Ink_Mix__c`** (`IM-{00000}`) — one batch of mixed ink. `Pantone__c` (matches
+  `Pre_Production_Item__c.Pantone_Color__c`), `Amount_Mixed__c`, `Amount_Remaining__c`, `Mixed_On__c`,
+  `Mixed_By__c`, `Art_Spec__c`, `Notes__c`.
+- **Two optional lookups on `Pre_Production_Item__c`:** `Screen__c` (which frame this screen job used)
+  and `Ink_Mix__c` (which batch this ink job drew from). ⛔ **Neither may enter a SELECT — including
+  `_station.js`'s `selectFields` — until both orgs have them (trap 1, build rule 3).**
+
+**Master-detail was chosen on purpose:** prep and reclaim are events *owned by* the frame, so the three
+roll-ups come free and no Apex maintains them. There is no Apex in S7 at all.
+
+🪤 **Two required fields blocked the frame idea and were loosened** (`updateMetadata`, whole field read
+back and re-sent so nothing else changed): `Screen__c.Status__c` and `Screen__c.AssignedOrder__c` were
+both **required**. A frame sitting in the rack has neither an order nor a job status. `Mesh_Count__c`
+stays required, which is correct — every frame has a mesh. Loosening a constraint is not a rename and
+destroys nothing; it is the one existing-field change in S7.
+
+**Proved end to end in dev2, then removed** (2026-09-18): created frame `S-0006` with **no order**,
+two preps and one reclaim under it → `Times_Prepped__c` 2, `Times_Reclaimed__c` 1,
+`Last_Reclaimed_On__c` set; an `IM-00000` batch with `Amount_Remaining__c` 320 of 500; linked a real
+Screen job and a real Ink job to them, read `Screen__r.Name` / `Screen__r.Mesh_Count__c` back through
+the lookup, then unlinked both live rows and deleted every test record. dev2 is back to **6 screens**.
+
+**The staging check (2026-09-18) — what was actually verified, not just "it deployed".**
+
+1. **All 37 fields read back by query** in staging: the 12 on `Screen__c`, 7 on `Screen_Prep__c`, 5 on
+   `Screen_Reclaim__c`, 7 on `Ink_Mix__c`, the 2 on `Pre_Production_Item__c`, and the child
+   relationships `Screen_Preps__r` / `Screen_Reclaims__r` (which is what proves the master-detail landed).
+2. **Field-by-field diff against dev2 — zero differences.** A describe fingerprint of all four objects
+   (type · required · reference target and relationship · picklist values and default · calculated ·
+   auto-number) was taken in both orgs and compared: **0 diffs, 0 missing, 0 extra.** That confirms in
+   one shot that the loosened `Screen__c.Status__c` and `AssignedOrder__c` travelled as **optional**
+   (the frame idea depends on it), that `Mesh_Count__c` is still the required picklist
+   (110/125/156/180/196/230/305), that both `Screen__c` master-details are `/MD` not `/LK`, that the
+   three roll-ups arrived `calc`, and that `Frame_Status__c` kept its seven values with **In Rack** as
+   the default.
+3. **Proved end to end in staging, then removed.** Frame `S-0000` created with **no order attached**
+   (which is the whole point of D29), two preps and one reclaim under it → `Times_Prepped__c` 2,
+   `Times_Reclaimed__c` 1, `Last_Reclaimed_On__c` set. `SP-00000` and `IM-00000` both took their
+   `NOW()` defaults without being given one. A real Screen job and a real Ink job were linked, read back
+   through `Screen__r.Name` / `Screen__r.Mesh_Count__c`, then unlinked. Everything deleted: all four
+   objects back to **0 rows**, and **0 Pre-Production Items left holding a link**.
+4. **FLS travelled — 30 of 31 fields on each of the three profiles.** 🪤 The one "missing" is
+   `Screen__c.Mesh_Count__c`, and that is **correct, not a gap**: a universally required field has no
+   `FieldPermissions` row because it is always visible. The read-back in step 1 included it and
+   succeeded, which is the proof. 📌 Counting FLS rows is the cheap way to catch a change set that
+   silently dropped profiles (§9) — but expect required fields to be absent from the count.
+
+📌 **Nothing in the app reads any of this yet**, so there was no board to break: the two
+`Pre_Production_Item__c` lookups are still out of every SELECT, `_station.js`'s `selectFields` included.
+
+**Still to do on S7.**
+- ✅ **DEPLOYED TO STAGING 2026-09-18** via change set **"S7 Shop Floor 2026-09-18 v2"**
+  (`0A2ca000000JDJJ`), **37 components + 3 profiles**, each verified against a checklist across both
+  pages of the component list before upload. **Read back and checked in staging — see below.**
+  - 4 Custom Objects: `Screen__c`, `Screen_Prep__c`, `Screen_Reclaim__c`, `Ink_Mix__c`.
+  - **Every field, listed one by one** — 7 on Screen Prep (including the master-detail `Screen`), 5 on
+    Screen Reclaim (ditto), 7 on Ink Mix, **12 on Screen** (the 7 new ones *and* the 5 that already
+    existed in dev2, because staging has no `Screen__c` at all), and the 2 on Pre-Production Item.
+  - 3 profiles so FLS travels (§9): System Administrator, Salesforce API Only System Integrations,
+    Minimum Access - API Only Integrations.
+  - 🚩 **v1 (`0A2ca000000JDET`) FAILED VALIDATION and is the reason v2 exists.** See trap 19.
+- Seed the frames: Anthony says how many frames of each mesh exist, they are created in a batch, labels
+  are printed from `Name`, and `Label_Printed__c` is ticked as they go on.
+- Re-point the 6 dev2 screens by hand onto `Frame_Status__c`, then deactivate `Status__c`'s job values.
+- **Dashboard:** `station.html` gains a frame picker on a screen job and a batch picker on an ink job,
+  through a new endpoint answering `available:false` where the objects are missing. Not started.
+- **Test.** T1–T8 on `station.html` at tablet width.
+
+📌 **Technique, and it is a big one: the Metadata API works straight from the Developer Console tab** —
+much faster than the Setup UI and it never touches the custom-field EDIT page that wedges the renderer
+(trap 13). The whole S7 org build was ~6 calls. Take the `Authorization` header the console already
+sends (hook `Ext.Ajax` `beforerequest`), strip `Bearer `, and POST a SOAP envelope to
+`/services/Soap/m/67.0` with `createMetadata` / `readMetadata` / `updateMetadata`. To change an existing
+field safely, `readMetadata` it, patch the one tag in the returned XML and send that whole body back —
+never hand-write the field definition, because `updateMetadata` replaces it entirely.
+🪤 **A field created this way is FLS-hidden from every profile**, which reads as
+`No such column 'X' on entity 'Y'` — trap 1 wearing a "you typo'd the field name" mask. Grant FLS by
+inserting `FieldPermissions` rows against each profile's own `PermissionSet`
+(`IsOwnedByProfile = true`) via `/composite/sobjects`; roll-ups and formulas take `PermissionsRead`
+only, and master-detail fields take none. S7 needed 78 rows across the three profiles in §4's build
+rule 2.
 
 #### S8 · Production (E7.4) — waits until S1–S7 are done (D22)
 
 Production has **none** of the production objects (§9, 2026-09-14). Build it **once**, on the new
-model, in the order S1 → S7, using the same change sets. Everything in §9's "what change sets do not
+model, in the order S1 → S7, using the same change sets.
+
+⛔ **S7 carries a data gate into this stage: the sandbox frames and ink batches are PLACEHOLDERS.**
+Anthony must take a real per-mesh frame count before production gets any `Screen__c` rows, and the
+seeded rows (`Location__c = 'SEED-PLACEHOLDER'`, `Mixed_By__c = 'SEED-PLACEHOLDER'`) must be deleted from
+both sandboxes first. See the production gate in S7. Everything in §9's "what change sets do not
 do" list applies, and **`Artwork_Approved__c`'s gate turns on in production only when its start date
 is set there**.
 
@@ -5676,6 +5975,8 @@ build against this until it carries a decision date.
 
 **D27 — how Art Specs are linked and shown. DECIDED 2026-09-17 (Anthony).** (1) The order sheet and the Pre-Production drawer show the recipe facts that belong to the decoration's method (screen print: ink colors, color order, mesh, ink type, flash, dryer; embroidery: thread colors, stitch count; heat press: transfer, temperature, time, pressure; plus size/location, print specs and notes for all). (2) A location is linked to a spec automatically **only when exactly one spec fits** — same job, method and location; a spec with no location only for a single-location decoration. (3) That rule keeps running on new and edited records, not just once. Hand-set links are never overwritten. **Rules out:** guessing between two candidate recipes, and copying recipe facts onto the item (D18). See **S5**.
 
+**D29 — a Screen is a physical frame, not a job. DECIDED 2026-09-18 (Anthony).** `Screen__c` is one row per aluminium frame the shop owns, reused job after job: mesh, where it lives, what Art Spec is burned on it now, and whether its label has been printed. `Screen_Prep__c` and `Screen_Reclaim__c` are its **history** — one row per coat-and-burn and per strip — and `Ink_Mix__c` is **a batch of mixed ink** (pantone, mixed, remaining). The per-order "make a screen" and "mix the ink" **jobs stay on `Pre_Production_Item__c`**, where `station.html` already runs them (186 + 96 rows in dev2, 138 + 68 in staging) — consistent with **D18**. A job may point at the frame and the batch it used, and that link is **optional**, because the shop's frames are not labelled yet: the org issues the number, Anthony prints the label. **Rules out:** rebuilding the screen and ink pipelines on the new objects (a third home for the same work, and a rewrite of the one surface workers touch daily), making the frame link required before frames are numbered, and repurposing `Screen__c.Status__c`, which is frozen per build rule 1. See **S7**.
+
 **D28 — how counting works under Run Result. DECIDED 2026-09-17 (Anthony).** (1) Salesforce totals the Run Results into the line item's existing Misprint / Damaged / Incomplete fields (plus a new Good_Qty__c), so the reprint builder, shortfalls, the skeleton flow and the damage email keep reading what they read today. (2) Submit still means "counts are final"; the org refuses count changes on a submitted run, and a **manager can reopen** it (manager PIN). (3) Migrated counts get **good = planned − problems**, ticked as estimated. (4) **Good is optional** on a count. **Rules out:** rewiring every reader onto new roll-ups, deleting counts after submit without a reopen, and forcing a good number on every count. See **S6**.
 
 **D26 — the order-creation flow keeps writing `Order.Design__c`. DECIDED 2026-09-17 (Anthony); amends D20.** Flow *Order and Order Items Subflow Design* (active v48) sets `Order.Design__c` from its `DesignID` input when it creates an Order. It stays, unless it would cause a critical failure. Checked 2026-09-17: it writes only on **create** (a `recordCreates` element; no update of an existing Order), so it never overwrites a design a person later chose, and after S3 a design no longer disappears with its Opportunity (lookup, clear on delete), so the link it writes stays valid. No critical failure found. A person still attaches the design on orders made by hand. **Rules out:** removing that assignment from the flow.
@@ -8434,6 +8735,13 @@ Newest first. One line per change; link to the story that carries the detail.
 
 | Date | What | Where |
 |---|---|---|
+| 2026-09-18 | 🔧 **S7 STATION PICKERS BUILT** — a screen job can record which physical frame it used, an ink job which batch. New **follow-up** endpoint `functions/api/shop-floor/index.js` (GET options + `byItem`, POST link/clear), `getShopFloor` / `setShopFloorLink` in `ca-api.js`, and a picker in `station.html`'s job modal. ⛔ **The two PPI lookups stay OUT of `_station.js`'s selectFields** — naming them there would empty the ink and screen boards in any org one step behind (trap 1); the endpoint answers `available:false` instead and the picker vanishes. Options narrow to what fits the job (156 job → 156 frames), Retired/Damaged frames and empty batches are never offered, unlabelled frames are pickable but flagged. Tested: **endpoint rig 30/30** (including both no-object and no-lookup degradations, the capability gate, and INVALID_FIELD → 409) and a **headless tablet-width page walk both ways** — picker renders and posts correctly with the layer, renders **not at all** without it. smoke 7/7. Code uncommitted on the Mac; Anthony pushes | §4 S7 |
+| 2026-09-18 | 🟡 **S7 frames seeded with PLACEHOLDER data so the build can continue** (Anthony's call: fake numbers while testing, real count before production). **35 frames per sandbox** — 110×4 · 125×2 · 156×10 · 180×4 · 196×3 · 230×10 · 305×2 — plus 4 placeholder ink batches, in **both dev2 and staging** so the boards work whichever org is active. Every row is marked (`Location__c` / `Mixed_By__c` = `SEED-PLACEHOLDER`) and says so in its own Notes, so one query removes them and nobody meets one in the UI and believes it. ⛔ **Production gate logged in §4 S7 and S8: Anthony takes a real per-mesh count, the placeholders are deleted from both sandboxes, and only then does production get any Screen__c rows.** | §4 S7, §4 S8 |
+| 2026-09-18 | ✅ **S7 IS IN BOTH SANDBOXES.** Change set v2 deployed to staging and **checked, not just assumed**: all 37 fields read back by query including the `Screen_Preps__r` / `Screen_Reclaims__r` child relationships; a **describe fingerprint diffed field-by-field against dev2 came back with 0 differences** (confirming the loosened `Status__c` / `AssignedOrder__c` arrived optional, both master-details are MD not lookup, the 3 roll-ups are calculated, and `Frame_Status__c` kept its 7 values with In Rack default); and the end-to-end proof re-run in staging — frame `S-0000` with **no order**, 2 preps + 1 reclaim rolling up to 2/1/set, `NOW()` defaults taken unprompted, a real Screen job and Ink job linked, read back through `Screen__r` and unlinked — then everything deleted, all four objects back to 0 rows and 0 jobs left linked. FLS travelled: **30 of 31 fields on each of the 3 profiles**, the one absentee being `Mesh_Count__c`, which is correct because a universally required field has no FieldPermissions row. Left: seed the frames (needs Anthony's counts by mesh) and the `station.html` pickers | §4 S7 |
+| 2026-09-18 | 🚩 **S7 CHANGE SET v1 FAILED VALIDATION — a custom object in a change set does NOT carry its own fields (trap 19).** Staging reported `Cannot set sharingModel to ControlledByParent on a CustomObject without a MasterDetail relationship field` for `Screen_Prep__c` and `Screen_Reclaim__c`: adding an MD field flips the object's sharing model automatically, so the object then *needs* that field present — and it was not in the package. The other objects would have landed as **empty shells**, which reads exactly like trap 1 on the first read-back. 🚫 An uploaded change set is locked (Delete / Upload / Clone only), so v1 was **cloned** into **"S7 Shop Floor 2026-09-18 v2"** (`0A2ca000000JDJJ`) with **every field listed explicitly** — both master-detail `Screen` lookups, and all 12 `Screen__c` fields including the 5 that pre-date S7, since staging has no `Screen__c` at all. **6 components → 37**, plus the 3 profiles, each verified across both pages of the component list against a checklist. ⛔ Anthony uploads and deploys v2 | §2 trap 19, §4 S7 |
+| 2026-09-18 | 🔧 **S7 SHOP FLOOR BUILT IN DEV2 (D29).** Measured first, and the measurement changed the design: the shop floor is **already tracked** on `Pre_Production_Item__c` (**186 screen + 96 ink jobs in dev2, 138 + 68 in staging**), `station.html` runs both pipelines today, and the 6 `Screen__c` rows were a hand-made second copy using the same four status values. So **Screen became the physical frame, not the job** — jobs stay on Pre-Production Item (D18 holds). Built: `Screen_Prep__c` and `Screen_Reclaim__c` (master-detail children of the frame, so `Times_Prepped__c` / `Times_Reclaimed__c` / `Last_Reclaimed_On__c` roll up with **no Apex**), `Ink_Mix__c` (a batch: pantone, mixed, remaining), and on `Screen__c` `Art_Spec__c` / `Location__c` / `Label_Printed__c` / `Frame_Status__c` — `Status__c` left frozen per build rule 1. Two optional PPI lookups added and **kept out of every SELECT** until staging has them. 🚩 `Screen__c.Status__c` and `AssignedOrder__c` were **required** and had to be loosened (a frame has no order). Proved end to end then removed: frame S-0006 with no order, 2 preps + 1 reclaim rolling up correctly, an IM-00000 batch, both live PPI rows linked, read back and unlinked; dev2 back to 6 screens. ⛔ Change set to staging is Anthony's, and it must carry `Screen__c` itself | §4 S7, §5 D29 |
+| 2026-09-17 | ✅ **TRAP 18 FIXED IN BOTH ORGS, AND S6 (d) NOW PASSES.** Anthony re-entered the two filter values on `Get Rows Across This Method`; **dev2 v6 `301ca00000U5OEwAAN`, staging v4 `301ca00000U5HQvAAN`**, both read back `Method__c ≡ $Record.PrintMethod__c AND Run_Print_Location__c ≡ $Record.Print_Location__c` from the metadata. Give-back re-proved in dev2 with the same rolled-back Apex that caught it: a run planned at 80 on method `a3Vca000000LJCXEA4` now creates **XL:40 + 2XL:40, total 80** (was 5 blank rows; and 200 when planned at 500). 📌 Also measured and cleared: the confirm leg costs **66** SOQL queries with populated rows, **36** with blank — fixed per branch, not per row — and insert/confirm are separate transactions, so there is no governor risk in the app | §2 trap 18, §4 S6 |
+| 2026-09-17 | ✅ **S6 CLOSED — scenarios (c)(d)(e) walked in dev2.** **(c)** order 00013518 / PR-0118: 7 good, 2 misprint, 1 damaged → reprint **00013519 for 7 (S=4, L=3)**, `rework-check` agrees. **(e)** B9's damaged-lines query replayed on the same order gives **S — 3 misprint, 1 damaged; L — 3 misprint, 0 damaged**, matching the Run Results exactly, in size order (no email sent). **(d)** 🚩 **found a pre-existing fault, not ours: the skeleton flow's give-back has been dead in BOTH orgs since the 2026-09-15 repair** — `Get Rows Across This Method` lost both filter values, so it matches zero rows, `varAlreadyPlanned` stays 0 and every make-up run re-plans the WHOLE order (proved with rolled-back Apex: 80 planned → 5 blank rows; 500 planned → 200, the full order, not the 80 outstanding). S6's own half is correct and verified. ⛔ **Flow fix is Anthony's — make-up runs are wrong until it lands.** The earlier “dashboard write-ordering” guess is withdrawn. Test run PR-0119 deleted; PM-00109 restored to Completed | §2 trap 18, §4 S6, §11 |
 | 2026-09-17 | ✅ **S6 LIVE in both sandboxes.** Change set deployed to staging (tests 5/5); staging migrated (2 Run Results; 12 eligible lines). Code pushed; the live counting screen walked on dev2 throwaway run PR-0091 — add, two counts summing, remove, submit (reprint check ran), locked view, org refusing add/remove on a submitted run, reopen — then every test count deleted. T6 passed and **found a defect: the Run-Result probe used `SELECT Id` while the read used the full field list, so a half-hidden layer left the old form with a save that 409'd. Probe now matches the read — one-line fix, needs a push.** 🪤 staging's legacy PR-0001 has no decoration and `PrintMethod__c` is required there, so its 2 line items cannot be written at all (pre-existing; migration skips them, 3,000 misprints still on the old field). Left: scenarios (c)(d)(e) on a throwaway order | §4 S6, §9 |
 | 2026-09-17 | 🔧 **S6 RUN RESULT BUILT in dev2** (D28). New `Run_Result__c` + `Good_Qty__c` / `Total_Good_Qty__c`; Apex `RunResultRollup` keeps the old line boxes = sums of Run Results and locks submitted runs; tests 5/5. dev2 migrated: 132 Run Results, sums match, 0 runs rescheduled. **Code, uncommitted on the Mac:** `run-results` actions add/remove/submit/reopen + results in GET (fail-open), `ca-api.js` wrappers, `counting.html` "add a count" screen with progress, log and manager reopen (old form kept when the org lacks Run Result). Rig 24/24, headless screen walk clean, smoke green. Change set "S6 Run Result 2026-09-17" built, not uploaded | §0, §4 S6, §5, §9 |
 | 2026-09-17 | ✅ **S5 CLOSED.** Order sheet re-pushed and live; dev2 live check passed (recipes print on 00013513); T6 passed (field hidden → `available:false`, boards unchanged; restored) | §0, §4 S5 |
