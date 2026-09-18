@@ -72,6 +72,16 @@ staging was at V35. Version numbers do not line up between orgs; do not use them
 in dev2 resolves in staging and production too. That is why the hardcoded `0055e000005tFYfAAM` in
 `CreateCalendarEvent` is not a promotion blocker — it has been checked in both.
 
+### 🛑 LIVE BREAKAGE — 2026-09-18: the dashboard's decoration endpoint has no route. Fix is written, NOT PUSHED.
+
+`ca-api.js` calls `/api/production-methods`; the folder is `functions/api/decorations/`, and under
+`functions/` **the folder name IS the url**. On the live site `POST` there answers **405 with an empty
+body** and `GET` answers **200 with the SPA's own HTML**, so from the dashboard every decoration
+create / status move / checklist toggle / edit / remove fails, mostly in silence. **Trap 20** has the
+measurements, the fix (client repointed, `production-methods/` kept as a re-export alias, endpoint
+headers corrected, **smoke check 8** added) and why every previous test missed it.
+⛔ **It is uncommitted on Anthony's Mac. Nothing works from the UI until he pushes.**
+
 ### 🧭 NEWEST — 2026-09-16: the target object model was adopted. Read §4 "Target model build" first.
 
 Anthony's boss handed over a new Salesforce object design (OBJECT-GUIDE). Its decisions are
@@ -928,6 +938,134 @@ lettered (`lsc` A=0…T=19) *and* each letter can run to a second page (`lsr=160
 was on page 2 of "S", which is exactly how a field goes missing without anyone noticing. The detail page
 itself shows 25 rows and hides the rest behind **Next**. **Verify a change set by walking every page and
 ticking off a written checklist**, not by glancing at the first screen.
+
+**20. 🪤 A FOLDER UNDER `functions/` IS A URL. RENAMING IT RENAMES THE ROUTE — AND A ROUTE THAT NO
+LONGER EXISTS ANSWERS 200 ON GET AND 405-WITH-NOTHING ON POST.** The Decoration rename moved
+`functions/api/production-methods/` to `functions/api/decorations/`. Cloudflare Pages builds each URL
+from the path under `functions/`, so the endpoint's address moved with the folder — and `ca-api.js`
+kept calling the old one from **six** places (`createMethod`, `patchMethodStatus`,
+`patchMethodChecklist`, `patchMethodFields`, `getMethodsForOrder`, `deleteMethod`). Measured live
+2026-09-18 on `culture-apparel-preprod.pages.dev`:
+
+```
+GET  /api/production-methods   ->  200, 280,477 bytes of the SPA's own HTML   (JSON.parse then throws)
+POST /api/production-methods   ->  405, 0 bytes, no content-type, no body
+GET  /api/decorations          ->  400 {"error":"missing_orderId"}            (the real endpoint, alive)
+```
+
+A Pages request with no matching function is **not** a 404 you can read — it falls through to the
+static assets. So the GET looks like a success and poisons the parse (board → demo data + amber chip,
+silently), and the write looks like nothing at all. **This is byte-identical to the extensionless-route
+incident** that smoke check 2 exists for (`shipments/combine` and `split`, 405 with an empty body).
+
+🚩 **What it cost.** Every decoration write from the UI failed for as long as this was live: Create
+Production Plan & Send, status moves, the 7 checklist toggles, the drawer's edit form and Remove. None
+of them said so — `loadMethodsForOrder`'s catch is a bare `setState`, so the drawer's decoration list
+just sat empty, and Remove's catch blames child records. What Anthony saw was
+**"Create failed — check the plan and try again"** and, in DevTools, a red row with an **empty**
+Response.
+
+📌 **Why it survived every test.** S2, S4 and S5's T5 walks all called `/api/decorations` **by hand** and
+all passed, because the server was never the problem. **Calling an endpoint directly does not test the
+route the app uses.** The only thing that would have caught it is the network tab on the real button —
+which is what CLAUDE.md already says, and is the whole reason this trap is here.
+
+✅ **Fixed 2026-09-18:** `ca-api.js` repointed to `/api/decorations`;
+`functions/api/production-methods/{index,[id]}.js` kept as **re-export aliases** (no logic, ever) so a
+tablet holding a cached `ca-api.js` survives the rollout; both endpoint files' header comments now name
+the route they actually serve. **Smoke check 8** now fails on any `/api/…` path the client calls with no
+function behind it (uncommitted counts as missing), and it was verified the project's way — the
+incident was reconstructed in a throwaway copy and the check failed on it.
+
+📌 **So: after moving anything under `functions/`, grep the client for the old path before pushing**, and
+remember that the check only sees the *literal* prefix of a url — `'/api/orders/' + id` is checked as
+far as `orders/`.
+
+**20b. 🪤 THE SECOND FAULT, AND THE REASON THE FIRST ONE WAS INVISIBLE: the create handler's error
+message required a shape the endpoint never returns.** `pre-production.html` read:
+
+```
+var detail = e && e.data && (e.data.detail || e.data.all);
+var sfMsg  = Array.isArray(detail) && detail[0] && detail[0].message;
+```
+
+`/api/decorations` returns a **validation** rejection as `{error, detail}` with `detail` a bare string
+(`bad_mesh`, `missing_placements`, `bad_method_type`, `bad_item_status`…) or no detail at all, and a
+**composite** failure with `detail` already formatted as the string `"referenceId: ERROR_CODE: message"`
+by `_composite.js`. `Array.isArray` was false in both cases, so every real cause — including the 405
+above, which carries no body at all — rendered as the same generic sentence. There is a comment above
+that block, dated 2026-07-28, claiming to fix exactly this. It did not.
+
+📌 An error path has no happy-path symptom: the page renders, the request fails as designed, and the only
+thing wrong is a sentence nobody diffs. **Assert against the endpoint's literal error shapes, or call the
+shared helper** — `errText(e)` in `ca-api.js`, which the page's other three catch blocks already used. It
+is now used here too; a fourth private copy is how the shapes drift apart.
+
+🪤 **Debugging one of these without a deploy:** DevTools → Network → retry → read the response body.
+**And read the request's URL while you are there** — that is where this one was hiding in plain sight.
+
+**21. 🪤 SALESFORCE'S "PUBLIC LINK" IS A WEB PAGE, NOT A PICTURE — AND THE FIELD THAT HOLDS IT IS
+`Design__c.Mockup_URL__c`, NOT THE FILES TAB.** Two separate things bite here, and 2026-09-18 hit
+both in one sitting.
+
+**(a) Dropping files on the Design's Files tab does nothing.** Every mockup on every board is read
+from `Design__c.Mockup_URL__c` — `_mockup.js` queries it by `Opportunity__c`, and the Files/Vault
+flow its own header describes has never been used by anybody in either sandbox. A file attached and
+no link pasted is a file the dashboard cannot see.
+
+**(b) The link the share button gives you is not the image.** Anthony pasted the file's **public
+link**:
+
+```
+https://cultureapparel--dev2.sandbox.my.salesforce.com/sfc/p/ca000004mabZ/a/ca000000jrbF/XWjd29...
+```
+
+It has no `068` in it, so `/api/mockup-proxy`'s ID_RE found nothing and the direct-fetch branch asked
+Salesforce for it as if it were an ordinary image url. **Salesforce answered 200 with 1,359 bytes of
+HTML.** An `<img>` pointed at HTML draws nothing and reports nothing — no broken-image icon, no
+console error, no failed request — so the card falls back to its shirt outline and the field reads as
+ignored. (The record was at least not corrupted: `adoptMockup` refuses a non-image content type.)
+
+📌 **The ids are in the path with their key prefixes stripped.** `/sfc/p/<org>/a/<dist>/<token>` —
+`ca000000jrbF` is `05Dca000000jrbF`, a **ContentDistribution**. One query turns it into a
+ContentVersion id, and from there the proxy's authenticated branch fetches the file with no outbound
+request at all. ✅ `/api/mockup-proxy` now resolves all three shapes a person actually copies: the
+public link, `ContentDownloadUrl` (its `068` sits in a query parameter, not at the end), and a
+ContentDocument `069` link. Verified end to end on the real file — 1.34 MB, JPEG, renders at
+3300×2700.
+
+🪤 **A public link is a 30-day loan** (`ContentDistribution.ExpiryDate`; this one expires
+2026-10-18). Another reason the proxy resolves it to a ContentVersion and fetches with our own token
+rather than following the link.
+
+⛔ **Tightened at the same time, and this is the part to not undo:** the id lookups run ONLY when the
+host is Salesforce's. ID_RE used to accept a trailing `068`-shaped run on *any* host, which is the
+same wrong-branch mistake the `068` prefix was added to stop, one step further along.
+
+**22. 🪤 A CHANGE THAT SPANS TWO FILES ONLY WORKS IF BOTH LAND — AND A FAILED BUILD KEEPS THE WHOLE
+SITE ON THE PREVIOUS VERSION, NOT JUST THAT ENDPOINT.** 2026-09-18, the same day as trap 20: the
+press fix had `proposed-runs/index.js` import a failure-matching helper newly exported from
+`_placements.js`. Only one of the two reached the commit, and Cloudflare answered:
+
+```
+✘ [ERROR] No matching export in "api/_placements.js" for import "failureMentionsField"
+    api/proposed-runs/index.js:25:32
+```
+
+Both files parse perfectly on their own, so `node --check` (smoke check 4) sees nothing — it is a
+fact about the **pair**. And the price is not one broken endpoint: the build fails, so nothing
+deploys at all, including whatever else was in that push.
+
+📌 **In this repo, half-landed pairs are normal weather** — iCloud eviction, a partial `git add`, a
+commit that only touched an mtime (see the working notes at the end of §1). So the endpoint was
+rewritten to need nothing new from anywhere: it asks with the press field and, if that fails, asks
+again without it, which answers "was press the problem?" by trying rather than by importing a
+predicate. One extra query in the rare failure case, no cross-file dependency.
+
+✅ **Smoke check 9** now reads every `import { … } from "./sibling.js"` and fails if the target file
+exports no such name. Verified the project's way: the incident was reconstructed in a throwaway copy
+and the check failed on it. A full `npx wrangler pages functions build` is still the only thing that
+proves a deploy compiles — worth running before a push that moves anything between files.
 
 #### Conventions to follow
 
@@ -2377,7 +2515,70 @@ the lookup, then unlinked both live rows and deleted every test record. dev2 is 
 - Re-point the 6 dev2 screens by hand onto `Frame_Status__c`, then deactivate `Status__c`'s job values.
 - **Dashboard:** `station.html` gains a frame picker on a screen job and a batch picker on an ink job,
   through a new endpoint answering `available:false` where the objects are missing. Not started.
-- **Test.** T1–T8 on `station.html` at tablet width.
+**T1–T8 run 2026-09-18, after the push. Seven pass; T5 is half done and needs Anthony.**
+
+| | Result |
+|---|---|
+| **T1** repo well-formed | ✅ `smoke.mjs` 7/7, `check-dc-templates` green |
+| **T2** body matches in both orgs | ✅ `FieldDefinition` for all four objects + the 2 PPI lookups, dev2 vs staging, **diffed in-page: 0 differences**. Roll-ups read back as `Roll-Up Summary (COUNT Screen Prep)` etc. and both `Screen__c` links as `Master-Detail(Screen)` in *both* orgs |
+| **T3** FLS granted | ✅ **30 of 31 fields on each of the 3 profiles, in both orgs.** The absentee is `Screen__c.Mesh_Count__c` and that is correct — a universally required field has no `FieldPermissions` row |
+| **T4** flows active and correct | ✅ N/A by design: **S7 ships no flow and no Apex.** Verified anyway — 0 Apex classes and 0 triggers on the four new objects; the only triggers on `Pre_Production_Item__c` are S4's `CatalogSyncPreProductionItem` and S5's `ArtSpecLinkItem`, both still Active; the skeleton flow is still **v6** (the trap-18 fix) |
+| **T5** outfit fits every org | ✅ **Both orgs.** dev2: header **DEV2 · Live**, `/api/shop-floor` 200 `available:true`, 41 frames, 4 batches. staging (Anthony switched the org): header **STAGING · Live**, no demo banner, 35 frames, 4 batches, and **95 real screen jobs + 50 real ink jobs** — a far better test than dev2's empty board |
+| **T6** outfit survives a missing body | ✅ **The one that matters.** `Screen__c.Frame_Status__c` FLS removed in dev2 → `/api/shop-floor` answered **200 `available:false`**, the picker vanished from the modal, and **the screen and ink boards kept returning their jobs** with the pipeline intact. Restored and re-verified at 41 options |
+| **T7** scenario walk | ✅ Both stations on a throwaway, then deleted |
+| **T8** nothing else moved | ✅ station-items (screen/ink/transfer), orders, production-orders, inbox, presses, shortfalls, calendar all 200; `pre-production-items`, `proposed-runs` and `run-line-items` answer 400 **only without their required parameter** and 200 with it; `run-line-items` still reports `methodCommitted 120`, S6's give-back value, unchanged; `rework-check` 200 |
+
+**What T7 actually walked (dev2, live board).** All three station boards were empty — every Pre-Production
+Item in dev2 is already at its done status — so a throwaway Screen job (156 mesh) and Ink job (PMS 186 C)
+were created on `PM-00136`, walked, and deleted.
+- **Narrowing works on real data:** the screen job offered **12 frames of 41**, every one 156 mesh, and
+  **none of the other six mesh counts**. The ink job offered **1 batch of 4**, the matching pantone.
+- Unlabelled frames rendered with their "no label yet" flag, as intended while the labelling is pending.
+- Tapping `S-0002` wrote `Screen__c` onto the item, the chip read Saved, and Salesforce confirmed the
+  link with the frame's mesh matching the job's. 📌 **`Screen_Sub_Status__c` and `Status__c` were
+  untouched** — recording a frame does not disturb the pipeline, which is the whole reason it is a
+  separate write.
+- Tapping the same frame again cleared it, on screen and in the org. Same set-then-clear on the ink job.
+- Afterwards: **0 jobs linked, 0 throwaways left**, 41 screens and 4 ink batches as before.
+
+🪤 **T6 leaves a mess if you restore it the obvious way.** Setting `PermissionsRead` false does not
+update a `FieldPermissions` row, it **deletes** it — so the Ids saved beforehand are invalid and the
+restore fails with `invalid record id`. Rebuild by **inserting** fresh rows, copying `ParentId` /
+`PermissionsRead` / `PermissionsEdit` from a sibling field granted in the same batch (`Location__c` was
+used here). Restored to the same 4 rows.
+
+🪤 `Pre_Production_Item__c.Notes__c` is a **Long Text Area**, so `WHERE Notes__c LIKE '%…%'` throws —
+the same trap S6 hit on `Art_Spec__c.Notes__c`. Find throwaway rows by Id, not by their note.
+
+📌 Known and already logged: dev2's **6 original screens have a blank `Frame_Status__c`** (they still
+carry the old job values in `Status__c`), which is why 35 of 41 options report a frame status. That is
+the "re-point the 6 dev2 screens" item above, not a T-failure.
+
+**T5 on staging (2026-09-18) — walked on REAL jobs, and it found two things dev2 could not.**
+
+The staging boards are busy, so the walk used live records and restored them rather than creating
+throwaways. Both jobs were read back afterwards: `Status__c`, the sub-status and both lookups are
+exactly as they were, and **0 Pre-Production Items are left holding a link** in either org.
+
+- **Screen job (156 mesh):** the picker offered **10 frames of 35** — every 156, none of the other six
+  mesh counts, no warning. Set `S-0007`, chip read Saved, cleared again; org confirms blank.
+- **Ink job (`130C`):** 🚩 **the no-match branch fired, and it was right to.** Staging's real pantones
+  are `5038C`, `130C`, `4567C`, `122C`, `574C`, `6542C` — the placeholder batches are `PMS 186 C`,
+  `PMS 286 C`, `Black`, `White`, so **nothing matched**. All 4 batches were offered with the warning
+  *"Nothing in stock matches this job, so everything usable is listed. Check before you pick."* Set and
+  cleared cleanly. This is the fallback path dev2 never reached, exercised on real data.
+
+📌 **A real finding for the frame/ink seeding, and it belongs with the production gate.** The shop
+writes pantones as **`130C`** — no "PMS", no space. The placeholder batches used `PMS 186 C`, which is
+why every real ink job fell through to "showing all". **When the real ink batches are created, their
+`Pantone__c` must be written the way `Pre_Production_Item__c.Pantone_Color__c` already writes it**, or
+the narrowing silently never matches and workers get the full list every time. Nothing is broken — the
+fallback is doing its job — but the matching is only as good as the two fields agreeing.
+📌 The same caution does **not** apply to frames: staging's screen jobs use only `156` (92), `125` (2)
+and `196` (1), and every one of those meshes has frames, so mesh matching worked on every job.
+
+- **Test.** T1–T8 on `station.html` at tablet width. ✅ **All eight pass, run 2026-09-18** — see the
+  table above.
 
 📌 **Technique, and it is a big one: the Metadata API works straight from the Developer Console tab** —
 much faster than the Setup UI and it never touches the custom-field EDIT page that wedges the renderer
@@ -8735,6 +8936,12 @@ Newest first. One line per change; link to the story that carries the detail.
 
 | Date | What | Where |
 |---|---|---|
+| 2026-09-18 | 🛠️ **THE PRESS FIX FAILED TO BUILD, AND THE BUILD FAILING MEANS NOTHING DEPLOYS (trap 22).** `proposed-runs/index.js` imported `failureMentionsField`, newly exported from `_placements.js`; only one file landed, so Cloudflare answered **No matching export in "api/_placements.js"** and the whole push stayed on the old version. Reproduced here on purpose, then removed the cause rather than re-pushing: the endpoint now asks **with** press and, if that fails, asks **without** it — if the second attempt works, press was the problem; if it fails too, the FIRST failure is reported because that is the one that describes what is wrong. No new import, no second copy of anything, `_placements.js` back exactly as it was. ✅ **New smoke check 9** reads every named import and fails when the target file exports no such name — `node --check` cannot see this, because each file parses fine alone. Verified by reconstructing the incident. **`npx wrangler pages functions build` → Compiled Worker successfully** against the untouched `_placements.js`; rig **17/17**; smoke **9/9** | §2 trap 22 |
+| 2026-09-18 | 🔧 **MOCKUPS: THE PUBLIC LINK NOW WORKS, AND THE FILES TAB STILL DOES NOTHING (trap 21).** Anthony's mockup would not show. Measured, not guessed: his Design (`a05ca00000CQMHRAA5`, opportunity `006ca00000J4JQw`, which is the opportunity behind BOTH his test orders 00013520 and 00013521) holds a file **public link**, and `/api/mockup-proxy` fetching it gets **200 with 1,359 bytes of HTML** — an `<img>` on HTML shows nothing and says nothing. 📌 The path carries the **ContentDistribution** id with its `05D` prefix stripped; one query gives the ContentVersion, and the authenticated branch returns the real file (**1.34 MB JPEG, renders 3300×2700** — proved live). The proxy now resolves the public link, `ContentDownloadUrl` (`068` mid-string) and a `069` ContentDocument link, and — deliberately stricter — runs those lookups only for Salesforce hosts. **Rig 16/16** incl. SSRF guard, SOQL-injection attempt, both degradations. smoke 8/8 | §2 trap 21 |
+| 2026-09-18 | 🔧 **PRESS NOW PREFILLS FROM A PROPOSED RUN — the client was always ready; the deployed endpoint never sent it.** Anthony: every field carries across from a suggestion except Press. Traced live: `GET /api/proposed-runs` returns **no `pressId` key at all**, while Salesforce holds `Press__c` = Press 1 on PROP-0055 and `/api/presses` lists that exact id. Both clients (`pre-production.html`, `calendar.html`) already carry press. 🚩 **So the deployed build predates the 2026-09-11 `Press__c` work even though it includes today's S7 endpoint — the Mac's copy of `proposed-runs/index.js` has never been pushed.** Hardened before pushing, per build rule 3: `Press__c`/`Press__r.Name` are now dropped the way `Print_Location__c` already is, because one deployment serves three orgs and naming a field the active org lacks kills the WHOLE query — which `getProposedRuns()` swallows into `[]`, i.e. every order silently reporting "no suggestions". `failureMentionsField` exported from `_placements.js` so the endpoint can tell which field the org objected to; response gained `pressAvailable`. dev2 FLS checked first: 26 rows, read+edit. **Rig 16/16** | §4, §9 |
+| 2026-09-18 | 🛑 **THE UI'S DECORATION ENDPOINT HAD NO ROUTE — EVERY DECORATION WRITE FROM THE DASHBOARD WAS FAILING LIVE (trap 20).** Anthony's "Create failed — check the plan and try again" was real, and it was not his plan: `ca-api.js` calls `/api/production-methods` in **6** places, but the folder was renamed to `functions/api/decorations/` and **a folder under `functions/` IS the url**. Measured on the live site: `POST /api/production-methods` → **405, zero bytes** (exactly the red-X-with-empty-Response in his screenshot), `GET` → **200 with 280 KB of the SPA's own HTML**, which fails `JSON.parse` and drops the board to demo data without a word. Create, status moves, the 7 checklist toggles, drawer edits and Remove were all dead; `loadMethodsForOrder` swallows the throw, so the decoration list just looked empty. 📌 **Every T5 walk passed because they called `/api/decorations` by hand — testing an endpoint is not testing the app's route.** ✅ Fixed: client repointed to `/api/decorations`; `production-methods/` kept as a **re-export alias** for cached tablets; endpoint headers corrected; **new smoke check 8** fails on any client `/api/…` path with no function behind it, verified by reconstructing the incident in a throwaway copy. Also fixed (trap 20b, the reason it was invisible): the create catch block required an **array** `detail` this endpoint never returns, so every cause rendered as the generic sentence — now uses the shared `errText(e)`. smoke **8/8**. **Uncommitted on the Mac; Anthony pushes — the dashboard stays broken until he does.** | §2 trap 20 |
+| 2026-09-18 | ✅ **S7 T5 CLOSED ON STAGING — all eight tests now pass.** Anthony switched the org; header read **STAGING · Live**, 35 frames, 4 batches, and **95 real screen jobs + 50 real ink jobs**, so the walk used live records and restored them (both read back unchanged; **0 jobs left linked** in either org). A 156 job offered **10 frames of 35**, all the right mesh. 🚩 **The ink job exercised the no-match branch on real data:** staging's pantones are written `130C` / `5038C`, the placeholder batches `PMS 186 C`, so nothing matched and all 4 were offered **with the warning**, as designed. 📌 **Finding for the production gate: real `Ink_Mix__c.Pantone__c` values must be written the way `Pantone_Color__c` already is (`130C`, no PMS, no space) or the narrowing will never match.** Mesh matching is unaffected — staging uses only 156/125/196 and all three have frames | §4 S7 |
+| 2026-09-18 | ✅ **S7 T1–T8 RUN — seven pass, T5 half.** T2 diffed `FieldDefinition` across both orgs with **0 differences**; T3 **30/31 fields on 3 profiles in both orgs** (`Mesh_Count__c` correctly absent, being universally required); T4 confirmed **S7 ships no flow and no Apex** and the skeleton flow is still v6. **T6 is the one that matters:** hiding `Frame_Status__c` in dev2 made `/api/shop-floor` answer `available:false`, the picker vanished, and **the screen and ink boards kept working** — the degradation is real, not theoretical. T7 walked a throwaway screen job (offered **12 of 41 frames**, all the right mesh) and ink job (1 of 4 batches), set and cleared both, and **left the sub-status and status untouched**; everything deleted afterwards. T8 all boards 200. 🚩 **T5 on staging needs Anthony to switch the active org** (global, PIN-gated); staging's org side is already proven. 🪤 Restoring T6's FLS needs an INSERT, not an update — clearing read **deletes** the row | §4 S7 |
 | 2026-09-18 | 🔧 **S7 STATION PICKERS BUILT** — a screen job can record which physical frame it used, an ink job which batch. New **follow-up** endpoint `functions/api/shop-floor/index.js` (GET options + `byItem`, POST link/clear), `getShopFloor` / `setShopFloorLink` in `ca-api.js`, and a picker in `station.html`'s job modal. ⛔ **The two PPI lookups stay OUT of `_station.js`'s selectFields** — naming them there would empty the ink and screen boards in any org one step behind (trap 1); the endpoint answers `available:false` instead and the picker vanishes. Options narrow to what fits the job (156 job → 156 frames), Retired/Damaged frames and empty batches are never offered, unlabelled frames are pickable but flagged. Tested: **endpoint rig 30/30** (including both no-object and no-lookup degradations, the capability gate, and INVALID_FIELD → 409) and a **headless tablet-width page walk both ways** — picker renders and posts correctly with the layer, renders **not at all** without it. smoke 7/7. Code uncommitted on the Mac; Anthony pushes | §4 S7 |
 | 2026-09-18 | 🟡 **S7 frames seeded with PLACEHOLDER data so the build can continue** (Anthony's call: fake numbers while testing, real count before production). **35 frames per sandbox** — 110×4 · 125×2 · 156×10 · 180×4 · 196×3 · 230×10 · 305×2 — plus 4 placeholder ink batches, in **both dev2 and staging** so the boards work whichever org is active. Every row is marked (`Location__c` / `Mixed_By__c` = `SEED-PLACEHOLDER`) and says so in its own Notes, so one query removes them and nobody meets one in the UI and believes it. ⛔ **Production gate logged in §4 S7 and S8: Anthony takes a real per-mesh count, the placeholders are deleted from both sandboxes, and only then does production get any Screen__c rows.** | §4 S7, §4 S8 |
 | 2026-09-18 | ✅ **S7 IS IN BOTH SANDBOXES.** Change set v2 deployed to staging and **checked, not just assumed**: all 37 fields read back by query including the `Screen_Preps__r` / `Screen_Reclaims__r` child relationships; a **describe fingerprint diffed field-by-field against dev2 came back with 0 differences** (confirming the loosened `Status__c` / `AssignedOrder__c` arrived optional, both master-details are MD not lookup, the 3 roll-ups are calculated, and `Frame_Status__c` kept its 7 values with In Rack default); and the end-to-end proof re-run in staging — frame `S-0000` with **no order**, 2 preps + 1 reclaim rolling up to 2/1/set, `NOW()` defaults taken unprompted, a real Screen job and Ink job linked, read back through `Screen__r` and unlinked — then everything deleted, all four objects back to 0 rows and 0 jobs left linked. FLS travelled: **30 of 31 fields on each of the 3 profiles**, the one absentee being `Mesh_Count__c`, which is correct because a universally required field has no FieldPermissions row. Left: seed the frames (needs Anthony's counts by mesh) and the `station.html` pickers | §4 S7 |
