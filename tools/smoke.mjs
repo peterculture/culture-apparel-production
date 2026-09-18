@@ -267,6 +267,69 @@ say("\n\x1b[1mPre-deploy smoke check\x1b[0m  ·  E8.5\n");
   else pass("every /api/ path the client calls has a route", `${seen.size} paths`);
 }
 
+/* ── 9. Every named import exists in the file it comes from ──────────── */
+{
+  // WHY. Check 3 proves the FILE is there; it says nothing about what is inside
+  // it. 2026-09-18: proposed-runs/index.js was changed to import a helper that
+  // was exported from _placements.js in the same sitting, only one of the two
+  // files reached the commit, and Cloudflare answered
+  //   No matching export in "api/_placements.js" for import "failureMentionsField"
+  // -- a failed build, which means the WHOLE deployment stays on the previous
+  // version, not just that endpoint. Node's --check (check 4) cannot see this:
+  // each file parses perfectly on its own. It is a fact about the pair.
+  //
+  // Half-landed pairs are this repo's normal weather -- iCloud eviction, a
+  // partial `git add`, a commit that only touched an mtime -- so the check is
+  // worth more here than the one line of code it guards.
+  const bad = [];
+  const exportsOf = (file) => {
+    const src = readFileSync(file, "utf8");
+    const names = new Set();
+    // export function f / export async function f / export const f / class f
+    for (const m of src.matchAll(/\bexport\s+(?:async\s+)?(?:function\s*\*?|class|const|let|var)\s+([A-Za-z_$][\w$]*)/g)) {
+      names.add(m[1]);
+    }
+    // export { a, b as c }, and the re-export form (export { a } from a sibling), which
+    // still provides the name.
+    for (const m of src.matchAll(/\bexport\s*\{([^}]*)\}/g)) {
+      for (const part of m[1].split(",")) {
+        const t = part.trim();
+        if (!t) continue;
+        const bits = t.split(/\s+as\s+/);
+        names.add((bits[1] || bits[0]).trim());
+      }
+    }
+    // A star re-export could bring the name from anywhere down that chain, so
+    // this check stops rather than guesses.
+    if (/\bexport\s*\*/.test(src)) names.add("*");
+    return names;
+  };
+  const jsFiles = [
+    ...(existsSync(join(ROOT, "functions")) ? walk(join(ROOT, "functions"), [], true) : []),
+    ...(existsSync(join(ROOT, "tools")) ? walk(join(ROOT, "tools"), [], true) : []),
+  ].filter((p) => p.endsWith(".js") || p.endsWith(".mjs"));
+
+  for (const p of jsFiles) {
+    const src = readFileSync(p, "utf8");
+    for (const m of src.matchAll(/\bimport\s*\{([^}]*)\}\s*from\s*["'](\.[^"']+)["']/g)) {
+      const target = resolve(dirname(p), m[2]);
+      if (!existsSync(target)) continue; // check 3 already owns "that file is not there"
+      const have = exportsOf(target);
+      if (have.has("*")) continue;
+      for (const part of m[1].split(",")) {
+        const t = part.trim();
+        if (!t) continue;
+        const name = t.split(/\s+as\s+/)[0].trim();
+        if (!have.has(name)) {
+          bad.push(`${rel(p)} imports { ${name} } from "${m[2]}"   THAT FILE EXPORTS NO SUCH NAME -- the build fails, and nothing deploys`);
+        }
+      }
+    }
+  }
+  if (bad.length) fail("every named import exists in the file it comes from", bad);
+  else pass("every named import exists in the file it comes from");
+}
+
 /* ── 6 & 7. Delegate to the focused tools ────────────────────────────── */
 for (const [script, label] of [
   ["tools/check-dc-templates.mjs", "no dc-runtime elements inside <table>"],
