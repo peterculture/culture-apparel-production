@@ -246,6 +246,24 @@ window.__resources = Object.assign({}, window.__resources, {
             </sc-for>
           </div>
           <button onClick="{{ modal.onError }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:8px;font:600 12px/1 'Oswald';letter-spacing:.07em;text-transform:uppercase;color:#E8A89F;background:transparent;border:1px solid #7A241C;border-radius:12px;padding:15px;cursor:pointer" style-hover="background:#2A100D"><i class="ti ti-alert-triangle"></i>{{modal.errorLabel}}</button>
+
+          <sc-if value="{{modal.hasKit}}" hint-placeholder-val="{{ true }}">
+            <div style="margin-top:26px;background:#101014;border:1px solid #232327;border-radius:14px;padding:16px 17px">
+              <div style="font:600 11px/1 'Oswald';letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:8px">{{modal.kitLabel}}</div>
+              <div style="font:400 12px/1.5 'Archivo';color:var(--text-secondary);margin-bottom:11px">{{modal.kitHint}} Tap to record it, tap it again to clear. Leaving it blank is fine.</div>
+              <div style="display:flex;align-items:center;gap:8px;font:600 13px/1.3 'Oswald';letter-spacing:.03em;color:{{modal.kitCurrentColor}};margin-bottom:12px"><i class="ti ti-tag"></i>{{modal.kitCurrent}}</div>
+              <sc-if value="{{modal.kitShowingAll}}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;align-items:flex-start;gap:7px;font:400 12px/1.45 'Archivo';color:#C9923A;margin-bottom:11px"><i class="ti ti-alert-triangle" style="margin-top:2px;flex-shrink:0"></i><span>Nothing in stock matches this job, so everything usable is listed. Check before you pick.</span></div>
+              </sc-if>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
+                <sc-for list="{{modal.kitOptions}}" as="k" hint-placeholder-count="4">
+                  <button onClick="{{ k.onPick }}" disabled="{{modal.kitBusy}}" class="ca-status-btn" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font:700 13px/1 'Oswald';letter-spacing:.04em;text-transform:uppercase;color:{{k.color}};background:{{k.bg}};border:1px solid {{k.border}};border-radius:12px;padding:14px 8px;cursor:pointer">{{k.label}}<span style="font:400 10px/1.2 'Archivo';text-transform:none;letter-spacing:0;opacity:.75">{{k.sub}}</span></button>
+                </sc-for>
+              </div>
+              <sc-if value="{{modal.hasKitMsg}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:7px;font:600 12px/1 'Oswald';letter-spacing:.05em;text-transform:uppercase;color:#BBD382;margin-top:11px"><i class="ti ti-check"></i>{{modal.kitMsg}}</div></sc-if>
+              <sc-if value="{{modal.hasKitErr}}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:flex-start;gap:7px;font:400 12px/1.45 'Archivo';color:#E8A89F;background:#2A100D;border:1px solid #7A241C;border-radius:9px;padding:10px 12px;margin-top:11px"><i class="ti ti-alert-triangle" style="margin-top:2px;flex-shrink:0"></i><span>{{modal.kitErr}}</span></div></sc-if>
+            </div>
+          </sc-if>
         </sc-if>
       </div>
     </div>
@@ -333,8 +351,8 @@ class Component extends DCLogic {
       // name match on this field, so no translation layer is needed here (or
       // wanted: see functions/api/_station.js for the same note). The final
       // stage is the done stage and never gets its own tab.
-      ink:      { label:'Ink Station',    accent:'#2E9CCA', icon:'ti-droplet',   stages:['Needs Label','Needs Mixing','Mixed'], subField:'Ink_Sub_Status__c', identField:'Pantone_Color__c', inventory:'ink', empty:'All inks mixed — nothing waiting.', errorLabel:'Ink Error — reset', cta:'Mix' },
-      screen:   { label:'The Blue Lagoon', accent:'#1FB2A6', icon:'ti-grid-4x4',  stages:['Needs Emulsion','Ready for Exposure','Needs Tape','Ready for Print'], subField:'Screen_Sub_Status__c', identField:'Mesh_Count__c', identSuffix:' mesh', inventory:'screen', empty:'All screens ready — board clear.', errorLabel:'Screen Error — reclaim', cta:'Prep' },
+      ink:      { label:'Ink Station',    accent:'#2E9CCA', icon:'ti-droplet',   stages:['Needs Label','Needs Mixing','Mixed'], subField:'Ink_Sub_Status__c', identField:'Pantone_Color__c', inventory:'ink', kit:'ink', kitLabel:'Ink Batch Used', kitHint:'Which mixed batch this job drew from.', kitNone:'No batch recorded', empty:'All inks mixed — nothing waiting.', errorLabel:'Ink Error — reset', cta:'Mix' },
+      screen:   { label:'The Blue Lagoon', accent:'#1FB2A6', icon:'ti-grid-4x4',  stages:['Needs Emulsion','Ready for Exposure','Needs Tape','Ready for Print'], subField:'Screen_Sub_Status__c', identField:'Mesh_Count__c', identSuffix:' mesh', inventory:'screen', kit:'screen', kitLabel:'Frame Used', kitHint:'Which physical screen frame this job is on.', kitNone:'No frame recorded', empty:'All screens ready — board clear.', errorLabel:'Screen Error — reclaim', cta:'Prep' },
       transfer: { label:'Transfer Station', accent:'#E0B23C', icon:'ti-flame',    stages:['Not Received','Transfers Received','Transfers Cut/Ready'], subField:'Transfers_Sub_Status__c', identField:'Transfer_Type__c', inventory:null, empty:'All transfers cut and ready.', errorLabel:'Transfer Error — reset', cta:'Cut' },
       /* 'Received' added 2026-09-04 -- the blanks are physically here, nobody
          has counted them yet. It sits second because that is the order a
@@ -429,6 +447,10 @@ class Component extends DCLogic {
       gatePin:'', gateErr:'', gateSubmitting:false, gateShake:false,
       items:{ ink:[], screen:[], transfer:[], garment:[] },
       inv:{ ink:[], screen:[] },
+      /* S7 (D29): which physical frames / ink batches exist, per station, and which job is
+         using what. Loaded by its own follow-up call -- an org without the shop-floor layer
+         answers available:false and the picker never renders. See getShopFloor in ca-api.js. */
+      sf:{}, sfBusy:'', sfMsg:'', sfErr:'',
       // Multi-org Salesforce switcher -- global toggle (every tablet, not
       // just this one), PIN-gated. Mirrors index.html's copy of the same
       // feature -- see loadSfEnv()/openSfEnvModal()/submitSfEnv() and
@@ -488,10 +510,13 @@ class Component extends DCLogic {
           missing:(r.Partial_Check_in_Missing_Items__c||'') }; });
       } else {
         const recs=await api.getStationItems(station);
-        items = recs.map(r=>{ const o=(r.Production_Method__r&&r.Production_Method__r.Order__r)||{}; const due=api.dueInfo(o.Print_Date__c); const idv=r[cfg.identField]||''; return { id:r.Id, order:api.text(o.GOA_Order_Number__c)||'', customer:api.text(o.Customer_Order_Name__c)||api.text(o.Name)||'—', ident:(idv?api.text(idv)+(cfg.identSuffix||''):'\u2014'), qty:'', dueLabel:due.label, urg:due.urg, days:due.days, stage:(r[cfg.subField]||cfg.stages[0]), mockupUrl:(o.DesignMockupUrl||null), notes:api.text(r.Notes__c)||'' }; });
+        items = recs.map(r=>{ const o=(r.Production_Method__r&&r.Production_Method__r.Order__r)||{}; const due=api.dueInfo(o.Print_Date__c); const idv=r[cfg.identField]||''; return { id:r.Id, identRaw:(idv===null||idv===undefined)?'':String(idv), order:api.text(o.GOA_Order_Number__c)||'', customer:api.text(o.Customer_Order_Name__c)||api.text(o.Name)||'—', ident:(idv?api.text(idv)+(cfg.identSuffix||''):'\u2014'), qty:'', dueLabel:due.label, urg:due.urg, days:due.days, stage:(r[cfg.subField]||cfg.stages[0]), mockupUrl:(o.DesignMockupUrl||null), notes:api.text(r.Notes__c)||'' }; });
       }
       this.setState(st=>({ items:Object.assign({},st.items,{[station]:items}), connection:'live' }));
       if(cfg.inventory){ try { const inv=await api.getInventory(cfg.inventory); this.setState(st=>({ inv:Object.assign({},st.inv,{[cfg.inventory]:inv}) })); } catch(_){} }
+      /* S7: best-effort and non-blocking. If this fails or the org has no shop-floor layer the
+         board is exactly what it was before S7 -- the picker is simply absent. */
+      if(cfg.kit && api.getShopFloor){ try { const sf=await api.getShopFloor(cfg.kit); this.setState(st=>({ sf:Object.assign({},st.sf,{[cfg.kit]:sf}) })); } catch(_){} }
     } catch(_) {
       const cfg=this.STATIONS[station];
       this.setState(st=>({
@@ -655,6 +680,25 @@ class Component extends DCLogic {
       .catch(()=>this.setState({ missingSaving:false, missingErr:'Could not save — your note is still here, try again.' }));
   }
   setMissingDraft(val){ this.setState({ missingDraft:val, missingMsg:'', missingErr:'' }); }
+  /* S7 (D29): record which physical frame / ink batch this job used. valueId '' clears it.
+     Optimistic on the local byItem map so the tap feels instant, and rolled back on failure --
+     the same shape as setStage() above. A blank link is a perfectly normal state (the shop's
+     frames are not all labelled yet), so clearing is a first-class action, not an error path. */
+  setKit(itemId, valueId){
+    const stn=this.state.station, cfg=this.STATIONS[stn], kit=cfg&&cfg.kit;
+    if(!kit) return;
+    if(!this.canWriteNow(cfg.kitLabel||'That')) return;
+    const api=this._api||window.CAApi; if(!api||!api.setShopFloorLink) return;
+    const prev=((this.state.sf[kit]||{}).byItem)||{};
+    const next=Object.assign({}, prev);
+    if(valueId) next[itemId]=valueId; else delete next[itemId];
+    this.setState(st=>({ sf:Object.assign({},st.sf,{[kit]:Object.assign({},st.sf[kit],{byItem:next})}), sfBusy:itemId, sfMsg:'', sfErr:'' }));
+    api.setShopFloorLink(kit, itemId, valueId||null)
+      .then(()=>this.setState({ sfBusy:'', sfMsg: valueId?'Saved.':'Cleared.' }))
+      .catch(()=>{
+        this.setState(st=>({ sf:Object.assign({},st.sf,{[kit]:Object.assign({},st.sf[kit],{byItem:prev})}), sfBusy:'', sfErr:'Could not save that \u2014 nothing changed in Salesforce.' }));
+      });
+  }
   invAdj(i,delta){
     const key=this.STATIONS[this.state.station].inventory; if(!key) return;
     this.setState(st=>{ const arr=st.inv[key].map((x,ix)=>ix===i?Object.assign({},x,{qty:Math.max(0,x.qty+delta)}):x); return {inv:Object.assign({},st.inv,{[key]:arr})}; });
@@ -751,6 +795,47 @@ class Component extends DCLogic {
         missingMsg: st.missingMsg, hasMissingMsg: !!st.missingMsg,
         missingErr: st.missingErr, hasMissingErr: !!st.missingErr,
       });
+
+      /* ── S7 (D29): "which frame / which batch did you use?" ──
+         Only renders when the active org actually has the shop-floor layer (available:true from
+         /api/shop-floor). The options are narrowed to the ones that FIT this job -- a 156 mesh job
+         offers 156 frames, a PMS 186 job offers PMS 186 batches -- because handing a worker all 35
+         frames and trusting them to read the mesh off the list is how the wrong screen gets pulled.
+         If nothing matches, every usable option is offered rather than an empty list, since a blank
+         picker looks broken and the worker still has to record something. */
+      const kit = cfg.kit ? (st.sf[cfg.kit] || null) : null;
+      if(modal && kit && kit.available){
+        const want=(src.identRaw||'').trim().toLowerCase();
+        const all=kit.options||[];
+        const fits=want ? all.filter(o=>String(o.match||'').trim().toLowerCase()===want) : [];
+        const list=fits.length?fits:all;
+        const curId=(kit.byItem||{})[src.id]||'';
+        const cur=all.filter(o=>o.id===curId)[0]||null;
+        const busy=st.sfBusy===src.id;
+        modal.hasKit=true;
+        modal.kitLabel=cfg.kitLabel||'Used';
+        modal.kitHint=cfg.kitHint||'';
+        modal.kitCurrent=cur?(cur.name+(cur.detail?' \u00b7 '+cur.detail:'')):(cfg.kitNone||'Nothing recorded');
+        modal.kitHasCurrent=!!cur;
+        modal.kitCurrentColor=cur?'#ECEAE4':'#5a554c';
+        modal.kitNarrowed=fits.length>0;
+        modal.kitShowingAll=!fits.length&&!!want;
+        modal.kitBusy=busy;
+        modal.kitMsg=st.sfMsg; modal.hasKitMsg=!!st.sfMsg;
+        modal.kitErr=st.sfErr; modal.hasKitErr=!!st.sfErr;
+        modal.kitOptions=list.map(o=>{
+          const active=o.id===curId;
+          /* An unlabelled frame is still pickable -- most of them are, until the labels get
+             printed -- but it is flagged, because a worker cannot read an S-number off a frame
+             that has not got one yet. */
+          const warn=(o.labelled===false);
+          return { label:o.name, sub:(o.detail||'')+(warn?' \u00b7 no label yet':''),
+                   bg:active?accent:'#141417', color:active?'#08080A':'#ECEAE4',
+                   border:active?accent:(warn?'#5E4214':'#2a2a2f'),
+                   onPick:()=>this.setKit(src.id, active?'':o.id) };
+        });
+        modal.onKitClear=()=>this.setKit(src.id,'');
+      }
     }
 
     const clock=st.now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
