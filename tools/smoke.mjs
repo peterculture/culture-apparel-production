@@ -215,6 +215,58 @@ say("\n\x1b[1mPre-deploy smoke check\x1b[0m  ·  E8.5\n");
   else pass("board logic parses", `${n} pages`);
 }
 
+/* ── 8. Every /api/ path the client calls has a function behind it ───── */
+{
+  // WHY. Cloudflare Pages builds each route from the path under functions/, so
+  // renaming a folder renames the URL. functions/api/production-methods/ became
+  // .../decorations/ during the Decoration rename and ca-api.js was left calling
+  // the old one. There is no 404 to notice: a Pages request with no matching
+  // function falls through to the static assets, so GET answered 200 with the
+  // SPA's HTML -- which failed to JSON.parse, so the board fell back to demo
+  // data with an amber chip -- and POST answered 405 with an EMPTY BODY, which
+  // is exactly what check 2's extensionless routes did. It shipped, sat live,
+  // and surfaced as "Create failed -- check the plan and try again" on a plan
+  // that was fine. This check is the cheap version of the network tab.
+  //
+  // Only the LITERAL prefix of each url is checked -- '/api/orders/' + id stops
+  // at orders/, which is the part that has to exist. A trailing segment that is
+  // built at runtime is satisfied by any [param].js in that folder.
+  const bad = [];
+  const callers = readdirSync(ROOT).filter((f) => f.endsWith(".html") || f.endsWith(".js")).sort();
+  const seen = new Map(); // "/api/path" -> first file that asked for it
+  for (const f of callers) {
+    for (const m of readFileSync(join(ROOT, f), "utf8").matchAll(/['"`]\/api\/([A-Za-z0-9_\-/]+)/g)) {
+      const path = m[1].replace(/\/+$/, "");
+      const dynamic = m[1].endsWith("/"); // url continues with a runtime value
+      const key = path + (dynamic ? "/*" : "");
+      if (!seen.has(key)) seen.set(key, { file: f, path, dynamic });
+    }
+  }
+  for (const [key, { file, path, dynamic }] of seen) {
+    const dir = join(ROOT, "functions/api", path);
+    const candidates = [];
+    if (dynamic) {
+      // /api/orders/<id> needs functions/api/orders/[something].js
+      if (existsSync(dir) && statSync(dir).isDirectory()) {
+        for (const n of readdirSync(dir)) if (/^\[.+\]\.js$/.test(n)) candidates.push(`functions/api/${path}/${n}`);
+      }
+    } else {
+      for (const c of [`functions/api/${path}/index.js`, `functions/api/${path}.js`]) {
+        if (existsSync(join(ROOT, c))) candidates.push(c);
+      }
+      // A bare /api/x that is really a prefix of /api/x/<id> written elsewhere
+      // still needs its own index.js -- do not let a sibling [id].js excuse it.
+    }
+    if (!candidates.length) {
+      bad.push(`${file} calls /api/${key}   NO ROUTE -- Pages answers 200-with-HTML on GET and 405-with-nothing on POST`);
+    } else if (gitAvailable && !candidates.some((c) => tracked.has(c))) {
+      bad.push(`${file} calls /api/${key}   ${candidates[0]} exists but is NOT COMMITTED (git status shows ?? ${candidates[0]})`);
+    }
+  }
+  if (bad.length) fail("every /api/ path the client calls has a route", bad);
+  else pass("every /api/ path the client calls has a route", `${seen.size} paths`);
+}
+
 /* ── 6 & 7. Delegate to the focused tools ────────────────────────────── */
 for (const [script, label] of [
   ["tools/check-dc-templates.mjs", "no dc-runtime elements inside <table>"],
