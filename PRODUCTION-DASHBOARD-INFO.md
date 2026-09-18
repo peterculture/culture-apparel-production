@@ -1104,6 +1104,46 @@ on their boards at `Not Started`.
 Pre-Production Item keeps `Status__c` in step with the sub-status. Anything that writes one without
 the other will find the org has an opinion.
 
+**24. 🪤 SALESFORCE REFUSES A SEMI-JOIN AGAINST THE SAME OBJECT — AND THE B9 REPRINT SWEEP HAD BEEN
+DEAD SINCE THE DAY IT WAS WRITTEN BECAUSE OF IT.** Reported 2026-09-18: "I moved the misprint outcome
+to Reprint on the order and it didn't create a reprint order." Every gate passed — `/api/rework-check`
+said so in as many words (*"approved, not yet built … the Management inbox sweep builds it on its next
+load"*), and loading the inbox built nothing.
+
+The sweep's candidate query in `inbox/index.js` excluded orders that already had a reprint like this:
+
+```
+AND Id NOT IN (SELECT Original_Production_Order__c FROM Order WHERE Original_Production_Order__c != null)
+```
+
+Both halves are `Order`. Salesforce answers:
+
+```
+ERROR at Row:1:Column:80
+The inner and outer selects should not be on the same object type
+```
+
+So `candidates.ok` was **always** false, the sweep returned before its loop every single time, and **no
+reprint has ever been built by it, in any org**. It looked like it worked because the other two callers
+— the decoration status PATCH and a run-results submit — fire while an order is finishing. Those are
+the "the shop already knew" cases. **B9's entire reason for existing is the AM deciding LATER**, and
+that path did nothing at all.
+
+📌 **The fix is two plain queries and a `Set`**: scan the approved orders (wider than the build limit,
+so orders already built cannot fill the window), then ask which of THOSE ids already appear as
+`Original_Production_Order__c`, and subtract. Both verified against dev2. `createReworkIfNeeded`'s own
+gate 1 re-checks idempotency anyway, so a miss costs one wasted call, never a duplicate reprint.
+
+🚩 **How it hid:** the failure is a console line in a `waitUntil` after the response, on a query whose
+result is only ever counted, never shown. Nothing on any board changes when it fails. 📌 **When a
+background sweep is the thing that builds records, its query failure needs a surface** — that is what
+`rework-check`'s verdict is for, and it is worth extending it to actually RUN the sweep's query rather
+than describing what the sweep would do.
+
+⛔ **Check every other semi-join for this shape before writing one:** the rest of the codebase joins
+across objects (`Order` → `Decoration__c`, `Production_Run__c` → `Decoration__c`) and is fine. Only
+this one pointed at itself.
+
 #### Conventions to follow
 
 - **Allow-list every write.** No endpoint accepts a caller-supplied field name. See
@@ -8973,6 +9013,7 @@ Newest first. One line per change; link to the story that carries the detail.
 
 | Date | What | Where |
 |---|---|---|
+| 2026-09-18 | 🛑 **THE REPRINT SWEEP HAS NEVER BUILT ANYTHING — a same-object semi-join Salesforce refuses outright (trap 24).** "Misprint outcome → Reprint" created nothing on 00013520. Every gate passed and `rework-check` said so; the inbox sweep was the thing at fault. Its candidate query excluded already-built orders with `Id NOT IN (SELECT Original_Production_Order__c FROM Order …)` — **both halves `Order`** — and dev2 answers **"The inner and outer selects should not be on the same object type"**, so `candidates.ok` was always false and the loop never ran. **In any org, since it was written.** It looked healthy because the other two callers (a decoration status PATCH, a run-results submit) fire while an order finishes — but B9 exists for the AM deciding LATER, and that path was dead. ✅ Replaced with a wider scan + a scoped "which of these already have one" query and a `Set`; both verified in dev2 (3 approved orders found, all 3 correctly filtered). Proved the builder itself is fine by firing the decoration hook: **reprint 00013522 built from 00013520** — 1 decoration, 2 products, 4 garments. `wrangler pages functions build` → Compiled Worker successfully; smoke **9/9** | §2 trap 24 |
 | 2026-09-18 | 🔧 **A SCREEN ITEM CAN NO LONGER BE CREATED WITHOUT A MESH COUNT.** "The screen mesh count won't show up" on order 00013520: `Mesh_Count__c` was simply **null** on PPI-0350 — the `—` is the blank — because the mesh dropdown is optional and was left on "Mesh count…". 🚩 **And by then there was nowhere to fix it:** the editable mesh select lives in the pre-production drawer, the plan had been sent, and the production board's item rows (`index.html` ppItemsView) are **read-only** — type · detail · status · delete. A blank mesh also takes S7's frame picker back to all 41 frames with the no-match warning. ✅ Now refused at the source: `missing_mesh` (400) from both `decorations` POST and `pre-production-items` POST, before anything is written, plus a plain-English block in all three forms (create-plan modal, and Add Item on both boards). `bad_mesh` still reads `bad_mesh`, and no other item type is touched. Set `125` on PPI-0350 by hand (Anthony's call). **Rig 10/10**, smoke **9/9**. 📌 Also seen: the deployed pages are byte-for-byte the working tree **with CRLF endings** — the ~2.4 KB size gap is line endings, not missing work | §4, §2 trap 23 |
 | 2026-09-18 | 🪤 **"THE INK WAS NEVER CREATED" — IT WAS CREATED, AND THEN TICKED AS DONE (trap 23).** `PPI-0351` (Ink, 4062 C) and `PPI-0350` (Screen) were both created at 15:49 on PM-00140 / order 00013520 — **so the route fix is live and creates work again.** At 16:23 and 16:24 the method's **Mix Inks** and **Screens Completed** boxes were ticked, which is the forward cascade in `_ppi-checklist.js`: every item of that type goes to its terminal sub-status and `Status__c` = `Ready`, and `station-items` filters `Status__c != 'Ready'`, so a finished job leaves the board. 🚩 Both labels read backwards — "Mix Inks" looks like a request, not a report. 📌 Measured: **331 of 331 Pre-Production Items in dev2 were `Ready`**, i.e. every station board was legitimately empty. ✅ Both jobs PATCHed back to the first stage; the reverse cascade unticked both boxes on its own and both now show on their boards at Not Started (verified through `/api/station-items`) | §2 trap 23 |
 | 2026-09-18 | 🛠️ **THE PRESS FIX FAILED TO BUILD, AND THE BUILD FAILING MEANS NOTHING DEPLOYS (trap 22).** `proposed-runs/index.js` imported `failureMentionsField`, newly exported from `_placements.js`; only one file landed, so Cloudflare answered **No matching export in "api/_placements.js"** and the whole push stayed on the old version. Reproduced here on purpose, then removed the cause rather than re-pushing: the endpoint now asks **with** press and, if that fails, asks **without** it — if the second attempt works, press was the problem; if it fails too, the FIRST failure is reported because that is the one that describes what is wrong. No new import, no second copy of anything, `_placements.js` back exactly as it was. ✅ **New smoke check 9** reads every named import and fails when the target file exports no such name — `node --check` cannot see this, because each file parses fine alone. Verified by reconstructing the incident. **`npx wrangler pages functions build` → Compiled Worker successfully** against the untouched `_placements.js`; rig **17/17**; smoke **9/9** | §2 trap 22 |
