@@ -22,7 +22,7 @@
  * writes to a Production Run.
  */
 import { jsonError } from "../_sf.js";
-import { runQueryOptionalField, failureMentionsField } from "../_placements.js";
+import { runQueryOptionalField } from "../_placements.js";
 
 const OBJECT = "Proposed_Run__c";
 const SF_ID = /^[a-zA-Z0-9]{15,18}$/;
@@ -95,16 +95,35 @@ export async function onRequestGet({ request, env }) {
        failure into [], so the cost of getting this wrong is every order quietly reporting "no
        suggestions" while the CAM's proposals sit there in Salesforce.
 
-       runQueryOptionalField retries for ONE named field, so press is handled around it: ask with
-       press, and only if the org's complaint actually names Press__ do we ask again without it.
-       Location's own fallback rides along inside both attempts. Any other failure is still a real
-       failure and is reported as one. */
+       runQueryOptionalField retries for ONE named field, so press is handled AROUND it: ask with
+       press, and if that fails for any reason at all, ask again without it. If the second attempt
+       succeeds, press was the problem and the board gets its proposals; if it fails too, the
+       problem was never press and the FIRST failure is the one reported, because that is the one
+       that describes what is actually wrong. Location's own fallback rides along inside both.
+
+       ⚠️ Written this way on purpose, after a build failure on 2026-09-18: the first version asked
+       _placements.js's failure matcher which field the org had objected to, which meant exporting
+       it -- and a change that only compiles when BOTH files land is a change that breaks the whole
+       deployment when one of them does not. One extra query in the rare failure case is cheaper
+       than a cross-file dependency for a question this endpoint can answer by trying. */
+    const ask = (withPress) =>
+      runQueryOptionalField(env, (withLocation) => buildSoql(withLocation, withPress), LOCATION_FIELD);
+
     let hadPress = true;
-    let res = await runQueryOptionalField(env, (withLocation) => buildSoql(withLocation, true), LOCATION_FIELD);
-    if (!res.ok && failureMentionsField(res.data, "Press__")) {
-      hadPress = false;
-      console.warn("proposed-runs: Press__c is not queryable in the active org -- serving proposals without it");
-      res = await runQueryOptionalField(env, (withLocation) => buildSoql(withLocation, false), LOCATION_FIELD);
+    let res = await ask(true);
+    if (!res.ok) {
+      const firstFailure = res;
+      const withoutPress = await ask(false);
+      if (withoutPress.ok) {
+        hadPress = false;
+        console.warn(
+          "proposed-runs: the query only succeeds without Press__c -- this org has not got the " +
+            "field yet, or the integration user cannot see it. Serving proposals without a press.",
+        );
+        res = withoutPress;
+      } else {
+        res = firstFailure;
+      }
     }
     if (!res.ok) {
       console.error("proposed-runs query failed", res.status, res.detail);
