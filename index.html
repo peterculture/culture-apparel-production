@@ -2142,6 +2142,12 @@ class Component extends DCLogic {
     const f=this.state.itemCreateForm;
     if(!f || !this._api || this.state.itemCreateSubmitting) return;
     this.setState({itemCreateSubmitting:true, itemCreateErr:''});
+    /* A Screen job with no mesh cannot be worked: S7's frame picker narrows the rack by mesh, and a
+       blank one offers every frame with a warning. The server refuses it (missing_mesh); this says so
+       before the round trip. Mirrors the same guard in pre-production.html -- and note that THIS
+       board's existing item rows are read-only, so a blank that gets past here has nowhere to be
+       fixed from. */
+    if(f.type==='Screen' && !f.mesh){ this.setState({itemCreateSubmitting:false, itemCreateErr:'Pick a mesh count — a screen job needs one.'}); return; }
     const item={ type:f.type };
     if(f.type==='Screen') item.mesh=f.mesh;
     else if(f.type==='Ink') item.pantone=f.pantone;
