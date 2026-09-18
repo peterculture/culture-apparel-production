@@ -1968,17 +1968,32 @@ class Component extends DCLogic {
       // the manager returns here, that should be reflected too).
       this.load();
     }catch(e){
-      // FIXED 2026-07-28: this used to always show the same generic
-      // "Create failed — check the plan and try again" no matter what
-      // actually went wrong, which is why the real cause (an FLS gap on a
-      // Pre_Production_Item__c field, then a restricted-picklist mismatch on
-      // Mesh Count) stayed invisible. jsend() (ca-api.js) now attaches the
-      // server's parsed error body as e.data -- surface its first concrete
-      // Salesforce error message when present, and only fall back to the
-      // generic copy if the server didn't return anything useful.
-      var detail = e && e.data && (e.data.detail || e.data.all);
-      var sfMsg = Array.isArray(detail) && detail[0] && detail[0].message;
-      this.setState({submitting:false, mgrErr: sfMsg ? ('Create failed — '+sfMsg) : 'Create failed — check the plan and try again'});
+      /* FIXED 2026-07-28: this used to always show the same generic
+         "Create failed — check the plan and try again" no matter what actually
+         went wrong, which is why the real cause (an FLS gap on a
+         Pre_Production_Item__c field, then a restricted-picklist mismatch on
+         Mesh Count) stayed invisible. jsend() (ca-api.js) attaches the server's
+         parsed error body as e.data.
+
+         FIXED AGAIN 2026-09-18, and the first fix is why: it read
+         `e.data.detail` and required an ARRAY of {message}. Neither error shape
+         this endpoint actually returns is that.
+           - A composite failure returns `detail` as a STRING already formatted
+             "referenceId: ERROR_CODE: message" (see _composite.js).
+           - A server-side VALIDATION rejection (bad_mesh, missing_placements,
+             bad_method_type, bad_item_status …) returns `{error, detail}` where
+             detail is a bare string, or no detail at all.
+         In both cases `Array.isArray(detail)` was false, so every real cause
+         fell through to the generic copy -- the exact fault the 07-28 note says
+         it was fixing. Reported live 2026-09-18: a create failed, the screen
+         said "check the plan", and the plan was fine.
+
+         errText() in ca-api.js already handles all of these (array detail,
+         string detail, error slug, bare status) and is what the other three
+         catch blocks on this page use. Use it here too rather than keeping a
+         fourth private copy of the same logic. */
+      const a=window.CAApi, det=(a&&a.errText)?a.errText(e):'';
+      this.setState({submitting:false, mgrErr: det ? ('Create failed — '+det) : 'Create failed — check the plan and try again'});
     }
   }
   // Best-effort reference data (garment breakdown, print specs, special
