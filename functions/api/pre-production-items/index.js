@@ -138,7 +138,15 @@ export async function onRequestPost({ env, request }) {
   if (!type || typeof type !== "string" || !ALLOWED_ITEM_TYPES.has(type)) {
     return jsonError("bad_item_type", 400);
   }
-  if (type === "Screen" && payload.mesh != null && payload.mesh !== "" && !ALLOWED_MESH.has(String(payload.mesh))) {
+  /* A Screen job with no mesh is a job the shop floor cannot do anything with: S7's frame picker
+   narrows the rack by mesh, so a blank one offers all 41 frames with a "couldn't match" warning,
+   and the worker picks by eye. Reported 2026-09-18 -- PPI-0350 was created blank, and by then the
+   plan had been sent, which puts it on the production board, where items are READ-ONLY. There was
+   no screen anywhere left to fix it from. So it is refused at creation instead. */
+  if (type === "Screen" && (payload.mesh == null || payload.mesh === "")) {
+    return Response.json({ error: "missing_mesh", detail: "a Screen item needs a mesh count" }, { status: 400 });
+  }
+  if (type === "Screen" && !ALLOWED_MESH.has(String(payload.mesh))) {
     return Response.json({ error: "bad_mesh", detail: payload.mesh }, { status: 400 });
   }
   if (type === "Transfer" && payload.transferType != null && payload.transferType !== "" && !ALLOWED_TRANSFER_TYPE.has(payload.transferType)) {
