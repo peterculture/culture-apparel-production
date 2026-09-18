@@ -244,8 +244,16 @@ export async function onRequestPost({ env, request }) {
     if (it.status != null && it.status !== "" && !ALLOWED_ITEM_STATUSES.has(it.status)) {
       return Response.json({ error: "bad_item_status", detail: it.status }, { status: 400 });
     }
+    /* A Screen job with no mesh is a job the shop floor cannot do anything with: S7's frame picker
+       narrows the rack by mesh, so a blank one offers all 41 frames with a "couldn't match" warning,
+       and the worker picks by eye. Reported 2026-09-18 -- PPI-0350 was created blank, and by then the
+       plan had been sent, which puts it on the production board, where items are READ-ONLY. There was
+       no screen anywhere left to fix it from. So it is refused at creation instead. */
+    if (it.type === "Screen" && (it.mesh == null || it.mesh === "")) {
+      return Response.json({ error: "missing_mesh", detail: "a Screen item needs a mesh count" }, { status: 400 });
+    }
     // Restricted picklists: reject bad values before they reach Salesforce.
-    if (it.type === "Screen" && it.mesh != null && it.mesh !== "" && !ALLOWED_MESH.has(String(it.mesh))) {
+    if (it.type === "Screen" && !ALLOWED_MESH.has(String(it.mesh))) {
       return Response.json({ error: "bad_mesh", detail: it.mesh }, { status: 400 });
     }
     if (it.type === "Transfer" && it.transferType != null && it.transferType !== "" && !ALLOWED_TRANSFER_TYPE.has(it.transferType)) {
