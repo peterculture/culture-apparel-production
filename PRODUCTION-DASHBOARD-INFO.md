@@ -1067,6 +1067,43 @@ exports no such name. Verified the project's way: the incident was reconstructed
 and the check failed on it. A full `npx wrangler pages functions build` is still the only thing that
 proves a deploy compiles — worth running before a push that moves anything between files.
 
+**23. 🪤 THE PRE-PRODUCTION CHECKLIST BOXES MEAN "DONE", AND TICKING ONE CLEARS THAT JOB OFF THE
+STATION BOARD.** Reported 2026-09-18 as "I created an ink and it was never created and isn't on the
+station dashboard." It was created — `PPI-0351`, Pantone 4062 C, 15:49:04, on `PM-00140` / order
+00013520. The timeline says the rest:
+
+| time (UTC) | what |
+|---|---|
+| 15:49:03 | decoration PM-00140 created |
+| 15:49:04 | PPI-0350 (Screen) + **PPI-0351 (Ink)** created |
+| 16:23:21 | ink item → `Mixed`, Status `Ready` |
+| 16:24:03 | screen item → `Ready for Print`, Status `Ready` |
+| 16:24:04 | PM-00140 `Mix_Inks__c` and `Screens_Completed__c` both true |
+
+Ticking **Mix Inks** on the method's checklist runs the forward cascade in `_ppi-checklist.js`: every
+Ink item on that method is pushed to its terminal sub-status and `Status__c` = `Ready`. And
+`station-items` queries `WHERE Type__c = '<type>' AND Status__c != 'Ready'` — `doneStatus` in
+`_station.js`. A finished job is not supposed to sit on a worker's board, so it disappears. Working
+as designed; it just reads as "my ink vanished".
+
+🚩 **The boxes are easy to read backwards.** "Mix Inks" looks like *this order needs ink mixed*. It
+means *the ink is mixed*. Same for "Screens Completed". Worth a label or a confirm before the next
+person meets it.
+
+📌 **Measured while looking: every Pre-Production Item in dev2 was `Ready`** — Screen 187, Ink 97,
+Transfer 27, Thread 11, Digitization 9, 331 of 331 — so **every station board in dev2 was legitimately
+empty**, not broken. Check that before chasing a blank board: `SELECT Type__c, Status__c, COUNT(Id)
+FROM Pre_Production_Item__c GROUP BY Type__c, Status__c`.
+
+🔁 **Reversing it is a normal write, not a repair:** PATCH the item to the first stage of its pipeline
+(`Ink_Sub_Status__c` = `Needs Label`, `Screen_Sub_Status__c` = `Needs Emulsion`) and the reverse
+cascade unticks the method's box by itself. Done for both of these on 2026-09-18; both jobs came back
+on their boards at `Not Started`.
+
+⚠️ Related, and NOT a bug: an active **before-save** flow `Sub_Status_LINKED_TO_Status` on
+Pre-Production Item keeps `Status__c` in step with the sub-status. Anything that writes one without
+the other will find the org has an opinion.
+
 #### Conventions to follow
 
 - **Allow-list every write.** No endpoint accepts a caller-supplied field name. See
@@ -8936,6 +8973,8 @@ Newest first. One line per change; link to the story that carries the detail.
 
 | Date | What | Where |
 |---|---|---|
+| 2026-09-18 | 🔧 **A SCREEN ITEM CAN NO LONGER BE CREATED WITHOUT A MESH COUNT.** "The screen mesh count won't show up" on order 00013520: `Mesh_Count__c` was simply **null** on PPI-0350 — the `—` is the blank — because the mesh dropdown is optional and was left on "Mesh count…". 🚩 **And by then there was nowhere to fix it:** the editable mesh select lives in the pre-production drawer, the plan had been sent, and the production board's item rows (`index.html` ppItemsView) are **read-only** — type · detail · status · delete. A blank mesh also takes S7's frame picker back to all 41 frames with the no-match warning. ✅ Now refused at the source: `missing_mesh` (400) from both `decorations` POST and `pre-production-items` POST, before anything is written, plus a plain-English block in all three forms (create-plan modal, and Add Item on both boards). `bad_mesh` still reads `bad_mesh`, and no other item type is touched. Set `125` on PPI-0350 by hand (Anthony's call). **Rig 10/10**, smoke **9/9**. 📌 Also seen: the deployed pages are byte-for-byte the working tree **with CRLF endings** — the ~2.4 KB size gap is line endings, not missing work | §4, §2 trap 23 |
+| 2026-09-18 | 🪤 **"THE INK WAS NEVER CREATED" — IT WAS CREATED, AND THEN TICKED AS DONE (trap 23).** `PPI-0351` (Ink, 4062 C) and `PPI-0350` (Screen) were both created at 15:49 on PM-00140 / order 00013520 — **so the route fix is live and creates work again.** At 16:23 and 16:24 the method's **Mix Inks** and **Screens Completed** boxes were ticked, which is the forward cascade in `_ppi-checklist.js`: every item of that type goes to its terminal sub-status and `Status__c` = `Ready`, and `station-items` filters `Status__c != 'Ready'`, so a finished job leaves the board. 🚩 Both labels read backwards — "Mix Inks" looks like a request, not a report. 📌 Measured: **331 of 331 Pre-Production Items in dev2 were `Ready`**, i.e. every station board was legitimately empty. ✅ Both jobs PATCHed back to the first stage; the reverse cascade unticked both boxes on its own and both now show on their boards at Not Started (verified through `/api/station-items`) | §2 trap 23 |
 | 2026-09-18 | 🛠️ **THE PRESS FIX FAILED TO BUILD, AND THE BUILD FAILING MEANS NOTHING DEPLOYS (trap 22).** `proposed-runs/index.js` imported `failureMentionsField`, newly exported from `_placements.js`; only one file landed, so Cloudflare answered **No matching export in "api/_placements.js"** and the whole push stayed on the old version. Reproduced here on purpose, then removed the cause rather than re-pushing: the endpoint now asks **with** press and, if that fails, asks **without** it — if the second attempt works, press was the problem; if it fails too, the FIRST failure is reported because that is the one that describes what is wrong. No new import, no second copy of anything, `_placements.js` back exactly as it was. ✅ **New smoke check 9** reads every named import and fails when the target file exports no such name — `node --check` cannot see this, because each file parses fine alone. Verified by reconstructing the incident. **`npx wrangler pages functions build` → Compiled Worker successfully** against the untouched `_placements.js`; rig **17/17**; smoke **9/9** | §2 trap 22 |
 | 2026-09-18 | 🔧 **MOCKUPS: THE PUBLIC LINK NOW WORKS, AND THE FILES TAB STILL DOES NOTHING (trap 21).** Anthony's mockup would not show. Measured, not guessed: his Design (`a05ca00000CQMHRAA5`, opportunity `006ca00000J4JQw`, which is the opportunity behind BOTH his test orders 00013520 and 00013521) holds a file **public link**, and `/api/mockup-proxy` fetching it gets **200 with 1,359 bytes of HTML** — an `<img>` on HTML shows nothing and says nothing. 📌 The path carries the **ContentDistribution** id with its `05D` prefix stripped; one query gives the ContentVersion, and the authenticated branch returns the real file (**1.34 MB JPEG, renders 3300×2700** — proved live). The proxy now resolves the public link, `ContentDownloadUrl` (`068` mid-string) and a `069` ContentDocument link, and — deliberately stricter — runs those lookups only for Salesforce hosts. **Rig 16/16** incl. SSRF guard, SOQL-injection attempt, both degradations. smoke 8/8 | §2 trap 21 |
 | 2026-09-18 | 🔧 **PRESS NOW PREFILLS FROM A PROPOSED RUN — the client was always ready; the deployed endpoint never sent it.** Anthony: every field carries across from a suggestion except Press. Traced live: `GET /api/proposed-runs` returns **no `pressId` key at all**, while Salesforce holds `Press__c` = Press 1 on PROP-0055 and `/api/presses` lists that exact id. Both clients (`pre-production.html`, `calendar.html`) already carry press. 🚩 **So the deployed build predates the 2026-09-11 `Press__c` work even though it includes today's S7 endpoint — the Mac's copy of `proposed-runs/index.js` has never been pushed.** Hardened before pushing, per build rule 3: `Press__c`/`Press__r.Name` are now dropped the way `Print_Location__c` already is, because one deployment serves three orgs and naming a field the active org lacks kills the WHOLE query — which `getProposedRuns()` swallows into `[]`, i.e. every order silently reporting "no suggestions". `failureMentionsField` exported from `_placements.js` so the endpoint can tell which field the org objected to; response gained `pressAvailable`. dev2 FLS checked first: 26 rows, read+edit. **Rig 16/16** | §4, §9 |
