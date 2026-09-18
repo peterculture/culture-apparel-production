@@ -363,7 +363,7 @@
   // Same rfp/ip/pp/done bucketing, but for a Production_Method__c's own
   // Status__c instead of the Order's Order_Substatus__c -- no label/value
   // quirk here, Production_Method__c.Status__c stores "In Production"
-  // literally (see production-methods/index.js ALLOWED_STATUSES), so
+  // literally (see decorations/index.js ALLOWED_STATUSES), so
   // STAGE_KEY can be looked up directly. Returns null for "Pre-Production",
   // "Cancelled", and "On Hold" -- those methods haven't reached the
   // production floor board (or have left it) and shouldn't show a card there.
@@ -932,7 +932,7 @@
   /* ── low-level fetch ── */
   /* Turn a failed Response into an Error carrying the server's own words.
      Every endpoint here answers {error, detail, ...} on failure (see
-     jsonError in functions/api/_sf.js, and production-methods' richer
+     jsonError in functions/api/_sf.js, and the decorations endpoint's richer
      {error, failedRef, detail, all}), and until 2026-08-31 only jsend() read
      it -- jget and jdel threw a bare 'GET /api/x -> 500' with no status and no
      body, so a caller could not tell a 401 from a 502 from an FLS gap, and the
@@ -1443,7 +1443,22 @@
   // records, not every Account. Powers the Press picker on the
   // Create Production Run modal.
   function searchPresses(q){ return jget('/api/presses?q=' + encodeURIComponent(q || '')).then(function (d) { return d.records || []; }); }
-  function createMethod(body){ return jsend('/api/production-methods', 'POST', body); }
+  /* ⚠️ THE ROUTE IS `/api/decorations`, AND IT IS A FOLDER NAME, NOT A LABEL.
+     Cloudflare Pages builds each URL from the path under functions/, so
+     renaming functions/api/production-methods/ to functions/api/decorations/
+     during the Decoration rename RENAMED THE URL -- and these six wrappers
+     were left pointing at the old one. A Pages request with no matching
+     function falls through to the static assets: GET answered 200 with the
+     SPA's HTML (which then failed to JSON.parse, so every board fell back to
+     demo data) and POST/PATCH/DELETE answered 405 WITH AN EMPTY BODY. That is
+     byte-identical to the extensionless-route incident smoke check 2 exists
+     for, and it is what Anthony hit on 2026-09-18: Create Production Plan &
+     Send failed with no reason, because there was no reason to read.
+     Smoke check 8 now fails on any /api/ path with no function behind it.
+     functions/api/production-methods/ is back as a re-export alias, so a
+     tablet holding a cached copy of this file keeps working; do not treat
+     that alias as permission to add new calls to the old path. */
+  function createMethod(body){ return jsend('/api/decorations', 'POST', body); }
   // Creates one Production_Run__c. body: { printMethodId, pressId, scheduledStart, scheduledEnd, quantity }
   function createProductionRun(body){ return jsend('/api/production-runs', 'POST', body); }
   // Every Production_Run__c attached to one Production_Method__c -- powers
@@ -1498,21 +1513,21 @@
   function patchMethodStatus(id, status, orderId){
     var body = { Status__c: status };
     if (orderId) body.orderId = orderId;
-    return jsend('/api/production-methods/' + encodeURIComponent(id), 'PATCH', body);
+    return jsend('/api/decorations/' + encodeURIComponent(id), 'PATCH', body);
   }
   // Toggles one of the 7 per-method pre-production checklist booleans
   // (Design_Received__c..Transfers_Ready__c -- same field names as CHECK_FIELD
   // below, just written to the method instead of the order). No orderId
   // needed: these don't affect Order_Substatus__c, so there's nothing to
   // roll up.
-  function patchMethodChecklist(id, fields){ return jsend('/api/production-methods/' + encodeURIComponent(id), 'PATCH', fields); }
+  function patchMethodChecklist(id, fields){ return jsend('/api/decorations/' + encodeURIComponent(id), 'PATCH', fields); }
   // Every Production_Method__c on one order, regardless of its own Status__c
   // (unlike getProductionOrders()/getOrders(), which only surface methods
   // that have already reached the relevant board) -- powers the "Production
   // Methods" section of a card's drawer, so a manager can see/edit/remove
   // every method on the order the open card belongs to, and add a new one,
-  // from any card on either board. See functions/api/production-methods/index.js.
-  function getMethodsForOrder(orderId){ return jget('/api/production-methods?orderId=' + encodeURIComponent(orderId)).then(function (d) { return d.records || []; }); }
+  // from any card on either board. See functions/api/decorations/index.js.
+  function getMethodsForOrder(orderId){ return jget('/api/decorations?orderId=' + encodeURIComponent(orderId)).then(function (d) { return d.records || []; }); }
   // Generic per-method write -- same endpoint/shape as patchMethodStatus and
   // patchMethodChecklist above, just named for its newer use: editing a
   // method's Type__c/Placements__c in place from the drawer.
@@ -1529,12 +1544,12 @@
   function patchMethodFields(id, fields, ifUnmodifiedSince){
     var body = Object.assign({}, fields);
     if (ifUnmodifiedSince) body.ifUnmodifiedSince = ifUnmodifiedSince;
-    return jsend('/api/production-methods/' + encodeURIComponent(id), 'PATCH', body);
+    return jsend('/api/decorations/' + encodeURIComponent(id), 'PATCH', body);
   }
   // Removes ONE Production_Method__c. See that endpoint's header comment --
   // Salesforce (not this client) decides whether the delete is allowed if
   // Pre_Production_Item__c/Production_Run__c children still look up to it.
-  function deleteMethod(id){ return jdel('/api/production-methods/' + encodeURIComponent(id)); }
+  function deleteMethod(id){ return jdel('/api/decorations/' + encodeURIComponent(id)); }
   // Removes ONE Production_Run__c.
   function deleteProductionRun(id){ return jdel('/api/production-runs/' + encodeURIComponent(id)); }
   function patchOrder(id, fields){
@@ -2314,7 +2329,7 @@
    * why that count may not match what you can see on the board.
    *
    * `records` are the RAW Production_Method__c rows from
-   * /api/production-methods?orderId= -- deliberately that fetch and not the
+   * /api/decorations?orderId= -- deliberately that fetch and not the
    * board record's rec.ProductionMethods, because the board's own query is
    * filtered to BOARD_STATUSES (production-orders/index.js) and therefore
    * cannot see a Pre-Production, On Hold or Cancelled sibling at all. Counting
@@ -2608,7 +2623,7 @@
 
   // Placement__c picklist values. MUST match Salesforce (Setup -> Object
   // Manager -> Decoration -> Fields -> Placement) and the server-side
-  // ALLOWED_PLACEMENTS in functions/api/production-methods/index.js -- all
+  // ALLOWED_PLACEMENTS in functions/api/decorations/index.js -- all
   // three copies have to move together if the shop adds a new print location.
   var PLACEMENTS = [
     'Front', 'Back', 'Left Sleeve', 'Right Sleeve',
