@@ -1644,6 +1644,22 @@
     return jsend('/api/run-results', 'POST', { action: 'reopen', runId: runId, by: workerName() });
   }
 
+  /* ── shop floor: which frame / which ink batch (S7, D29) ──
+     A follow-up call, exactly like getArtSpecs above. The station board's own query never names
+     Pre_Production_Item__c.Screen__c or .Ink_Mix__c, because an org that lacks them turns the whole
+     SELECT into a parse error and empties the board (trap 1). So this asks separately, and an org
+     without the shop-floor layer answers available:false and the picker simply does not render. */
+  var SHOP_FLOOR_NONE = { available: false, options: [], byItem: {} };
+  function getShopFloor(station){
+    return jget('/api/shop-floor?station=' + encodeURIComponent(station))
+      .then(function (d) { return (d && d.available) ? d : SHOP_FLOOR_NONE; })
+      .catch(function () { return SHOP_FLOOR_NONE; });
+  }
+  /* valueId null clears the link — a worker undoing a mistap, or swapping frames mid-job. */
+  function setShopFloorLink(station, itemId, valueId){
+    return jsend('/api/shop-floor', 'POST', { station: station, itemId: itemId, valueId: valueId || null });
+  }
+
   /* ── mockup thumbnails ──
      Build the <img> as a React node instead of putting its URL in a template
      hole.
@@ -2615,6 +2631,7 @@
     proposalFillMessage: proposalFillMessage,
     getOrders: getOrders, getProductionOrders: getProductionOrders, getInbox: getInbox, getPreProductionItems: getPreProductionItems, getArtSpecs: getArtSpecs, artSpecLines: artSpecLines, artSpecsForDecoration: artSpecsForDecoration, patchItem: patchItem, deleteItem: deleteItem, createItem: createItem, searchPlans: searchPlans, searchPresses: searchPresses, createMethod: createMethod, createProductionRun: createProductionRun, getProductionRuns: getProductionRuns, patchProductionRun: patchProductionRun, deleteProductionRun: deleteProductionRun, getProposedRuns: getProposedRuns, patchProposedRun: patchProposedRun, patchMethodStatus: patchMethodStatus, patchMethodChecklist: patchMethodChecklist, getMethodsForOrder: getMethodsForOrder, patchMethodFields: patchMethodFields, deleteMethod: deleteMethod, patchOrder: patchOrder, getOrderSizes: getOrderSizes,
     getCountableRuns: getCountableRuns, getRunResults: getRunResults, submitRunResults: submitRunResults, addRunCounts: addRunCounts, removeRunCount: removeRunCount, finalizeRunCounts: finalizeRunCounts, reopenRunCounts: reopenRunCounts,
+    getShopFloor: getShopFloor, setShopFloorLink: setShopFloorLink,
     getRunLineItems: getRunLineItems, getMethodAllocation: getMethodAllocation, patchRunLineItems: patchRunLineItems,
     getShortfalls: getShortfalls,
     mockupThumb: mockupThumb, THUMB_CARD: THUMB_CARD, THUMB_PANEL: THUMB_PANEL,
