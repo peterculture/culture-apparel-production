@@ -1,5 +1,10 @@
 /**
- * POST /api/production-methods
+ * POST /api/decorations
+ *
+ * ⚠️ THE ROUTE IS THIS FOLDER'S NAME. It was /api/production-methods until this folder was
+ * renamed; ../production-methods/ is now a re-export alias kept for cached clients, and
+ * ca-api.js calls /api/decorations. Renaming a folder under functions/ renames the URL, and a
+ * URL with no function behind it answers 200-with-HTML on GET and 405-with-nothing on POST.
  *
  * Creates a Production Method (+ its Pre-Production Items) for one order,
  * atomically. The Method's ProductionPlan__c parent is supplied one of two ways:
@@ -132,7 +137,7 @@ const ALLOWED_STATUSES     = new Set([
 const ALLOWED_ITEM_STATUSES = new Set(["Not Started", "In Progress", "Ready"]);
 
 /**
- * GET /api/production-methods?orderId=<id>
+ * GET /api/decorations?orderId=<id>
  *
  * Lists every Production_Method__c on ONE order, regardless of its Status__c
  * (so this includes methods still sitting in Pre-Production, unlike the
@@ -142,7 +147,7 @@ const ALLOWED_ITEM_STATUSES = new Set(["Not Started", "In Progress", "Ready"]);
  * remove every method on the order the open card belongs to, not just the
  * one method that card itself represents.
  *
- *   GET /api/production-methods?orderId=801...  ->  { records: [ {...}, ... ] }
+ *   GET /api/decorations?orderId=801...  ->  { records: [ {...}, ... ] }
  */
 export async function onRequestGet({ env, request }) {
   try {
